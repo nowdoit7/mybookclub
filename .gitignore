@@ -1,0 +1,20 @@
+node_modules/
+dist/
+coverage/
+
+.env
+.env.*
+!.env.example
+
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Local Korean reference copies (submission materials remain English)
+Agent_kor_NotRead.md
+Spec_kor_NotRead.md
+
+.firebase/
+.firebaserc.local
+functions/lib/
