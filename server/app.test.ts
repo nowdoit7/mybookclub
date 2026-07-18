@@ -2,6 +2,10 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 import { MockGenerationClient } from "../src/api/mockGenerationClient";
+import {
+  IncompleteGenerationError,
+  InvalidStructuredOutputError,
+} from "../src/api/errors";
 import { selectPersonas } from "../src/personas";
 import { createApp } from "./app";
 
@@ -10,6 +14,7 @@ function testApp(sessionCallLimit = 60) {
     generationClient: new MockGenerationClient(),
     allowedOrigins: ["http://localhost:5173"],
     sessionCallLimit,
+    logger: { info() {}, error() {} },
   });
 }
 
@@ -22,6 +27,7 @@ describe("server boundary", () => {
       liveGenerationAvailable: true,
       model: "gpt-5.6",
     });
+    expect(response.headers["x-request-id"]).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("validates input before generation", async () => {
@@ -129,5 +135,79 @@ describe("server boundary", () => {
 
     expect(response.status).toBe(429);
     expect(response.body.error).toBe("session_call_limit_reached");
+    expect(response.body.requestId).toBe(response.headers["x-request-id"]);
+  });
+
+  it("returns and logs safe diagnostics without exposing exception text", async () => {
+    const generationClient = new MockGenerationClient();
+    generationClient.identifyBook = async () => {
+      throw new Error("private request content must not escape");
+    };
+    const errorLogs: string[] = [];
+    const app = createApp({
+      generationClient,
+      allowedOrigins: ["http://localhost:5173"],
+      exposeErrorDetails: true,
+      logger: { info() {}, error(message) { errorLogs.push(message); } },
+    });
+
+    const response = await request(app)
+      .post("/api/generate/book-identification")
+      .send({ title: "The Stranger" });
+
+    expect(response.status).toBe(502);
+    expect(response.body).toMatchObject({
+      error: "generation_failed",
+      requestId: response.headers["x-request-id"],
+      detail: "Generation failed for an unexpected server-side reason.",
+    });
+    expect(JSON.stringify(response.body)).not.toContain("private request content");
+    expect(errorLogs).toHaveLength(1);
+    expect(errorLogs[0]).toContain('"errorCode":"generation_failed"');
+    expect(errorLogs[0]).not.toContain("private request content");
+  });
+
+  it.each([
+    {
+      error: new IncompleteGenerationError("max_output_tokens"),
+      code: "incomplete_output",
+      detail: "The model response ended before its structured output was complete.",
+    },
+    {
+      error: new InvalidStructuredOutputError(),
+      code: "invalid_structured_output",
+      detail: "The model returned an unusable structured response.",
+    },
+  ])("returns a distinct typed error for $code", async ({ error, code, detail }) => {
+    const generationClient = new MockGenerationClient();
+    generationClient.generateReadingNotes = async () => {
+      throw error;
+    };
+    const app = createApp({
+      generationClient,
+      allowedOrigins: ["http://localhost:5173"],
+      exposeErrorDetails: true,
+      logger: { info() {}, error() {} },
+    });
+    const identified = await generationClient.identifyBook({ title: "The Stranger" });
+    const persona = selectPersonas("demo")[0];
+
+    const response = await request(app)
+      .post("/api/generate/reading-notes")
+      .send({
+        language: "en",
+        book: {
+          title: identified.canonical_title,
+          author: identified.author,
+          confirmedSummary: identified.summary,
+          mainCharacters: identified.main_characters,
+          candidateTopics: identified.candidate_topics,
+          confidence: identified.confidence,
+        },
+        persona,
+      });
+
+    expect(response.status).toBe(502);
+    expect(response.body).toMatchObject({ error: code, detail });
   });
 });

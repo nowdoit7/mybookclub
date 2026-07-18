@@ -169,7 +169,7 @@ function pickBySeed(category: Category, seed: string): PersonaCard {
 
 export function selectPersonas(seed: string = crypto.randomUUID()): PersonaCard[] {
   if (seed === "demo") {
-    return ["maddie", "marcus", "eleanor"].map(
+    return ["maddie", "marcus", "dev"].map(
       (id) => PERSONAS.find((persona) => persona.id === id)!,
     );
   }

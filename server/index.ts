@@ -44,6 +44,7 @@ createApp({
   sessionCallLimit,
   liveGenerationAvailable: Boolean(process.env.OPENAI_API_KEY),
   model,
+  exposeErrorDetails: process.env.NODE_ENV !== "production",
 }).listen(port, () => {
   console.log(`Reading Table API listening on http://localhost:${port}`);
 });

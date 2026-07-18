@@ -8,9 +8,10 @@ import { MockGenerationClient } from "./api/mockGenerationClient";
 import { calculateReadingDelay } from "./engine/playbackTiming";
 import { SessionEngine } from "./engine/sessionEngine";
 import { localizedSpeakerName, STAGE_LABELS } from "./localization";
-import { PERSONAS } from "./personas";
+import { PERSONAS, selectPersonas } from "./personas";
 import { formatTranscriptAsMarkdown } from "./transcriptExport";
 import type { AppLanguage, PersonaCard, StageId, Utterance } from "./types";
+import { DiagnosticsPanel } from "./ui/DiagnosticsPanel";
 
 const STAGES: StageId[] = [
   "INTRO",
@@ -108,7 +109,11 @@ const COPY = {
     serverNotConfigured: "The server API key is not configured.",
     sessionLimitReached: "This live session reached its model-call limit.",
     modelRefused: "The model could not generate this turn safely.",
+    incompleteOutput: "A reader's response ended before it was complete. Please retry the session.",
+    invalidStructuredOutput: "A reader returned an unusable structured response. Please retry the session.",
     liveGenerationFailed: "The live API request failed. The mock mode is still available.",
+    readingNotesReady: (progress: string) => `Reader notes ready: ${progress}`,
+    retryingReadingNotes: "A reader's notes were incomplete, so only that reader is retrying.",
     currentSpeaker: "Speaking",
     nextSpeaker: "Next",
     yourTurn: "Your turn",
@@ -185,7 +190,11 @@ const COPY = {
     serverNotConfigured: "서버에 API 키가 설정되지 않았습니다.",
     sessionLimitReached: "이 실제 세션의 모델 호출 한도에 도달했습니다.",
     modelRefused: "모델이 이 발언을 안전하게 생성할 수 없었습니다.",
+    incompleteOutput: "독자 응답이 완성되기 전에 종료되었습니다. 세션을 다시 시도해주세요.",
+    invalidStructuredOutput: "독자의 구조화 응답을 사용할 수 없습니다. 세션을 다시 시도해주세요.",
     liveGenerationFailed: "실제 API 요청에 실패했습니다. 모의 응답 모드는 계속 사용할 수 있습니다.",
+    readingNotesReady: (progress: string) => `독서 노트 준비: ${progress}`,
+    retryingReadingNotes: "완성되지 않은 독자의 노트만 다시 준비하고 있습니다.",
     currentSpeaker: "발언 중",
     nextSpeaker: "다음",
     yourTurn: "내 차례",
@@ -232,7 +241,11 @@ function pendingSpeakerName(
   return localizedSpeakerName(speaker.id, language);
 }
 
-const DEMO_SPEAKERS = ["moderator", "maddie", "marcus", "eleanor", "user"];
+const DEMO_SPEAKERS = [
+  "moderator",
+  ...selectPersonas("demo").map(({ id }) => id),
+  "user",
+];
 
 function SpeakerAvatar({
   speaker,
@@ -261,7 +274,7 @@ const ROUND_TABLE_POSITIONS: Record<string, string> = {
   moderator: "left-1/2 top-3 -translate-x-1/2",
   maddie: "left-3 top-[34%] sm:left-8",
   marcus: "right-3 top-[34%] sm:right-8",
-  eleanor: "bottom-3 left-[18%] -translate-x-1/2 sm:left-[22%]",
+  dev: "bottom-3 left-[18%] -translate-x-1/2 sm:left-[22%]",
   user: "bottom-3 right-[18%] translate-x-1/2 sm:right-[22%]",
 };
 
@@ -699,6 +712,10 @@ export function App() {
           setStatus(language === "ko" ? "모임 기록을 만들고 있습니다" : message);
         } else if (message === "Generating private reading notes in parallel") {
           setStatus(language === "ko" ? "세 독자의 독서 노트를 준비하고 있습니다" : message);
+        } else if (message.startsWith("Reading notes ready: ")) {
+          setStatus(copy.readingNotesReady(message.slice("Reading notes ready: ".length)));
+        } else if (message.startsWith("Retrying reading notes: ")) {
+          setStatus(copy.retryingReadingNotes);
         } else if (message === "Identifying book") {
           setStatus(language === "ko" ? "책을 확인하고 있습니다" : message);
         } else {
@@ -779,6 +796,10 @@ export function App() {
                 ? copy.sessionLimitReached
                 : caught.code === "model_refusal"
                   ? copy.modelRefused
+                  : caught.code === "incomplete_output"
+                    ? copy.incompleteOutput
+                    : caught.code === "invalid_structured_output"
+                      ? copy.invalidStructuredOutput
                   : copy.liveGenerationFailed
             : undefined;
         setError(apiMessage ?? (caught instanceof Error ? caught.message : copy.sessionFailed));
@@ -959,6 +980,7 @@ export function App() {
             {generationMode === "live" ? copy.startLive : copy.start}
           </button>
         </section>
+        <DiagnosticsPanel language={language} />
       </main>
     );
   }
@@ -1054,6 +1076,7 @@ export function App() {
             )}
           </div>
         </section>
+        <DiagnosticsPanel language={language} />
       </main>
     );
   }
@@ -1265,6 +1288,7 @@ export function App() {
           </section>
         </div>
       )}
+      <DiagnosticsPanel language={language} />
     </main>
   );
 }

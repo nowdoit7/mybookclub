@@ -21,7 +21,12 @@ describe("persona selection", () => {
     expect(selectPersonas("demo").map(({ id }) => id)).toEqual([
       "maddie",
       "marcus",
-      "eleanor",
+      "dev",
+    ]);
+    expect(selectPersonas("demo").map(({ category }) => category)).toEqual([
+      "emotional",
+      "analytical",
+      "contextual",
     ]);
   });
 });

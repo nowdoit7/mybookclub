@@ -10,6 +10,10 @@ import type {
   UtteranceRequest,
   UtteranceTask,
 } from "../api/generationClient";
+import {
+  IncompleteGenerationError,
+  InvalidStructuredOutputError,
+} from "../api/errors";
 import { selectPersonas } from "../personas";
 import type {
   CompletedSession,
@@ -92,6 +96,27 @@ function getTopicStance(notes: ReadingNotes, topic: string): number {
   return notes.stanceByTopic.find((item) => item.topic === topic)?.stance ?? notes.overallStance;
 }
 
+type GenerationOptions = Partial<
+  Pick<UtteranceRequest, "activeTopic" | "targetSpeaker" | "userArgument">
+> & { allowShelfReference?: boolean };
+
+interface PreparedUtterance {
+  speaker: PersonaCard | "moderator";
+  output: UtteranceOutput;
+  shelfKey: string;
+}
+
+function isRetryableReadingNotesError(error: unknown): boolean {
+  if (
+    error instanceof IncompleteGenerationError ||
+    error instanceof InvalidStructuredOutputError
+  ) {
+    return true;
+  }
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  return error.code === "incomplete_output" || error.code === "invalid_structured_output";
+}
+
 export class SessionEngine {
   private state!: SessionState;
   private readonly shelfCitations = new Set<string>();
@@ -140,12 +165,22 @@ export class SessionEngine {
     };
 
     this.onStatus?.("Generating private reading notes in parallel");
-    const notes = await Promise.all(personas.map((persona) => this.generateNotes(persona)));
-    personas.forEach((persona, index) => {
-      this.state.notes[persona.id] = notes[index];
-    });
+    let readyNoteCount = 0;
+    const notePromises = new Map(
+      personas.map((persona) => {
+        const promise = this.generateNotes(persona).then((notes) => {
+          readyNoteCount += 1;
+          this.onStatus?.(`Reading notes ready: ${readyNoteCount}/${personas.length}`);
+          return notes;
+        });
+        // Later personas may fail before their ordered reveal is reached. Attach a
+        // handler now while preserving the original rejection for that reveal.
+        void promise.catch(() => undefined);
+        return [persona.id, promise] as const;
+      }),
+    );
 
-    await this.runIntro(userInputs.intro);
+    await this.runIntro(userInputs.intro, notePromises);
     await this.runFirstImpressions(userInputs.firstImpression);
     await this.runMemorableScenes(userInputs.memorableScene);
     await this.runDiscussion(userInputs.discussion);
@@ -164,28 +199,34 @@ export class SessionEngine {
 
   private async generateNotes(persona: PersonaCard): Promise<ReadingNotes> {
     let validationError: string | undefined;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const output = await this.client.generateReadingNotes({
-        language: this.language,
-        book: this.state.book,
-        persona,
-        validationError,
-      });
-      const issues = validateReadingNotesQuality(output, this.state.book.candidateTopics);
-      if (issues.length === 0) return normalizeNotes(output);
-      validationError = issues.join("; ");
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const output = await this.client.generateReadingNotes({
+          language: this.language,
+          book: this.state.book,
+          persona,
+          validationError,
+        });
+        const issues = validateReadingNotesQuality(output, this.state.book.candidateTopics);
+        if (issues.length === 0) return normalizeNotes(output);
+        validationError = issues.join("; ");
+        lastError = undefined;
+      } catch (error) {
+        if (!isRetryableReadingNotesError(error) || attempt === 2) throw error;
+        lastError = error;
+        this.onStatus?.(`Retrying reading notes: ${persona.name} (${attempt + 1}/2)`);
+      }
     }
+    if (lastError) throw lastError;
     throw new Error(`${persona.name}'s reading notes failed validation: ${validationError}`);
   }
 
-  private async appendGenerated(
+  private async prepareGenerated(
     speaker: PersonaCard | "moderator",
     task: UtteranceTask,
-    options: Partial<
-      Pick<UtteranceRequest, "activeTopic" | "targetSpeaker" | "userArgument">
-    > & { allowShelfReference?: boolean } = {},
-  ): Promise<Utterance> {
-    await this.waitForAdvance?.({ stage: this.state.stage, task, speaker });
+    options: GenerationOptions = {},
+  ): Promise<PreparedUtterance> {
     const isModerator = speaker === "moderator";
     const shelfKey = isModerator ? "" : `${this.state.stage}:${speaker.id}`;
     const allowShelfReference =
@@ -219,13 +260,14 @@ export class SessionEngine {
       ) {
         issues.push("TOPIC_OPEN must state the code-selected active topic verbatim");
       }
-      if (issues.length === 0) {
-        return this.commitGenerated(speaker, output, shelfKey);
-      }
+      if (issues.length === 0) return { speaker, output, shelfKey };
       validationError = issues.join("; ");
     }
 
-    const fallback: UtteranceOutput = isModerator
+    this.onStatus?.(
+      `Used validated fallback for ${isModerator ? "moderator" : speaker.name}: ${validationError}`,
+    );
+    const output: UtteranceOutput = isModerator
       ? {
           utterance: "Let's hold onto that tension and return to the book.",
           stance: null,
@@ -239,8 +281,33 @@ export class SessionEngine {
           refers_to: options.targetSpeaker ?? null,
           shelf_ref: null,
         };
-    this.onStatus?.(`Used validated fallback for ${isModerator ? "moderator" : speaker.name}: ${validationError}`);
-    return this.commitGenerated(speaker, fallback, shelfKey);
+    return { speaker, output, shelfKey };
+  }
+
+  private async appendGenerated(
+    speaker: PersonaCard | "moderator",
+    task: UtteranceTask,
+    options: GenerationOptions = {},
+  ): Promise<Utterance> {
+    const advancePromise =
+      this.waitForAdvance?.({ stage: this.state.stage, task, speaker }) ?? Promise.resolve();
+    const [prepared] = await Promise.all([
+      this.prepareGenerated(speaker, task, options),
+      advancePromise,
+    ]);
+    return this.commitGenerated(prepared.speaker, prepared.output, prepared.shelfKey);
+  }
+
+  private async appendPrepared(
+    prepared: PreparedUtterance,
+    task: UtteranceTask,
+  ): Promise<Utterance> {
+    await this.waitForAdvance?.({
+      stage: this.state.stage,
+      task,
+      speaker: prepared.speaker,
+    });
+    return this.commitGenerated(prepared.speaker, prepared.output, prepared.shelfKey);
   }
 
   private commitGenerated(
@@ -334,11 +401,21 @@ export class SessionEngine {
     });
   }
 
-  private async runIntro(userInput: string): Promise<void> {
+  private async runIntro(
+    userInput: string,
+    notePromises: Map<string, Promise<ReadingNotes>>,
+  ): Promise<void> {
     this.setStage("INTRO");
+    const introductionPromises = this.state.personas.map(async (persona) => {
+      const notes = await notePromises.get(persona.id)!;
+      this.state.notes[persona.id] = notes;
+      return this.prepareGenerated(persona, "PERSONA_INTRODUCTION");
+    });
+    introductionPromises.forEach((promise) => void promise.catch(() => undefined));
+
     await this.appendGenerated("moderator", "WELCOME");
-    for (const persona of this.state.personas) {
-      await this.appendGenerated(persona, "PERSONA_INTRODUCTION");
+    for (const introductionPromise of introductionPromises) {
+      await this.appendPrepared(await introductionPromise, "PERSONA_INTRODUCTION");
     }
     await this.appendGenerated("moderator", "INVITE_USER");
     await this.requestAndAppendUser(userInput);

@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MockGenerationClient } from "../api/mockGenerationClient";
+import { IncompleteGenerationError } from "../api/errors";
 import { countSentences } from "./sentenceValidation";
 import { SessionEngine } from "./sessionEngine";
 
@@ -100,6 +101,81 @@ describe("SessionEngine", () => {
     expect(state.transcript.filter(({ speaker }) => speaker === "user").map(({ text }) => text)).toEqual(
       suppliedInputs,
     );
+  });
+
+  it("prefetches each introduction as that persona's note becomes ready", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateNotes = client.generateReadingNotes.bind(client);
+    const originalGenerateUtterance = client.generateUtterance.bind(client);
+    let releaseWelcome!: () => void;
+    const welcomeGate = new Promise<void>((resolve) => {
+      releaseWelcome = resolve;
+    });
+    const noteResolvers = new Map<string, () => void>();
+    const noteGates = new Map(
+      ["maddie", "marcus", "dev"].map((id) => [
+        id,
+        new Promise<void>((resolve) => noteResolvers.set(id, resolve)),
+      ]),
+    );
+    let noteCallsStarted = 0;
+    let welcomeGenerationStarted = false;
+    const introductionsStarted: string[] = [];
+
+    client.generateReadingNotes = async (input) => {
+      noteCallsStarted += 1;
+      await noteGates.get(input.persona.id);
+      return originalGenerateNotes(input);
+    };
+    client.generateUtterance = async (input) => {
+      if (input.task === "WELCOME") welcomeGenerationStarted = true;
+      if (input.task === "PERSONA_INTRODUCTION" && input.speaker !== "moderator") {
+        introductionsStarted.push(input.speaker.id);
+      }
+      return originalGenerateUtterance(input);
+    };
+
+    const run = new SessionEngine(client).run({
+      seed: "demo",
+      waitForAdvance(turn) {
+        return turn.task === "WELCOME" ? welcomeGate : Promise.resolve();
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(noteCallsStarted).toBe(3);
+      expect(welcomeGenerationStarted).toBe(true);
+    });
+
+    noteResolvers.get("maddie")?.();
+    await vi.waitFor(() => expect(introductionsStarted).toContain("maddie"));
+    expect(introductionsStarted).not.toContain("marcus");
+    expect(introductionsStarted).not.toContain("dev");
+
+    releaseWelcome();
+    noteResolvers.get("marcus")?.();
+    noteResolvers.get("dev")?.();
+    await expect(run).resolves.toMatchObject({ state: { stage: "WRAP_UP" } });
+  });
+
+  it("retries only an incomplete persona note and preserves the other results", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateNotes = client.generateReadingNotes.bind(client);
+    const calls = new Map<string, number>();
+
+    client.generateReadingNotes = async (input) => {
+      const count = (calls.get(input.persona.id) ?? 0) + 1;
+      calls.set(input.persona.id, count);
+      if (input.persona.id === "marcus" && count === 1) {
+        throw new IncompleteGenerationError("max_output_tokens");
+      }
+      return originalGenerateNotes(input);
+    };
+
+    await expect(new SessionEngine(client).run({ seed: "demo" })).resolves.toMatchObject({
+      state: { stage: "WRAP_UP" },
+    });
+    expect(Object.fromEntries(calls)).toEqual({ maddie: 1, marcus: 2, dev: 1 });
   });
 
   it("completes the same session contract in Korean", async () => {
