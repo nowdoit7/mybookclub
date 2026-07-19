@@ -6,13 +6,14 @@ Make The Reading Table feel like a small group of opinionated readers rather
 than a sequence of chatbot replies. The redesigned session should let the user
 participate, watch two readers argue, or end a topic when it feels complete.
 The interface should foreground faces, targets, and the line currently under
-pressure while retaining the round table as an establishing scene.
+pressure while using a five-person cast lineup to establish the room.
 
 ## Product principles
 
-1. **The table establishes the room; faces carry the conversation.** Show the
-   full table on arrival, stage transitions, and closing. During a turn, focus
-   the current speaker and the person being addressed.
+1. **The cast establishes the room; faces carry the conversation.** Show all
+   five medium portrait cards on arrival, while a requested line is being
+   prepared, at stage transitions, and at closing. During a turn, focus the
+   current speaker and the person being addressed.
 2. **Testimony precedes debate.** First impressions and memorable scenes are
    independently prepared. Readers do not orbit the user before discussion.
 3. **A real disagreement has direction.** `refersTo` is visible in the UI and
@@ -48,7 +49,7 @@ pressure while retaining the round table as an establishing scene.
 
 ### Introduction and testimony
 
-- Start with the full round-table establishing view.
+- Start with the five-person cast-card establishing view.
 - Reveal Alex and each reader as a focused portrait turn.
 - Prepare all first impressions before revealing any of them.
 - Prepare both memorable-scene testimonies before revealing either.
@@ -80,7 +81,7 @@ supporter after the user joins. No one speaks merely to complete a round.
 
 - Keep the user's closing thought first.
 - The two people most involved respond briefly.
-- Return to the full table for Alex's spoken summary.
+- Return to the five-person cast lineup for Alex's spoken summary.
 - Preserve the full transcript and generate the recap after the reader acknowledges
   the final spoken summary.
 
@@ -88,7 +89,8 @@ supporter after the user joins. No one speaks merely to complete a round.
 
 ### Conversation stage
 
-- **Establishing state:** compact round table with all five seats.
+- **Establishing/transition state:** five medium portrait cards with names and
+  roles; highlight the known upcoming speaker while a requested line is prepared.
 - **Focused state:** large active portrait, optional target portrait, speaker
   nameplate, and a visual-novel-style dialogue box.
 - **Debate state:** two portraits face inward; active and target roles are clear.
@@ -107,6 +109,9 @@ supporter after the user joins. No one speaks merely to complete a round.
   completes the page; clicking again moves to the next page or engine-owned turn.
 - Previous navigates only already revealed pages. Returning to the live edge must
   not regenerate dialogue or resolve an engine transition.
+- Requesting a new turn commits the current page cursor before generation. When
+  the utterance arrives, its first page and actual speaker replace the transition
+  state; the previous line is available only through Previous or the transcript.
 - Keep the complete chat-style transcript closed by default. Open it in an overlay
   drawer for review and copy, then return to the exact same dialogue page.
 

@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { MockGenerationClient } from "./api/mockGenerationClient";
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -220,18 +221,35 @@ describe("text prototype", () => {
   });
 
   it("waits for the reader before opening the first line", async () => {
+    const generateUtterance = MockGenerationClient.prototype.generateUtterance;
+    let releaseWelcome: () => void = () => undefined;
+    const welcomeGate = new Promise<void>((resolve) => {
+      releaseWelcome = resolve;
+    });
+    vi.spyOn(MockGenerationClient.prototype, "generateUtterance").mockImplementation(
+      async (input) => {
+        if (input.task === "WELCOME") await welcomeGate;
+        return generateUtterance(input);
+      },
+    );
     render(<App />);
 
     await startMockBook("ko", "달의 정원", "한여름");
     expect(screen.queryAllByRole("article")).toHaveLength(0);
     const dialogue = screen.getByRole("region", { name: "현재 대화" });
     expect(
-      within(dialogue).getAllByText("독자들이 자리에 앉고 있습니다.").length,
+      within(dialogue).getAllByText(
+        "알렉스의 다음 발언이 준비되어 있습니다. 준비되면 다음 사람을 눌러주세요.",
+      ).length,
     ).toBeGreaterThan(0);
+    expect(within(dialogue).getAllByRole("listitem")).toHaveLength(5);
     expect(screen.getByRole("button", { name: /테이블 입장/u })).toBeEnabled();
     expect(screen.getByRole("button", { name: "대화 기록 보기 0" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: /테이블 입장/u }));
+    expect(within(dialogue).getAllByText("알렉스의 발언을 준비하고 있습니다…").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /생각 중/u })).toBeDisabled();
+    releaseWelcome();
     expect(
       (await within(dialogue).findAllByText(/리딩 테이블에 오신 것을 환영합니다/u)).length,
     ).toBeGreaterThan(0);
@@ -249,7 +267,7 @@ describe("text prototype", () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "English" }));
-    await startMockBook("en", "The Cartographer's Lantern", "R. Vale");
+    await startMockBook("en", "The Cartographer's Lantern", "Vale");
     expect(screen.queryAllByRole("article")).toHaveLength(0);
 
     fireEvent.click(await screen.findByRole("button", { name: /Enter the table/u }));
@@ -263,9 +281,15 @@ describe("text prototype", () => {
     expect(screen.getByRole("region", { name: "Reading table" })).toBeVisible();
     expect(screen.getByText(/^Speaking$/u)).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "View transcript 1" }));
+    fireEvent.click(screen.getByRole("button", { name: /Next speaker/u }));
+    await waitFor(() =>
+      expect(within(dialogue).getAllByText(/Hi, I'm/u).length).toBeGreaterThan(0),
+    );
+    expect(within(dialogue).queryByLabelText("Alex")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "View transcript 2" }));
     expect(screen.getByRole("dialog", { name: "Conversation transcript" })).toBeVisible();
-    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Copy full transcript" }));
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining("## Intro\n\n**Alex**"),

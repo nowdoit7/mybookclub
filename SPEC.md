@@ -32,9 +32,9 @@ friendly narrator. A real book club **collides**. This app is different because:
 3. **A persistent artifact** — every session ends with an auto-generated,
    structured **meeting recap document** (the kind a real book club secretary
    would write), downloadable and shareable.
-4. **A purpose-built UI** — a round-table establishing scene that cuts into a
-   full-screen portrait-led conversation stage, directed speaker/target cues,
-   manual paged dialogue, and hard user stops.
+4. **A purpose-built UI** — a five-person cast-card establishing scene that cuts
+   into a full-screen portrait-led conversation stage, directed speaker/target
+   cues, manual paged dialogue, and hard user stops.
 5. **Participant or audience agency** — code schedules genuine reader-to-reader
    conflict, while bounded checkpoints let the user join, keep listening, or
    wrap up instead of being forced into the center of every exchange.
@@ -52,7 +52,7 @@ different interpretations preserved rather than flattened.
 | Criterion | How this project answers it |
 |---|---|
 | Technological implementation (Codex use) | Multi-agent orchestration engine, stateless per-utterance calls, JSON-schema outputs, prefetch pipeline. Document Codex collaboration in README + commit history. |
-| Design (complete product experience) | Full 5-stage session flow with beginning/middle/end, recap artifact, coherent round-table UI. Not a tech demo — a finished loop. |
+| Design (complete product experience) | Full 5-stage session flow with beginning/middle/end, recap artifact, coherent portrait-led book-club UI. Not a tech demo — a finished loop. |
 | Potential impact | Access to book-club-quality discussion for readers who have none; also pre/post-meeting companion for real clubs. |
 | Quality of the idea | "Committed-stance multi-agent book club with enforced disagreement" — not a chatbot skin. |
 
@@ -83,8 +83,8 @@ different interpretations preserved rather than flattened.
   delivery without changing persona positions, flow, or adding a model call
 - A manual visual-novel dialogue player: fast typewriter reveal, click-to-complete,
   sentence-safe pages, and previous/next navigation; every user turn is a hard stop
-- Full-table establishing states plus a portrait-led, visual-novel-style
-  conversation stage with active and addressed readers visible
+- Five-person cast-card establishing and transition states plus a portrait-led,
+  visual-novel-style conversation stage with active and addressed readers visible
 - A closed-by-default transcript drawer for review, copy, and evaluation; the
   main stage never carries a permanently visible chat log
 - A compact pre-session identity step with a local display name and one of four
@@ -164,7 +164,7 @@ a hard project usage limit in the OpenAI Platform before publishing the demo.
                ▼
 ┌─────────────────────────────────────────────┐
 │ SHARED TRANSCRIPT + UI                      │
-│ round table · chat log · stance map         │
+│ portrait stage · transcript · stance map    │
 └──────────────┬──────────────────────────────┘
                ▼
         ↻ back to moderator engine
@@ -503,8 +503,14 @@ Global rules enforced by code:
   typing completes that page; clicking again moves forward. Previous/next buttons
   move through revealed pages, and only Next at the live edge resolves the pending
   engine transition.
-- When the next utterance is not ready, keep the current page visible and show a
-  quiet generation state. Never insert a timer or progress bar.
+- When the reader requests the next turn and its utterance is not ready, replace
+  the previous line with the five-person transition cast and a quiet preparation
+  message. If code already knows the next speaker, name and highlight that person.
+  Never attribute the previous utterance to the upcoming turn, and never insert a
+  timer or progress bar.
+- At the live edge, appending a new utterance must move the main stage to that
+  utterance's first page and speaker. An explicit Previous action may browse older
+  pages; those pages are labeled as earlier dialogue and never drive engine flow.
 - Reaching a user turn always stops playback and exposes the input form. It
   never auto-passes or submits on the user's behalf.
 
@@ -718,9 +724,15 @@ Layout (desktop, single screen):
 └────────────────────────────────────────────────┘
 ```
 
-- The full oval table is an **establishing state**, shown on arrival, major stage
-  transitions, and closing. It is not a permanently empty map occupying the
-  primary reading surface.
+- A row of five medium portrait cards is the **establishing and transition
+  state**, shown on arrival, while a requested utterance is being prepared, at
+  major stage transitions, and at closing. It replaces the decorative oval table:
+  faces, names, and occupations communicate who has gathered more clearly than
+  empty seat positions.
+- Transition states never reuse the previous speaker's nameplate or line as the
+  current turn. When known, the upcoming speaker is highlighted and the fixed
+  dialogue box says that person's line is being prepared; otherwise it says the
+  next part of the conversation is being prepared.
 - During dialogue, the primary surface becomes a visual-novel-style focused
   stage: the active illustrated bust is large, the addressed participant is
   visible when `refersTo` is present, and a fixed-height nameplate dialogue box

@@ -61,7 +61,7 @@ npm run build
 - Development-only atmosphere diagnostics with no additional model call
 - Code-selected lead debaters with explicit persona-to-persona targets
 - A bounded discussion checkpoint: join, listen to one more exchange, or wrap
-- A short round-table establishing scene followed by a portrait-led dialogue stage
+- A five-person cast-card establishing/transition scene followed by a portrait-led dialogue stage
 - Nine optimized illustrated reader portraits plus four selectable user portraits
 - A full-viewport, game-like conversation stage with persistent participant cards
 - An on-demand transcript drawer that is closed by default and never changes session flow

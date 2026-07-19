@@ -42,3 +42,5 @@
 - 2026-07-19: Exposed the current atmosphere only in development diagnostics and hid it from production and automated tests so it stays a tuning aid rather than a user control.
 - 2026-07-19: Replaced timer-driven playback and the always-open recent-chat rail with reader-controlled sentence-safe pages, fast typewriter reveal, previous/next navigation, and an on-demand transcript drawer.
 - 2026-07-19: Expanded the reading room into a full-viewport visual-novel stage with persistent participant spotlights and four selectable presentation-only user portraits; the engine still owns every speaker and transition.
+- 2026-07-19: Replaced the decorative oval transition table with five medium cast cards that expose faces and roles, and added a named next-speaker preparation state without timers.
+- 2026-07-19: Fixed the live dialogue cursor so a newly appended one-page utterance always replaces the prior speaker on the main stage; older lines remain available through Previous and the transcript.

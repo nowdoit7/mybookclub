@@ -142,7 +142,13 @@ const COPY = {
     downloadMarkdown: "Download Markdown",
     manualHint: "Dialogue advances only when you choose Next.",
     readingTable: "Reading table",
-    tableReady: "The readers are taking their seats.",
+    tableReady: "Everyone is here. Alex will open the session when you are ready.",
+    sceneTransition: "Scene transition",
+    stageReady: (stageName: string) => `${stageName} is ready to begin.`,
+    preparingRoom: "Preparing the next part of the conversation…",
+    nextTurnReady: (name: string) => `${name} is next. Choose Next speaker when you are ready.`,
+    preparingTurn: (name: string) => `Preparing ${name}'s next line…`,
+    earlierDialogue: (stageName: string) => `Earlier dialogue · ${stageName}`,
     currentDialogue: "Current dialogue",
     challengedLine: "The line you are answering",
     discussionChoice: "How would you like to continue?",
@@ -268,7 +274,13 @@ const COPY = {
     downloadMarkdown: "Markdown 다운로드",
     manualHint: "다음 버튼을 눌러야 대화가 진행됩니다.",
     readingTable: "리딩 테이블",
-    tableReady: "독자들이 자리에 앉고 있습니다.",
+    tableReady: "모두 모였습니다. 준비되면 알렉스가 모임을 시작합니다.",
+    sceneTransition: "장면 전환",
+    stageReady: (stageName: string) => `${stageName} 단계로 넘어갑니다.`,
+    preparingRoom: "다음 대화를 준비하고 있습니다…",
+    nextTurnReady: (name: string) => `${name}의 다음 발언이 준비되어 있습니다. 준비되면 다음 사람을 눌러주세요.`,
+    preparingTurn: (name: string) => `${name}의 발언을 준비하고 있습니다…`,
+    earlierDialogue: (stageName: string) => `이전 대화 · ${stageName}`,
     currentDialogue: "현재 대화",
     challengedLine: "지금 답변할 발언",
     discussionChoice: "이 토론을 어떻게 이어갈까요?",
@@ -507,6 +519,60 @@ function ParticipantCard({
   );
 }
 
+function SceneParticipantCard({
+  speaker,
+  language,
+  userAvatarId,
+  userDisplayName,
+  status,
+}: {
+  speaker: string;
+  language: AppLanguage;
+  userAvatarId: UserAvatarId;
+  userDisplayName: string;
+  status?: "active" | "next";
+}) {
+  const name = speakerDisplayName(speaker, language, userDisplayName);
+  const role = speakerDisplayRole(speaker, language);
+  const portraitUrl = portraitUrlFor(speaker);
+
+  return (
+    <div
+      role="listitem"
+      aria-label={`${name} · ${role}`}
+      className={`relative h-40 w-28 shrink-0 overflow-hidden rounded-2xl border bg-stone-950/75 shadow-2xl transition-all duration-300 sm:h-48 sm:w-32 lg:h-56 lg:w-40 ${
+        status
+          ? "-translate-y-2 border-amber-300 ring-4 ring-amber-300/25"
+          : "border-amber-100/20 opacity-85"
+      }`}
+    >
+      {speaker === "user" ? (
+        <UserAvatarArtwork
+          avatarId={userAvatarId}
+          portrait
+          label={name}
+          className="h-full w-full"
+        />
+      ) : portraitUrl ? (
+        <img src={portraitUrl} alt={name} className="h-full w-full object-cover object-top" />
+      ) : (
+        <div className="grid h-full place-items-center bg-stone-800 text-3xl font-bold text-amber-100">
+          {name.slice(0, 1)}
+        </div>
+      )}
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/85 to-transparent px-3 pb-3 pt-10 text-left">
+        <p className="truncate text-sm font-bold text-white">{name}</p>
+        <p className="mt-0.5 truncate text-[10px] text-stone-300">{role}</p>
+      </div>
+      {status && (
+        <span className="absolute right-2 top-2 rounded-full bg-amber-300 px-2 py-1 text-[9px] font-black text-amber-950 shadow">
+          {status === "active" ? COPY[language].currentSpeaker : COPY[language].nextSpeaker}
+        </span>
+      )}
+    </div>
+  );
+}
+
 type PageNavigationState = {
   knownPageCount: number;
   cursor: number;
@@ -602,23 +668,46 @@ function ConversationStage({
   const speakers = ["moderator", ...personas.map(({ id }) => id), "user"];
   const currentPage = pages[cursor];
   const currentUtterance = currentPage?.utterance;
-  const primarySpeaker = currentUtterance?.speaker ?? activeSpeaker ?? upcomingSpeaker ?? "moderator";
-  const referencedSpeaker = currentUtterance?.refersTo;
-  const showClosingTable =
+  const isBrowsingHistory = cursor < revealedCursor;
+  const isHistoricalPage = Boolean(currentUtterance && isBrowsingHistory);
+  const isStageTransition = Boolean(
+    currentUtterance && currentUtterance.stage !== stage && !isBrowsingHistory,
+  );
+  const isOpeningScene = !currentUtterance;
+  const isPreparingNextTurn = busy && !isBrowsingHistory;
+  const isTransitionScene = isOpeningScene || isStageTransition || isPreparingNextTurn;
+  const displayPage = isTransitionScene ? undefined : currentPage;
+  const primarySpeaker = isTransitionScene
+    ? upcomingSpeaker ?? activeSpeaker ?? "moderator"
+    : currentUtterance?.speaker ?? activeSpeaker ?? upcomingSpeaker ?? "moderator";
+  const referencedSpeaker = isTransitionScene ? undefined : currentUtterance?.refersTo;
+  const showClosingCast =
     stage === "WRAP_UP" && currentUtterance?.stage === stage && currentUtterance.speaker === "moderator";
-  const showFullTable =
-    !currentUtterance || currentUtterance.stage !== stage || showClosingTable;
+  const showCastLineup = isTransitionScene || showClosingCast;
   const showReferencedSpeaker = Boolean(
     referencedSpeaker && referencedSpeaker !== primarySpeaker && speakers.includes(referencedSpeaker),
   );
+  const transitionSpeaker = upcomingSpeaker;
+  const transitionSpeakerName = transitionSpeaker
+    ? speakerDisplayName(transitionSpeaker, language, userDisplayName)
+    : undefined;
+  const transitionText = busy
+    ? transitionSpeakerName
+      ? copy.preparingTurn(transitionSpeakerName)
+      : copy.preparingRoom
+    : transitionSpeakerName
+      ? copy.nextTurnReady(transitionSpeakerName)
+      : isOpeningScene
+        ? copy.tableReady
+        : copy.stageReady(STAGE_LABELS[language][stage]);
   const { visibleText, typing, complete } = useTypewriter(
-    currentPage?.text ?? "",
-    currentPage?.key ?? "empty",
+    displayPage?.text ?? "",
+    displayPage?.key ?? `transition:${stage}`,
   );
 
   const nextPage = () => {
     if (interactionPanel) return;
-    if (typing) {
+    if (displayPage && typing) {
       complete();
       return;
     }
@@ -626,7 +715,7 @@ function ConversationStage({
       setPageNavigation({ ...navigation, cursor: cursor + 1 });
       return;
     }
-    if (currentPage && currentPage.pageIndex < currentPage.pageCount - 1) {
+    if (displayPage && displayPage.pageIndex < displayPage.pageCount - 1) {
       setPageNavigation({
         ...navigation,
         cursor: cursor + 1,
@@ -634,23 +723,28 @@ function ConversationStage({
       });
       return;
     }
-    if (canAdvance && !busy) onAdvance();
+    if (canAdvance && !busy) {
+      setPageNavigation(navigation);
+      onAdvance();
+    }
   };
 
-  const nextLabel = typing
-    ? copy.revealPage
-    : cursor < revealedCursor || (currentPage && currentPage.pageIndex < currentPage.pageCount - 1)
+  const nextLabel = busy
+    ? copy.thinking
+    : displayPage && typing
+      ? copy.revealPage
+      : cursor < revealedCursor || (displayPage && displayPage.pageIndex < displayPage.pageCount - 1)
       ? copy.nextPage
-      : busy
-        ? copy.thinking
-        : currentPage
+      : displayPage
           ? copy.advanceSpeaker
-          : copy.enterTable;
+          : transcript.length === 0
+            ? copy.enterTable
+            : copy.advanceSpeaker;
   const canMoveWithinRevealedPages =
     cursor < revealedCursor ||
-    Boolean(currentPage && currentPage.pageIndex < currentPage.pageCount - 1);
+    Boolean(displayPage && displayPage.pageIndex < displayPage.pageCount - 1);
   const nextDisabled =
-    !typing && !canMoveWithinRevealedPages && (!canAdvance || busy);
+    busy || (!(displayPage && typing) && !canMoveWithinRevealedPages && !canAdvance);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (interactionPanel || (event.key !== " " && event.key !== "Enter")) return;
@@ -680,8 +774,10 @@ function ConversationStage({
           </div>
           <div className="grid flex-1 grid-cols-5 gap-1.5 sm:gap-2" role="list">
             {speakers.map((speaker) => {
-              const isActive = primarySpeaker === speaker && Boolean(currentUtterance);
-              const isAddressed = referencedSpeaker === speaker && speaker !== primarySpeaker;
+              const isActive =
+                !isTransitionScene && primarySpeaker === speaker && Boolean(displayPage);
+              const isAddressed =
+                !isTransitionScene && referencedSpeaker === speaker && speaker !== primarySpeaker;
               const isNext = !isActive && (upcomingSpeaker === speaker || (Boolean(inputRequest) && speaker === "user"));
               return (
                 <ParticipantCard
@@ -700,105 +796,129 @@ function ConversationStage({
         </div>
 
         <div
-        className="relative flex flex-1 flex-col overflow-hidden px-4 sm:px-8"
-        role="region"
-        aria-label={copy.currentDialogue}
-        aria-live="polite"
-      >
-        {showFullTable ? (
-          <div className="flex flex-1 flex-col items-center justify-center pb-40 text-center">
-            <div className="flex -space-x-6" aria-hidden="true">
-              {speakers.map((speaker) => (
-                <div key={speaker} className="rounded-full border-4 border-amber-100/35 shadow-2xl">
-                  <SpeakerAvatar speaker={speaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} />
-                </div>
-              ))}
+          className="relative flex flex-1 flex-col overflow-hidden px-4 sm:px-8"
+          role="region"
+          aria-label={copy.currentDialogue}
+          aria-live="polite"
+        >
+          {showCastLineup ? (
+            <div className="flex flex-1 flex-col items-center justify-center pb-40 text-center">
+              <div
+                className="flex w-full max-w-5xl items-end justify-start gap-2 overflow-x-auto px-1 pb-3 pt-8 sm:gap-3 md:justify-center lg:gap-5"
+                role="list"
+                aria-label={copy.readingTable}
+              >
+                {speakers.map((speaker) => (
+                  <SceneParticipantCard
+                    key={speaker}
+                    speaker={speaker}
+                    language={language}
+                    userAvatarId={userAvatarId}
+                    userDisplayName={userDisplayName}
+                    status={
+                      isTransitionScene
+                        ? upcomingSpeaker === speaker
+                          ? "next"
+                          : undefined
+                        : primarySpeaker === speaker
+                          ? "active"
+                          : undefined
+                    }
+                  />
+                ))}
+              </div>
+              <p className="mt-3 font-serif text-xl text-amber-50 sm:text-2xl">
+                {STAGE_LABELS[language][stage]}
+              </p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100/50">
+                {isTransitionScene ? copy.sceneTransition : copy.currentDialogue}
+              </p>
             </div>
-            <div className="mt-7 h-16 w-[58%] rounded-[50%] border border-amber-200/25 bg-amber-900/65 shadow-[inset_0_2px_0_rgba(255,255,255,0.16),0_18px_30px_rgba(0,0,0,0.35)]" />
-            <p className="mt-5 font-serif text-2xl text-amber-50">
-              {currentUtterance ? STAGE_LABELS[language][stage] : copy.tableReady}
-            </p>
-            <p className="mt-2 text-sm text-amber-100/60">
-              {personas.map(({ id }) => localizedSpeakerName(id, language)).join(" · ")}
-            </p>
-          </div>
-        ) : (
+          ) : (
             <div className="flex flex-1 items-end justify-center gap-4 pb-40 sm:gap-12 lg:gap-20">
               <StagePortrait speaker={primarySpeaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} />
               {showReferencedSpeaker && referencedSpeaker && (
                 <StagePortrait speaker={referencedSpeaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} secondary />
               )}
             </div>
-        )}
+          )}
 
-        {interactionPanel ? (
-          <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-8 sm:bottom-6">{interactionPanel}</div>
-        ) : (
-          <div
-            className="absolute inset-x-3 bottom-3 z-20 h-40 rounded-2xl border border-amber-100/25 bg-stone-950/90 p-4 text-left text-stone-100 shadow-[0_24px_70px_rgba(0,0,0,0.6)] backdrop-blur-md sm:inset-x-8 sm:bottom-6 sm:h-44 sm:p-5"
-            onClick={nextPage}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="truncate rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-stone-950">
-                  {speakerDisplayName(primarySpeaker, language, userDisplayName)}
-                </p>
-                <span className="truncate text-xs text-stone-400">
-                  {speakerDisplayRole(primarySpeaker, language)}
-                </span>
+          {interactionPanel ? (
+            <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-8 sm:bottom-6">{interactionPanel}</div>
+          ) : (
+            <div
+              className="absolute inset-x-3 bottom-3 z-20 h-40 rounded-2xl border border-amber-100/25 bg-stone-950/90 p-4 text-left text-stone-100 shadow-[0_24px_70px_rgba(0,0,0,0.6)] backdrop-blur-md sm:inset-x-8 sm:bottom-6 sm:h-44 sm:p-5"
+              onClick={nextPage}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-stone-950">
+                    {isTransitionScene
+                      ? STAGE_LABELS[language][stage]
+                      : speakerDisplayName(primarySpeaker, language, userDisplayName)}
+                  </p>
+                  <span className="truncate text-xs text-stone-400">
+                    {isTransitionScene
+                      ? copy.sceneTransition
+                      : isHistoricalPage && currentUtterance
+                        ? copy.earlierDialogue(STAGE_LABELS[language][currentUtterance.stage])
+                        : speakerDisplayRole(primarySpeaker, language)}
+                  </span>
+                </div>
+                {displayPage && (
+                  <span className="shrink-0 font-mono text-[11px] text-amber-200/70">
+                    {displayPage.pageIndex + 1} / {displayPage.pageCount}
+                  </span>
+                )}
               </div>
-              {currentPage && (
-                <span className="shrink-0 font-mono text-[11px] text-amber-200/70">
-                  {currentPage.pageIndex + 1} / {currentPage.pageCount}
-                </span>
-              )}
-            </div>
-            <p className="mt-3 min-h-14 whitespace-pre-wrap text-base leading-7 text-stone-100 sm:text-lg sm:leading-8">
-              {currentPage ? visibleText : copy.tableReady}
-              {typing && <span className="ml-0.5 animate-pulse text-amber-300">▌</span>}
-            </p>
-            <span className="sr-only" aria-live="polite">{currentPage?.text}</span>
-            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between sm:left-5 sm:right-5">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setPageNavigation({ ...navigation, cursor: Math.max(0, cursor - 1) });
-                  }}
-                  disabled={cursor <= 0}
-                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
-                >
-                  ‹ {copy.previous}
-                </button>
-                {cursor < revealedCursor && (
+              <p className="mt-3 min-h-14 whitespace-pre-wrap text-base leading-7 text-stone-100 sm:text-lg sm:leading-8">
+                {displayPage ? visibleText : transitionText}
+                {displayPage && typing && <span className="ml-0.5 animate-pulse text-amber-300">▌</span>}
+              </p>
+              <span className="sr-only" aria-live="polite">
+                {displayPage?.text ?? transitionText}
+              </span>
+              <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between sm:left-5 sm:right-5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setPageNavigation({ ...navigation, cursor: revealedCursor });
+                      setPageNavigation({ ...navigation, cursor: Math.max(0, cursor - 1) });
                     }}
-                    className="text-xs font-semibold text-amber-200 underline decoration-amber-200/30 underline-offset-4"
+                    disabled={cursor <= 0}
+                    className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
                   >
-                    {copy.returnLive}
+                    ‹ {copy.previous}
                   </button>
-                )}
+                  {cursor < revealedCursor && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setPageNavigation({ ...navigation, cursor: revealedCursor });
+                      }}
+                      className="text-xs font-semibold text-amber-200 underline decoration-amber-200/30 underline-offset-4"
+                    >
+                      {copy.returnLive}
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    nextPage();
+                  }}
+                  disabled={nextDisabled}
+                  className="rounded-lg bg-amber-300 px-4 py-1.5 text-xs font-black text-amber-950 shadow hover:bg-amber-200 disabled:cursor-wait disabled:opacity-45"
+                >
+                  {nextLabel} ›
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  nextPage();
-                }}
-                disabled={nextDisabled}
-                className="rounded-lg bg-amber-300 px-4 py-1.5 text-xs font-black text-amber-950 shadow hover:bg-amber-200 disabled:cursor-wait disabled:opacity-45"
-              >
-                {nextLabel} ›
-              </button>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       </div>
     </section>
   );
