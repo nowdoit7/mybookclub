@@ -652,7 +652,7 @@ function RecentDialogueDock({
   };
 
   return (
-    <section className="mt-4 overflow-hidden rounded-2xl border border-stone-200 bg-[#fffdf8] shadow-sm" aria-label={copy.recentDialogue}>
+    <section className="mt-4 overflow-hidden rounded-2xl border border-stone-200 bg-[#fffdf8] shadow-sm xl:mt-0" aria-label={copy.recentDialogue}>
       <div className="flex items-center justify-between border-b border-stone-200 bg-white px-4 py-2">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
           {copy.recentDialogue}
@@ -662,7 +662,7 @@ function RecentDialogueDock({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="h-52 space-y-3 overflow-y-auto px-4 py-4"
+        className="h-52 space-y-3 overflow-y-auto px-4 py-4 xl:h-[22rem]"
       >
         {transcript.length === 0 ? (
           <p className="text-sm text-stone-500">{copy.tableReady}</p>
@@ -1683,7 +1683,7 @@ export function App() {
   return (
     <main className="min-h-screen bg-stone-100 text-stone-900">
       <header className="sticky top-0 z-10 border-b border-stone-200 bg-stone-100/95 px-4 py-4 backdrop-blur sm:px-6">
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-[88rem]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-serif text-xl">The Reading Table</p>
@@ -1733,25 +1733,28 @@ export function App() {
         </div>
       </header>
 
-      <section className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-4xl flex-col px-4 py-6 sm:px-6">
-        <ConversationStage
-          language={language}
-          stage={stage}
-          book={confirmedBook!}
-          personas={sessionPersonas}
-          latestUtterance={transcript.at(-1)}
-          inputRequest={inputRequest}
-          activeSpeaker={activeSpeaker}
-          upcomingSpeaker={upcomingSpeaker}
-        />
+      <section className="mx-auto grid min-h-[calc(100vh-9rem)] max-w-[88rem] px-4 py-6 sm:px-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(25rem,1fr)] xl:items-start xl:gap-6">
+        <div className="min-w-0">
+          <ConversationStage
+            language={language}
+            stage={stage}
+            book={confirmedBook!}
+            personas={sessionPersonas}
+            latestUtterance={transcript.at(-1)}
+            inputRequest={inputRequest}
+            activeSpeaker={activeSpeaker}
+            upcomingSpeaker={upcomingSpeaker}
+          />
+        </div>
 
-        <RecentDialogueDock
-          transcript={transcript}
-          language={language}
-          onReadingHistory={handleHistoryReading}
-        />
+        <aside className="min-w-0 xl:sticky xl:top-36">
+          <RecentDialogueDock
+            transcript={transcript}
+            language={language}
+            onReadingHistory={handleHistoryReading}
+          />
 
-        <div className="sticky bottom-0 mt-4 border-t border-stone-200 bg-stone-100 py-4">
+          <div className="sticky bottom-0 z-[2] mt-4 border-t border-stone-200 bg-stone-100 py-4 xl:static xl:border-0 xl:bg-transparent xl:py-0">
           {error && (
             <p role="alert" className="mb-3 rounded-xl bg-red-100 p-3 text-sm text-red-900">
               {error}
@@ -1812,7 +1815,7 @@ export function App() {
                 value={inputText}
                 onChange={(event) => setInputText(event.target.value)}
                 placeholder={copy.placeholder}
-                className="mt-2 w-full resize-none rounded-xl border border-stone-300 p-3 leading-6 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200"
+                className="mt-2 min-h-24 w-full resize-none rounded-xl border border-stone-300 p-3 leading-6 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200 xl:min-h-32"
               />
               <div className="mt-3 flex justify-end gap-2">
                 <button
@@ -1884,7 +1887,8 @@ export function App() {
               </button>
             </div>
           )}
-        </div>
+          </div>
+        </aside>
       </section>
 
       {transcriptOpen && (

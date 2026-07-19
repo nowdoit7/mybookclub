@@ -37,3 +37,4 @@
 - 2026-07-19: Reframed the table as an establishing scene and made illustrated faces, directed speech, the challenged line, and scrollable recent dialogue the persistent conversation surface.
 - 2026-07-19: Replaced the fixed user-centered panel with two lead readers who must clash before a code-owned join/listen/wrap checkpoint; independent testimony no longer bends around the user's previous answer.
 - 2026-07-19: Added warm/playful/intense delivery as session data, preserved one bounded listening extension, and kept user rebuttal enforcement mandatory whenever the user joins.
+- 2026-07-19: Expanded the desktop session into an unobstructed portrait stage plus a recent-dialogue/response rail; narrow screens keep the stacked flow and sticky response access.

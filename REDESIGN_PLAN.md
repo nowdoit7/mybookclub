@@ -90,7 +90,10 @@ supporter after the user joins. No one speaks merely to complete a round.
 
 ### Recent conversation dock
 
-- Fixed-height, internally scrollable history under the stage.
+- Fixed-height, internally scrollable history in a desktop right rail, returning
+  beneath the stage on narrower screens.
+- Keep the user response/playback card in the same rail so it never covers the
+  challenged line or active portrait on wide screens.
 - Auto-scroll to the newest turn only when the user is already near the bottom.
 - Scrolling upward temporarily pauses automatic playback.
 - Returning to the bottom resumes only a dock-caused pause.

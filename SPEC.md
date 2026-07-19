@@ -720,11 +720,14 @@ Layout (desktop, single screen):
   It changes table-wide delivery, not Alex's identity, and cannot change flow.
 - A compact participant row keeps names, occupations, and current/target cues
   visible without exposing the future speaker queue.
-- Beneath the stage, render a fixed-height recent-dialogue dock. It auto-scrolls
-  only while the reader is near its bottom; scrolling upward pauses playback
-  with reason `history`. Returning to the bottom resumes that temporary pause.
-  The complete transcript remains available in a separate modal/drawer for
-  review, copy, and evaluation.
+- On wide desktop screens, use a two-column conversation workspace: the focused
+  stage remains unobstructed on the left, while the fixed-height recent-dialogue
+  dock and user/playback controls form a right rail. On narrower screens the
+  rail returns beneath the stage and the user controls may stay sticky. The dock
+  auto-scrolls only while the reader is near its bottom; scrolling upward pauses
+  playback with reason `history`. Returning to the bottom resumes that temporary
+  pause. The complete transcript remains available in a separate modal/drawer
+  for review, copy, and evaluation.
 - When the user is answering a challenge, keep the challenger portrait and the
   full challenged utterance visible above the input. Never replace the line
   under discussion with a generic prompt.
