@@ -219,28 +219,28 @@ describe("text prototype", () => {
     );
   });
 
-  it("advances the first reader automatically without a click", async () => {
+  it("waits for the reader before opening the first line", async () => {
     render(<App />);
 
     await startMockBook("ko", "달의 정원", "한여름");
     expect(screen.queryAllByRole("article")).toHaveLength(0);
     const dialogue = screen.getByRole("region", { name: "현재 대화" });
+    expect(
+      within(dialogue).getAllByText("독자들이 자리에 앉고 있습니다.").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /테이블 입장/u })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "대화 기록 보기 0" })).toBeDisabled();
 
-    await waitFor(
-      () =>
-        expect(
-          within(dialogue).getByText(/리딩 테이블에 오신 것을 환영합니다/u),
-        ).toBeVisible(),
-      { timeout: 2_500 },
-    );
-    expect(screen.queryAllByRole("article")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "일시정지" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "바로 다음" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "일시정지" }));
-    expect(screen.getByRole("button", { name: "계속" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /테이블 입장/u }));
+    expect(
+      (await within(dialogue).findAllByText(/리딩 테이블에 오신 것을 환영합니다/u)).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("article")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "대화 기록 보기 1" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /다음 페이지/u })).toBeEnabled();
   });
 
-  it("advances exactly one utterance per Next click", async () => {
+  it("advances one dialogue page at a time and keeps the transcript closed", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -249,26 +249,23 @@ describe("text prototype", () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "English" }));
-    fireEvent.click(screen.getByRole("button", { name: "Automatic pacing on" }));
     await startMockBook("en", "The Cartographer's Lantern", "R. Vale");
-    const next = await screen.findByRole("button", { name: "Next →" });
     expect(screen.queryAllByRole("article")).toHaveLength(0);
 
-    fireEvent.click(next);
+    fireEvent.click(await screen.findByRole("button", { name: /Enter the table/u }));
     const dialogue = screen.getByRole("region", { name: "Current dialogue" });
     await waitFor(() =>
-      expect(within(dialogue).getByText(/Welcome to The Reading Table/u)).toBeVisible(),
+      expect(within(dialogue).getAllByText(/Welcome to The Reading Table/u).length).toBeGreaterThan(0),
     );
-    expect(screen.queryAllByRole("article")).toHaveLength(1);
-    expect(within(dialogue).getByText("Alex")).toBeVisible();
+    expect(screen.queryAllByRole("article")).toHaveLength(0);
+    expect(within(dialogue).getAllByText("Alex").length).toBeGreaterThan(0);
     expect(within(dialogue).getByRole("img", { name: "Alex" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Reading table" })).toBeVisible();
-    expect(screen.queryByText(/^Speaking$/u)).not.toBeInTheDocument();
-    expect(screen.queryByText(/^Next$/u)).not.toBeInTheDocument();
+    expect(screen.getByText(/^Speaking$/u)).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "View transcript 1" }));
     expect(screen.getByRole("dialog", { name: "Conversation transcript" })).toBeVisible();
-    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Copy full transcript" }));
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining("## Intro\n\n**Alex**"),
@@ -294,16 +291,15 @@ describe("text prototype", () => {
       "aria-pressed",
       "true",
     );
-    fireEvent.click(screen.getByRole("button", { name: "자동 진행 켜짐" }));
     await startMockBook("ko", "천천히 읽는 기술", "김독자");
 
-    for (let guard = 0; guard < 45; guard += 1) {
+    for (let guard = 0; guard < 100; guard += 1) {
       await waitFor(() => {
         const readyControl =
           screen.queryByRole("heading", { name: "모임이 끝났습니다" }) ??
           screen.queryByRole("textbox") ??
           screen.queryByRole("button", { name: "내 의견 보태기" }) ??
-          screen.queryByRole("button", { name: "다음 →" });
+          screen.queryByRole("button", { name: /(?:테이블 입장|다음 페이지|다음 사람)/u });
         expect(readyControl).not.toBeNull();
       });
       if (screen.queryByRole("heading", { name: "모임이 끝났습니다" })) break;
@@ -311,11 +307,9 @@ describe("text prototype", () => {
       const textbox = screen.queryByRole("textbox");
       if (textbox) {
         if (inputIndex === 4) {
-          expect(
-            within(screen.getByRole("region", { name: "현재 대화" })).getByText(
-              "지금 답변할 발언",
-            ),
-          ).toBeVisible();
+          expect(screen.getByRole("region", { name: "현재 대화" })).toHaveTextContent(
+            "지금 답변할 발언",
+          );
         }
         fireEvent.change(textbox, { target: { value: inputs[inputIndex] } });
         inputIndex += 1;
@@ -323,7 +317,9 @@ describe("text prototype", () => {
       } else if (screen.queryByRole("button", { name: "내 의견 보태기" })) {
         fireEvent.click(screen.getByRole("button", { name: "내 의견 보태기" }));
       } else {
-        const next = screen.getByRole("button", { name: "다음 →" });
+        const next = screen.getByRole("button", {
+          name: /(?:테이블 입장|다음 페이지|다음 사람)/u,
+        });
         await waitFor(() => expect(next).toBeEnabled());
         fireEvent.click(next);
       }

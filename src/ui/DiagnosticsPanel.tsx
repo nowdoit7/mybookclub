@@ -98,7 +98,7 @@ export function DiagnosticsPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-[60] rounded-full border border-stone-300 bg-white px-4 py-2 text-xs font-semibold text-stone-700 shadow-lg hover:bg-stone-50"
+        className="fixed bottom-1 right-1 z-[60] rounded-full border border-stone-300 bg-white/90 px-2 py-1 text-[10px] font-semibold text-stone-700 shadow-lg backdrop-blur hover:bg-white"
       >
         {copy.button}
         {roomAtmosphere ? ` · ${describeRoomAtmosphere(roomAtmosphere, language)}` : ""}

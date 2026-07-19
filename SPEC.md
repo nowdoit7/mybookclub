@@ -33,8 +33,8 @@ friendly narrator. A real book club **collides**. This app is different because:
    structured **meeting recap document** (the kind a real book club secretary
    would write), downloadable and shareable.
 4. **A purpose-built UI** — a round-table establishing scene that cuts into a
-   portrait-led conversation stage, a scrollable recent-dialogue dock, directed
-   speaker/target cues, and text-length-aware pacing with hard user stops.
+   full-screen portrait-led conversation stage, directed speaker/target cues,
+   manual paged dialogue, and hard user stops.
 5. **Participant or audience agency** — code schedules genuine reader-to-reader
    conflict, while bounded checkpoints let the user join, keep listening, or
    wrap up instead of being forced into the center of every exchange.
@@ -81,12 +81,14 @@ different interpretations preserved rather than flattened.
 - An emergent room atmosphere derived from the drawn readers, then adjusted
   gradually by user wording and code-scheduled conversation events; it affects
   delivery without changing persona positions, flow, or adding a model call
-- Text-length-aware **automatic pacing** by default, with pause, skip-now, and
-  manual Next controls; every user turn is a hard stop
+- A manual visual-novel dialogue player: fast typewriter reveal, click-to-complete,
+  sentence-safe pages, and previous/next navigation; every user turn is a hard stop
 - Full-table establishing states plus a portrait-led, visual-novel-style
   conversation stage with active and addressed readers visible
-- A fixed-height recent-dialogue dock beneath the stage; the full transcript
-  still opens separately for review, copy, and evaluation
+- A closed-by-default transcript drawer for review, copy, and evaluation; the
+  main stage never carries a permanently visible chat log
+- A compact pre-session identity step with a local display name and one of four
+  visual user avatars; the choice has no effect on model behavior or flow
 - User text input at designated turns
 - Live **stance map** (per-topic position of each participant, -2..+2)
 - Korean/English session language selection before the session starts; the
@@ -493,15 +495,16 @@ Global rules enforced by code:
 - A persona may cite its bookshelf **at most once per stage** (tracked in code; the
   directive says "you may/may not reference your shelf this turn").
 - The user is prompted at fixed points; the app waits for input (no timeout in MVP).
-- AI turns auto-advance after a language-aware reading delay derived from text
-  length and sentence count, clamped to 3–10 seconds. The first turn may use a
-  shorter entrance delay.
-- Auto playback tracks why it paused: `manual`, `transcript`, `history`, or
-  `hidden`. Closing a transcript, returning the recent-history dock to its
-  bottom, or returning to a visible tab resumes only the corresponding
-  temporary pause from its remaining delay. Manual pause never auto-resumes.
-  The user can continue, reveal the next turn immediately, or switch to manual
-  mode; manual "Next" advances exactly one transition.
+- AI turns never auto-advance. The next code-determined generation may prefetch
+  while the reader controls when it is revealed.
+- The active utterance is split into sentence-safe UI pages without changing the
+  transcript or model context. Previously revealed pages appear instantly; a new
+  page uses a fast typewriter effect. Clicking the dialogue surface while it is
+  typing completes that page; clicking again moves forward. Previous/next buttons
+  move through revealed pages, and only Next at the live edge resolves the pending
+  engine transition.
+- When the next utterance is not ready, keep the current page visible and show a
+  quiet generation state. Never insert a timer or progress bar.
 - Reaching a user turn always stops playback and exposes the input form. It
   never auto-passes or submits on the user's behalf.
 
@@ -702,19 +705,16 @@ Layout (desktop, single screen):
 
 ```
 ┌────────────────────────────────────────────────┐
-│  ● stage progress: Intro ─ Impressions ─ …     │
+│  book · stage progress      [transcript] [menu] │
 ├────────────────────────────────────────────────┤
-│       CONVERSATION STAGE / TABLE BACKDROP       │
-│ [active illustrated bust] [addressed reader]   │
-│ ┌ speaker name ──────────────────────────────┐ │
-│ │ full current utterance                    │ │
-│ └───────────────────────────────────────────┘ │
-├────────────────────────────────────────────────┤
-│  RECENT DIALOGUE (fixed-height, scrollable)     │
-│  [ View/copy complete conversation transcript ]│
-├────────────────────────────────────────────────┤
-│  [ stance map ] [pause/next now/manual control]│
-│  (user textarea appears here on user turns)    │
+│ [reader cards — active + addressed highlighted]│
+│                                                 │
+│      [active bust]      [addressed reader]      │
+│                                                 │
+│ ┌ speaker · role ───────────────────── 1 / 2 ┐ │
+│ │ paged dialogue with typewriter reveal      │ │
+│ │                          [previous] [next]  │ │
+│ └────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────┘
 ```
 
@@ -723,12 +723,14 @@ Layout (desktop, single screen):
   primary reading surface.
 - During dialogue, the primary surface becomes a visual-novel-style focused
   stage: the active illustrated bust is large, the addressed participant is
-  visible when `refersTo` is present, and a nameplate dialogue box contains the
-  full utterance. Persona-to-persona debate uses two inward-facing portraits.
+  visible when `refersTo` is present, and a fixed-height nameplate dialogue box
+  contains one page of the utterance. Persona-to-persona debate uses two
+  inward-facing portraits.
 - Assets: one consistent illustrated bust for Alex and each of the eight
   personas. The same asset supports a circular face crop and a large bust.
-  Colored initials remain the loading/error fallback. The user uses a neutral
-  silhouette in MVP. Expression variants remain roadmap scope.
+  Colored initials remain the loading/error fallback. Before entering, the user
+  chooses one of four neutral illustrated avatars and a local display name; this
+  affects presentation only. Expression variants remain roadmap scope.
 - Book entry includes a Korean/English selector. The selected language controls
   UI copy, generated dialogue, and recap headings, and cannot change mid-session.
 - Book entry does not ask the user to manufacture a mood. The engine derives an
@@ -736,27 +738,22 @@ Layout (desktop, single screen):
   adjusts it gradually from user wording and code-owned conversation events.
   The current state may be exposed in development diagnostics, but is hidden in
   production and automated tests. It changes delivery, never identity or flow.
-- A compact participant row keeps names, occupations, and current/target cues
-  visible without exposing the future speaker queue.
-- On wide desktop screens, use a two-column conversation workspace: the focused
-  stage remains unobstructed on the left, while the fixed-height recent-dialogue
-  dock and user/playback controls form a right rail. On narrower screens the
-  rail returns beneath the stage and the user controls may stay sticky. The dock
-  auto-scrolls only while the reader is near its bottom; scrolling upward pauses
-  playback with reason `history`. Returning to the bottom resumes that temporary
-  pause. The complete transcript remains available in a separate modal/drawer
-  for review, copy, and evaluation.
+- A prominent participant-card row keeps every face, name, occupation, and
+  current/target cue visible without exposing the future speaker queue. The
+  active card receives the primary spotlight; a directed target receives a
+  secondary highlight; listeners remain visible but subdued.
+- On wide desktop screens, use the full viewport for one immersive conversation
+  stage rather than a website-like two-column dashboard. The complete transcript
+  is closed by default and opens as an overlay drawer for review, copy, and
+  evaluation. Closing it returns to the same dialogue page and never changes flow.
 - When the user is answering a challenge, keep the challenger portrait and the
   full challenged utterance visible above the input. Never replace the line
   under discussion with a generic prompt.
-- Automatic pacing is the default. Delay is calculated from the visible text,
-  with pause/continue and "Next now" controls plus a manual-mode toggle. Controls
-  are disabled while generation is in flight. Timing stays invisible: do not
-  show seconds or a progress bar. Transcript, history, and page-visibility
-  pauses automatically resume only when their own blocking condition clears;
-  a manual pause never does.
+- Manual paging is the only playback mode. The dialogue surface and Space/Enter
+  complete a typewriter page before advancing it; explicit previous/next controls
+  remain visible. Respect `prefers-reduced-motion` by revealing pages immediately.
 - User turns are visually distinguished at the table and in the input area and are a
-  hard stop regardless of the selected pacing mode.
+  hard stop. They cannot be reached or submitted without an explicit reader action.
 - Discussion checkpoints use three explicit controls where applicable: "Join
   the discussion", "Keep listening", and "Wrap up". They are engine actions,
   not generated dialogue and not transcript messages.
@@ -1099,8 +1096,8 @@ Context: {last few utterances}. 1-3 sentences, warm and crisp. JSON only.
    extraction, and rebuttal enforcement.
 4. **Live console milestone:** run one complete `npm run session` against GPT-5.6,
    record the golden transcript, and fix structural failures before UI work.
-5. **UI:** transcript + automatic/manual pacing + user hard stops → participant strip
-   and round table layer → stance map.
+5. **UI:** manual paged dialogue + user hard stops → immersive participant stage
+   and closed transcript drawer → stance map.
 6. **Recap:** generation + copyright-safe validation + render + download.
 7. **Polish:** prefetch, localStorage resume, demo seed, latency pass, visual pass.
 8. **Ship:** hosted demo + local fallback instructions, README (Codex usage

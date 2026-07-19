@@ -7,7 +7,7 @@ different lenses and defend their positions.
 > implemented. The current redesign adds a portrait-led conversation stage,
 > independent reader testimony, directed reader-to-reader disagreement, a
 > bounded join/listen/wrap checkpoint, an emergent room atmosphere, and a
-> scrollable recent-dialogue dock. Final deployment polish remains.
+> reader-controlled paged dialogue surface. Final deployment polish remains.
 
 The completion screen renders the recap as a styled document and keeps the full
 conversation available in a separate tab for review and export.
@@ -56,15 +56,15 @@ npm run build
 - One browser `GenerationClient` contract with explicit Mock and Live implementations
 - Six same-origin generation routes protected by origin, rate, body-size, and session-call limits
 - Korean/English generation selected once at session start
-- Language-aware 3–10 second reading pace with pause, skip-now, and manual mode
+- Sentence-safe dialogue pages with fast typewriter reveal and reader-controlled advance
 - Persona-derived room atmosphere that evolves with user wording and debate events
 - Development-only atmosphere diagnostics with no additional model call
 - Code-selected lead debaters with explicit persona-to-persona targets
 - A bounded discussion checkpoint: join, listen to one more exchange, or wrap
 - A short round-table establishing scene followed by a portrait-led dialogue stage
-- Nine optimized illustrated portraits with a neutral user silhouette fallback
-- A fixed-height recent-dialogue dock that keeps challenged lines in view
-- On-demand transcript view that pauses automatic playback while reviewing history
+- Nine optimized illustrated reader portraits plus four selectable user portraits
+- A full-viewport, game-like conversation stage with persistent participant cards
+- An on-demand transcript drawer that is closed by default and never changes session flow
 - Evaluation-ready Markdown transcript copy from the transcript and recap views
 - Browser-only session persistence via `localStorage`
 - Firebase Hosting + Cloud Functions for Firebase v2 for the judging deployment
@@ -91,7 +91,7 @@ on exact generated prose.
 
 GPT-5.6 supplies the language, book verification, private reading notes, and
 recap, while TypeScript owns stage order, speaker selection, rebuttal targets,
-turn caps, and pause state. This separation let Codex simulate complete sessions
+turn caps, and dialogue-page advancement. This separation let Codex simulate complete sessions
 without spending API credits, diagnose live latency with privacy-safe request
 metadata, and reserve paid runs for model-quality validation. Product and
 engineering decisions made during that collaboration are recorded in

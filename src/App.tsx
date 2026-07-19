@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { GenerationApiError, HttpGenerationClient } from "./api/httpGenerationClient";
 import { MockGenerationClient } from "./api/mockGenerationClient";
 import type { GenerationClient } from "./api/generationClient";
-import { calculateReadingDelay } from "./engine/playbackTiming";
 import { SessionEngine, toConfirmedBook } from "./engine/sessionEngine";
 import { localizedSpeakerName, localizedSpeakerRole, STAGE_LABELS } from "./localization";
 import { PERSONAS, portraitUrlFor, selectPersonas } from "./personas";
@@ -23,6 +22,9 @@ import type {
   Utterance,
 } from "./types";
 import { DiagnosticsPanel } from "./ui/DiagnosticsPanel";
+import { buildDialoguePages } from "./ui/dialoguePaging";
+import { UserAvatarArtwork } from "./ui/UserAvatar";
+import { USER_AVATARS, type UserAvatarId } from "./ui/userAvatars";
 
 const STAGES: StageId[] = [
   "INTRO",
@@ -57,7 +59,7 @@ const COPY = {
     mockBadge: "Mock · no API credits",
     liveBadge: "Live · GPT-5.6 API",
     description:
-      "Test the pacing before the room gets decorated. Reader turns advance at a natural reading pace, and the table stops when it is your turn.",
+      "Enter a portrait-led reading room where every line moves only when you are ready.",
     bookSetup: "Bring a book to the table",
     scopeLabel: "Discussion scope",
     scopeLabels: { single_book: "One book", series: "Full series" },
@@ -116,6 +118,12 @@ const COPY = {
     pass: "Pass",
     share: "Share",
     next: "Next →",
+    previous: "Previous",
+    revealPage: "Show full line",
+    nextPage: "Next page",
+    advanceSpeaker: "Next speaker",
+    returnLive: "Return to current line",
+    enterTable: "Enter the table",
     thinking: "Thinking…",
     sessionComplete: "Session complete",
     recapTitle: "Meeting recap",
@@ -132,17 +140,10 @@ const COPY = {
     copyRecap: "Copy meeting recap",
     recapCopied: "Recap copied",
     downloadMarkdown: "Download Markdown",
-    autoMode: "Playback",
-    autoOn: "Automatic pacing on",
-    autoOff: "Automatic pacing off",
-    autoHint: "Turns advance according to text length and always stop for you.",
-    pause: "Pause",
-    resume: "Continue",
-    skipNow: "Next now",
+    manualHint: "Dialogue advances only when you choose Next.",
     readingTable: "Reading table",
     tableReady: "The readers are taking their seats.",
     currentDialogue: "Current dialogue",
-    recentDialogue: "Recent dialogue",
     challengedLine: "The line you are answering",
     discussionChoice: "How would you like to continue?",
     joinDiscussion: "Join the discussion",
@@ -172,13 +173,19 @@ const COPY = {
     yourTurn: "Your turn",
     waitingForYou: "The table stops here for you.",
     movingToRecap: "Alex has wrapped up the discussion. The meeting recap is next.",
+    identityTitle: "Take your seat",
+    identityHint: "Choose how you appear at the table. This does not change the discussion.",
+    displayName: "Display name (optional)",
+    displayNamePlaceholder: "You",
+    avatarLabel: "Choose your portrait",
+    youRole: "Book-club member",
   },
   ko: {
     prototype: "텍스트 프로토타입",
     mockBadge: "모의 응답 · API 크레딧 미사용",
     liveBadge: "실제 연결 · GPT-5.6 API",
     description:
-      "원탁을 꾸미기 전에 대화의 호흡부터 확인합니다. 참여자 발언은 읽을 시간에 맞춰 자동으로 이어지고, 사용자 차례가 오면 테이블이 멈춥니다.",
+      "초상화가 있는 독서 모임에 입장해, 모든 대사를 원하는 속도로 직접 넘겨보세요.",
     bookSetup: "읽은 책을 테이블에 올려주세요",
     scopeLabel: "토론 범위",
     scopeLabels: { single_book: "한 권", series: "시리즈 전체" },
@@ -237,6 +244,12 @@ const COPY = {
     pass: "건너뛰기",
     share: "공유",
     next: "다음 →",
+    previous: "이전",
+    revealPage: "대사 전체 보기",
+    nextPage: "다음 페이지",
+    advanceSpeaker: "다음 사람",
+    returnLive: "현재 대사로 돌아가기",
+    enterTable: "테이블 입장",
     thinking: "생각 중…",
     sessionComplete: "세션 완료",
     recapTitle: "모임 기록",
@@ -253,17 +266,10 @@ const COPY = {
     copyRecap: "모임 기록 복사",
     recapCopied: "기록 복사됨",
     downloadMarkdown: "Markdown 다운로드",
-    autoMode: "진행 방식",
-    autoOn: "자동 진행 켜짐",
-    autoOff: "자동 진행 꺼짐",
-    autoHint: "글 길이에 맞춰 진행하고 내 차례에서는 항상 멈춥니다.",
-    pause: "일시정지",
-    resume: "계속",
-    skipNow: "바로 다음",
+    manualHint: "다음 버튼을 눌러야 대화가 진행됩니다.",
     readingTable: "리딩 테이블",
     tableReady: "독자들이 자리에 앉고 있습니다.",
     currentDialogue: "현재 대화",
-    recentDialogue: "최근 대화",
     challengedLine: "지금 답변할 발언",
     discussionChoice: "이 토론을 어떻게 이어갈까요?",
     joinDiscussion: "내 의견 보태기",
@@ -293,6 +299,12 @@ const COPY = {
     yourTurn: "내 차례",
     waitingForYou: "내 차례에서 테이블이 멈췄습니다.",
     movingToRecap: "알렉스가 토론을 정리했습니다. 이어서 모임 기록으로 이동합니다.",
+    identityTitle: "내 자리 준비",
+    identityHint: "테이블에서 보일 모습을 선택하세요. 토론 내용에는 영향을 주지 않습니다.",
+    displayName: "표시 이름 (선택)",
+    displayNamePlaceholder: "나",
+    avatarLabel: "내 초상화 선택",
+    youRole: "모임 참여자",
   },
 };
 
@@ -303,7 +315,6 @@ type RecapView = "recap" | "transcript";
 type GenerationMode = "mock" | "live";
 type LiveAvailability = "checking" | "available" | "unavailable";
 type DiscussionDecisionRequest = { round: number; canListen: boolean };
-type PlaybackPauseReason = "manual" | "transcript" | "history" | "hidden" | null;
 
 async function writeToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
@@ -328,12 +339,18 @@ function speakerColor(speaker: string): string {
   return PERSONAS.find((persona) => persona.id === speaker)?.avatarColor ?? "#57534e";
 }
 
-function pendingSpeakerName(
-  speaker: PersonaCard | "moderator",
+function speakerDisplayName(
+  speaker: string,
   language: AppLanguage,
+  userDisplayName: string,
 ): string {
-  if (speaker === "moderator") return language === "ko" ? "알렉스" : "Alex";
-  return localizedSpeakerName(speaker.id, language);
+  if (speaker === "user" && userDisplayName.trim()) return userDisplayName.trim();
+  return localizedSpeakerName(speaker, language);
+}
+
+function speakerDisplayRole(speaker: string, language: AppLanguage): string {
+  if (speaker === "user") return COPY[language].youRole;
+  return localizedSpeakerRole(speaker, language);
 }
 
 function sourceHost(url: string): string {
@@ -347,13 +364,17 @@ function sourceHost(url: string): string {
 function SpeakerAvatar({
   speaker,
   language,
+  userAvatarId,
+  userDisplayName = "",
   size = "large",
 }: {
   speaker: string;
   language: AppLanguage;
+  userAvatarId: UserAvatarId;
+  userDisplayName?: string;
   size?: "small" | "large";
 }) {
-  const name = localizedSpeakerName(speaker, language);
+  const name = speakerDisplayName(speaker, language, userDisplayName);
   const portraitUrl = portraitUrlFor(speaker);
   return (
     <span
@@ -364,13 +385,17 @@ function SpeakerAvatar({
       aria-hidden="true"
     >
       {name.slice(0, 1)}
-      {portraitUrl && (
+      {speaker === "user" ? (
+        <span className="absolute inset-0">
+          <UserAvatarArtwork avatarId={userAvatarId} className="h-full w-full" />
+        </span>
+      ) : portraitUrl ? (
         <img
           src={portraitUrl}
           alt=""
           className="absolute inset-0 h-full w-full object-cover object-top"
         />
-      )}
+      ) : null}
     </span>
   );
 }
@@ -378,24 +403,35 @@ function SpeakerAvatar({
 function StagePortrait({
   speaker,
   language,
+  userAvatarId,
+  userDisplayName,
   secondary = false,
 }: {
   speaker: string;
   language: AppLanguage;
+  userAvatarId: UserAvatarId;
+  userDisplayName: string;
   secondary?: boolean;
 }) {
   const portraitUrl = portraitUrlFor(speaker);
-  const name = localizedSpeakerName(speaker, language);
+  const name = speakerDisplayName(speaker, language, userDisplayName);
   return (
     <div
-      className={`relative shrink-0 overflow-hidden rounded-t-[5rem] border border-amber-950/15 bg-amber-100 shadow-[0_18px_45px_rgba(60,42,24,0.2)] ${
+      className={`relative shrink-0 overflow-hidden rounded-t-[5rem] border border-amber-100/25 bg-amber-950/40 shadow-[0_24px_70px_rgba(0,0,0,0.5)] transition-all duration-500 ${
         secondary
-          ? "h-56 w-36 opacity-80 sm:h-72 sm:w-48"
-          : "h-72 w-48 sm:h-[23rem] sm:w-64"
+          ? "h-56 w-40 opacity-85 sm:h-72 sm:w-52 lg:h-[23rem] lg:w-64"
+          : "h-72 w-52 sm:h-[24rem] sm:w-72 lg:h-[31rem] lg:w-[23rem]"
       }`}
       aria-label={name}
     >
-      {portraitUrl ? (
+      {speaker === "user" ? (
+        <UserAvatarArtwork
+          avatarId={userAvatarId}
+          portrait
+          label={name}
+          className="h-full w-full"
+        />
+      ) : portraitUrl ? (
         <img src={portraitUrl} alt={name} className="h-full w-full object-cover object-top" />
       ) : (
         <div className="flex h-full flex-col items-center justify-center bg-emerald-950/80 text-white">
@@ -410,157 +446,359 @@ function StagePortrait({
   );
 }
 
+function ParticipantCard({
+  speaker,
+  language,
+  userAvatarId,
+  userDisplayName,
+  active,
+  addressed,
+  next,
+}: {
+  speaker: string;
+  language: AppLanguage;
+  userAvatarId: UserAvatarId;
+  userDisplayName: string;
+  active: boolean;
+  addressed: boolean;
+  next: boolean;
+}) {
+  const name = speakerDisplayName(speaker, language, userDisplayName);
+  const role = speakerDisplayRole(speaker, language);
+
+  return (
+    <div
+      role="listitem"
+      className={`relative flex min-w-0 items-center gap-2 rounded-xl border px-2 py-2 backdrop-blur-md transition-all duration-300 sm:px-3 ${
+        active
+          ? "-translate-y-1 border-amber-300 bg-amber-100/95 text-stone-950 shadow-[0_0_32px_rgba(251,191,36,0.48)]"
+          : addressed
+            ? "border-teal-300 bg-teal-950/80 text-white shadow-[0_0_24px_rgba(45,212,191,0.32)]"
+            : next
+              ? "border-white/35 bg-stone-900/70 text-white"
+              : "border-white/10 bg-stone-950/55 text-stone-300 opacity-75"
+      }`}
+    >
+      {speaker === "user" ? (
+        <UserAvatarArtwork
+          avatarId={userAvatarId}
+          className="h-10 w-10 shrink-0 rounded-lg sm:h-12 sm:w-12"
+        />
+      ) : (
+        <SpeakerAvatar
+          speaker={speaker}
+          language={language}
+          userAvatarId={userAvatarId}
+          userDisplayName={userDisplayName}
+        />
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-xs font-bold sm:text-sm">{name}</p>
+        <p className={`truncate text-[9px] sm:text-[10px] ${active ? "text-stone-600" : "text-current opacity-65"}`}>
+          {role}
+        </p>
+      </div>
+      {active && (
+        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-amber-950">
+          {COPY[language].currentSpeaker}
+        </span>
+      )}
+    </div>
+  );
+}
+
+type PageNavigationState = {
+  knownPageCount: number;
+  cursor: number;
+  revealedCursor: number;
+};
+
+function normalizePageNavigation(
+  state: PageNavigationState,
+  pageCount: number,
+): PageNavigationState {
+  if (pageCount === state.knownPageCount) return state;
+  if (pageCount === 0) return { knownPageCount: 0, cursor: 0, revealedCursor: -1 };
+  if (pageCount > state.knownPageCount) {
+    return {
+      knownPageCount: pageCount,
+      cursor: state.knownPageCount,
+      revealedCursor: state.knownPageCount,
+    };
+  }
+  return { knownPageCount: pageCount, cursor: 0, revealedCursor: 0 };
+}
+
+function useTypewriter(text: string, pageKey: string) {
+  const shouldReduceMotion =
+    import.meta.env.MODE === "test" ||
+    (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  const [reveal, setReveal] = useState({ pageKey, visibleLength: 0 });
+  const visibleLength =
+    shouldReduceMotion || reveal.pageKey !== pageKey ? (shouldReduceMotion ? text.length : 0) : reveal.visibleLength;
+
+  useEffect(() => {
+    if (shouldReduceMotion || text.length === 0) return;
+    const timer = window.setInterval(() => {
+      setReveal((current) => {
+        const currentLength = current.pageKey === pageKey ? current.visibleLength : 0;
+        if (currentLength >= text.length) {
+          window.clearInterval(timer);
+          return { pageKey, visibleLength: text.length };
+        }
+        return { pageKey, visibleLength: Math.min(text.length, currentLength + 2) };
+      });
+    }, 16);
+    return () => window.clearInterval(timer);
+  }, [pageKey, shouldReduceMotion, text]);
+
+  return {
+    visibleText: text.slice(0, visibleLength),
+    typing: visibleLength < text.length,
+    complete: () => setReveal({ pageKey, visibleLength: text.length }),
+  };
+}
+
 function ConversationStage({
   language,
   stage,
   book,
   personas,
-  latestUtterance,
+  transcript,
   inputRequest,
   activeSpeaker,
   upcomingSpeaker,
+  canAdvance,
+  busy,
+  onAdvance,
+  interactionPanel,
+  userAvatarId,
+  userDisplayName,
 }: {
   language: AppLanguage;
   stage: StageId;
   book: ConfirmedBook;
   personas: PersonaCard[];
-  latestUtterance?: Utterance;
+  transcript: Utterance[];
   inputRequest?: InputRequest;
   activeSpeaker?: string;
   upcomingSpeaker?: string;
+  canAdvance: boolean;
+  busy: boolean;
+  onAdvance: () => void;
+  interactionPanel?: ReactNode;
+  userAvatarId: UserAvatarId;
+  userDisplayName: string;
 }) {
   const copy = COPY[language];
+  const pages = useMemo(() => buildDialoguePages(transcript, language), [language, transcript]);
+  const [pageNavigation, setPageNavigation] = useState<PageNavigationState>({
+    knownPageCount: 0,
+    cursor: 0,
+    revealedCursor: -1,
+  });
+  const navigation = normalizePageNavigation(pageNavigation, pages.length);
+  const { cursor, revealedCursor } = navigation;
   const speakers = ["moderator", ...personas.map(({ id }) => id), "user"];
-  const primarySpeaker = latestUtterance?.speaker ?? activeSpeaker ?? upcomingSpeaker ?? "moderator";
-  const referencedSpeaker = latestUtterance?.refersTo;
+  const currentPage = pages[cursor];
+  const currentUtterance = currentPage?.utterance;
+  const primarySpeaker = currentUtterance?.speaker ?? activeSpeaker ?? upcomingSpeaker ?? "moderator";
+  const referencedSpeaker = currentUtterance?.refersTo;
   const showClosingTable =
-    stage === "WRAP_UP" && latestUtterance?.stage === stage && latestUtterance.speaker === "moderator";
+    stage === "WRAP_UP" && currentUtterance?.stage === stage && currentUtterance.speaker === "moderator";
   const showFullTable =
-    !latestUtterance || latestUtterance.stage !== stage || showClosingTable;
+    !currentUtterance || currentUtterance.stage !== stage || showClosingTable;
   const showReferencedSpeaker = Boolean(
     referencedSpeaker && referencedSpeaker !== primarySpeaker && speakers.includes(referencedSpeaker),
   );
+  const { visibleText, typing, complete } = useTypewriter(
+    currentPage?.text ?? "",
+    currentPage?.key ?? "empty",
+  );
+
+  const nextPage = () => {
+    if (interactionPanel) return;
+    if (typing) {
+      complete();
+      return;
+    }
+    if (cursor < revealedCursor) {
+      setPageNavigation({ ...navigation, cursor: cursor + 1 });
+      return;
+    }
+    if (currentPage && currentPage.pageIndex < currentPage.pageCount - 1) {
+      setPageNavigation({
+        ...navigation,
+        cursor: cursor + 1,
+        revealedCursor: revealedCursor + 1,
+      });
+      return;
+    }
+    if (canAdvance && !busy) onAdvance();
+  };
+
+  const nextLabel = typing
+    ? copy.revealPage
+    : cursor < revealedCursor || (currentPage && currentPage.pageIndex < currentPage.pageCount - 1)
+      ? copy.nextPage
+      : busy
+        ? copy.thinking
+        : currentPage
+          ? copy.advanceSpeaker
+          : copy.enterTable;
+  const canMoveWithinRevealedPages =
+    cursor < revealedCursor ||
+    Boolean(currentPage && currentPage.pageIndex < currentPage.pageCount - 1);
+  const nextDisabled =
+    !typing && !canMoveWithinRevealedPages && (!canAdvance || busy);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (interactionPanel || (event.key !== " " && event.key !== "Enter")) return;
+    const target = event.target as HTMLElement;
+    if (["INPUT", "TEXTAREA", "BUTTON", "A"].includes(target.tagName)) return;
+    event.preventDefault();
+    nextPage();
+  };
 
   return (
     <section
-      className="overflow-hidden rounded-[2rem] border border-amber-900/10 bg-[#f7efe1] shadow-sm"
+      className="relative h-full min-h-[36rem] overflow-hidden rounded-[1.75rem] border border-amber-100/15 bg-[#1c130d] shadow-[0_28px_90px_rgba(0,0,0,0.55)] outline-none"
       aria-label={copy.readingTable}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
     >
-      <div className="border-b border-amber-950/10 bg-white/75 px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-950/50">
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/reading-room-bg.png')" }} />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,6,4,0.7)_0%,rgba(20,12,7,0.12)_32%,rgba(5,4,3,0.7)_100%)]" />
+
+      <div className="relative z-10 flex h-full min-h-[36rem] flex-col">
+        <div className="flex items-center justify-between gap-4 px-4 pb-3 pt-4 sm:px-6">
+          <div className="hidden min-w-0 md:block">
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-200/55">
               {copy.currentBook}
             </p>
-            <p className="truncate font-serif text-lg text-amber-950">{book.title}</p>
+            <p className="max-w-48 truncate font-serif text-lg text-amber-50">{book.title}</p>
           </div>
-          <div className="flex items-start gap-2" role="list">
+          <div className="grid flex-1 grid-cols-5 gap-1.5 sm:gap-2" role="list">
             {speakers.map((speaker) => {
-              const isActive = latestUtterance
-                ? primarySpeaker === speaker
-                : activeSpeaker === speaker;
-              const isNext =
-                !isActive &&
-                (upcomingSpeaker === speaker || (Boolean(inputRequest) && speaker === "user"));
+              const isActive = primarySpeaker === speaker && Boolean(currentUtterance);
+              const isAddressed = referencedSpeaker === speaker && speaker !== primarySpeaker;
+              const isNext = !isActive && (upcomingSpeaker === speaker || (Boolean(inputRequest) && speaker === "user"));
               return (
-                <div key={speaker} role="listitem" className="w-11 text-center sm:w-16">
-                  <div
-                    className={`mx-auto w-fit rounded-full transition ${
-                      isActive
-                        ? "ring-3 ring-amber-400 ring-offset-2 ring-offset-white"
-                        : isNext
-                          ? "ring-2 ring-stone-400 ring-offset-1 ring-offset-white"
-                          : "opacity-65"
-                    }`}
-                  >
-                    <SpeakerAvatar speaker={speaker} language={language} size="small" />
-                  </div>
-                  <p className="mt-1 truncate text-[9px] font-semibold text-stone-600">
-                    {localizedSpeakerName(speaker, language)}
-                  </p>
-                  <p className="hidden truncate text-[8px] leading-3 text-stone-400 sm:block">
-                    {localizedSpeakerRole(speaker, language)}
-                  </p>
-                </div>
+                <ParticipantCard
+                  key={speaker}
+                  speaker={speaker}
+                  language={language}
+                  userAvatarId={userAvatarId}
+                  userDisplayName={userDisplayName}
+                  active={isActive}
+                  addressed={isAddressed}
+                  next={isNext}
+                />
               );
             })}
           </div>
         </div>
-      </div>
 
-      <div
-        className="relative min-h-[31rem] overflow-hidden bg-[#e8d7bd] px-4 pt-6 sm:px-10 sm:pt-8"
+        <div
+        className="relative flex flex-1 flex-col overflow-hidden px-4 sm:px-8"
         role="region"
         aria-label={copy.currentDialogue}
         aria-live="polite"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 50% 20%, rgba(255,250,235,0.95), rgba(228,203,168,0.68) 52%, rgba(98,68,43,0.25)), linear-gradient(90deg, rgba(83,55,33,0.16) 1px, transparent 1px)",
-          backgroundSize: "auto, 80px 100%",
-        }}
       >
         {showFullTable ? (
-          <div className="flex min-h-[27rem] flex-col items-center justify-center text-center">
+          <div className="flex flex-1 flex-col items-center justify-center pb-40 text-center">
             <div className="flex -space-x-6" aria-hidden="true">
-              {speakers.slice(0, -1).map((speaker) => (
-                <div key={speaker} className="rounded-full border-4 border-[#e8d7bd] shadow-lg">
-                  <SpeakerAvatar speaker={speaker} language={language} />
+              {speakers.map((speaker) => (
+                <div key={speaker} className="rounded-full border-4 border-amber-100/35 shadow-2xl">
+                  <SpeakerAvatar speaker={speaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} />
                 </div>
               ))}
             </div>
-            <div className="mt-7 h-20 w-[78%] rounded-[50%] border border-amber-950/20 bg-[#cda675] shadow-[inset_0_2px_0_rgba(255,255,255,0.45),0_18px_30px_rgba(75,55,35,0.18)]" />
-            <p className="mt-6 font-serif text-2xl text-amber-950">
-              {latestUtterance ? STAGE_LABELS[language][stage] : copy.tableReady}
+            <div className="mt-7 h-16 w-[58%] rounded-[50%] border border-amber-200/25 bg-amber-900/65 shadow-[inset_0_2px_0_rgba(255,255,255,0.16),0_18px_30px_rgba(0,0,0,0.35)]" />
+            <p className="mt-5 font-serif text-2xl text-amber-50">
+              {currentUtterance ? STAGE_LABELS[language][stage] : copy.tableReady}
             </p>
-            <p className="mt-2 text-sm text-amber-950/60">
+            <p className="mt-2 text-sm text-amber-100/60">
               {personas.map(({ id }) => localizedSpeakerName(id, language)).join(" · ")}
             </p>
-            {showClosingTable && latestUtterance && (
-              <div className="absolute inset-x-3 bottom-3 rounded-2xl border border-stone-900/20 bg-white/95 p-4 text-left shadow-[0_18px_50px_rgba(35,27,20,0.28)] backdrop-blur sm:inset-x-8 sm:bottom-6 sm:p-5">
-                <div className="flex items-center gap-2">
-                  <p className="rounded-full bg-stone-900 px-3 py-1 text-sm font-bold text-white">
-                    {localizedSpeakerName("moderator", language)}
-                  </p>
-                  <span className="text-xs text-stone-500">
-                    {localizedSpeakerRole("moderator", language)}
-                  </span>
-                </div>
-                <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-stone-800 sm:text-lg sm:leading-8">
-                  {latestUtterance.text}
-                </p>
-              </div>
-            )}
           </div>
         ) : (
-          <>
-            <div className="flex min-h-[25rem] items-end justify-center gap-4 sm:gap-12">
-              <StagePortrait speaker={primarySpeaker} language={language} />
+            <div className="flex flex-1 items-end justify-center gap-4 pb-40 sm:gap-12 lg:gap-20">
+              <StagePortrait speaker={primarySpeaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} />
               {showReferencedSpeaker && referencedSpeaker && (
-                <StagePortrait speaker={referencedSpeaker} language={language} secondary />
+                <StagePortrait speaker={referencedSpeaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} secondary />
               )}
             </div>
-            <div
-              className="absolute inset-x-3 bottom-3 rounded-2xl border border-stone-900/20 bg-white/95 p-4 shadow-[0_18px_50px_rgba(35,27,20,0.28)] backdrop-blur sm:inset-x-8 sm:bottom-6 sm:p-5"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="rounded-full bg-stone-900 px-3 py-1 text-sm font-bold text-white">
-                  {localizedSpeakerName(primarySpeaker, language)}
+        )}
+
+        {interactionPanel ? (
+          <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-8 sm:bottom-6">{interactionPanel}</div>
+        ) : (
+          <div
+            className="absolute inset-x-3 bottom-3 z-20 h-40 rounded-2xl border border-amber-100/25 bg-stone-950/90 p-4 text-left text-stone-100 shadow-[0_24px_70px_rgba(0,0,0,0.6)] backdrop-blur-md sm:inset-x-8 sm:bottom-6 sm:h-44 sm:p-5"
+            onClick={nextPage}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="truncate rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-stone-950">
+                  {speakerDisplayName(primarySpeaker, language, userDisplayName)}
                 </p>
-                <span className="text-xs text-stone-500">
-                  {localizedSpeakerRole(primarySpeaker, language)}
+                <span className="truncate text-xs text-stone-400">
+                  {speakerDisplayRole(primarySpeaker, language)}
                 </span>
-                {inputRequest?.kind === "discussion_reply" && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">
-                    {copy.challengedLine}
-                  </span>
+              </div>
+              {currentPage && (
+                <span className="shrink-0 font-mono text-[11px] text-amber-200/70">
+                  {currentPage.pageIndex + 1} / {currentPage.pageCount}
+                </span>
+              )}
+            </div>
+            <p className="mt-3 min-h-14 whitespace-pre-wrap text-base leading-7 text-stone-100 sm:text-lg sm:leading-8">
+              {currentPage ? visibleText : copy.tableReady}
+              {typing && <span className="ml-0.5 animate-pulse text-amber-300">▌</span>}
+            </p>
+            <span className="sr-only" aria-live="polite">{currentPage?.text}</span>
+            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between sm:left-5 sm:right-5">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setPageNavigation({ ...navigation, cursor: Math.max(0, cursor - 1) });
+                  }}
+                  disabled={cursor <= 0}
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  ‹ {copy.previous}
+                </button>
+                {cursor < revealedCursor && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setPageNavigation({ ...navigation, cursor: revealedCursor });
+                    }}
+                    className="text-xs font-semibold text-amber-200 underline decoration-amber-200/30 underline-offset-4"
+                  >
+                    {copy.returnLive}
+                  </button>
                 )}
               </div>
-              <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-stone-800 sm:text-lg sm:leading-8">
-                {latestUtterance.text}
-              </p>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  nextPage();
+                }}
+                disabled={nextDisabled}
+                className="rounded-lg bg-amber-300 px-4 py-1.5 text-xs font-black text-amber-950 shadow hover:bg-amber-200 disabled:cursor-wait disabled:opacity-45"
+              >
+                {nextLabel} ›
+              </button>
             </div>
-          </>
+          </div>
         )}
+      </div>
       </div>
     </section>
   );
@@ -569,9 +807,13 @@ function ConversationStage({
 function TranscriptList({
   transcript,
   language,
+  userAvatarId = "reader-1",
+  userDisplayName = "",
 }: {
   transcript: Utterance[];
   language: AppLanguage;
+  userAvatarId?: UserAvatarId;
+  userDisplayName?: string;
 }) {
   return transcript.map((utterance, index) => {
     const previousStage = transcript[index - 1]?.stage;
@@ -584,13 +826,12 @@ function TranscriptList({
           </p>
         )}
         <article className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
-          <div
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-            style={{ backgroundColor: speakerColor(utterance.speaker) }}
-            aria-hidden="true"
-          >
-            {localizedSpeakerName(utterance.speaker, language).slice(0, 1)}
-          </div>
+          <SpeakerAvatar
+            speaker={utterance.speaker}
+            language={language}
+            userAvatarId={userAvatarId}
+            userDisplayName={userDisplayName}
+          />
           <div
             className={`max-w-[85%] rounded-2xl border p-4 shadow-sm ${
               isUser
@@ -599,7 +840,7 @@ function TranscriptList({
             }`}
           >
             <p className={`text-xs font-bold ${isUser ? "text-emerald-100" : "text-stone-500"}`}>
-              {localizedSpeakerName(utterance.speaker, language)}
+              {speakerDisplayName(utterance.speaker, language, userDisplayName)}
             </p>
             <p className="mt-1 leading-7">{utterance.text}</p>
           </div>
@@ -607,73 +848,6 @@ function TranscriptList({
       </div>
     );
   });
-}
-
-function RecentDialogueDock({
-  transcript,
-  language,
-  onReadingHistory,
-}: {
-  transcript: Utterance[];
-  language: AppLanguage;
-  onReadingHistory: (readingHistory: boolean) => void;
-}) {
-  const copy = COPY[language];
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const atBottomRef = useRef(true);
-
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node || !atBottomRef.current) return;
-    node.scrollTop = node.scrollHeight;
-  }, [transcript]);
-
-  const handleScroll = () => {
-    const node = scrollRef.current;
-    if (!node) return;
-    const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight <= 24;
-    if (atBottom === atBottomRef.current) return;
-    atBottomRef.current = atBottom;
-    onReadingHistory(!atBottom);
-  };
-
-  return (
-    <section className="mt-4 overflow-hidden rounded-2xl border border-stone-200 bg-[#fffdf8] shadow-sm xl:mt-0" aria-label={copy.recentDialogue}>
-      <div className="flex items-center justify-between border-b border-stone-200 bg-white px-4 py-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
-          {copy.recentDialogue}
-        </p>
-        <span className="text-xs text-stone-400">{transcript.length}</span>
-      </div>
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="h-52 space-y-3 overflow-y-auto px-4 py-4 xl:h-[22rem]"
-      >
-        {transcript.length === 0 ? (
-          <p className="text-sm text-stone-500">{copy.tableReady}</p>
-        ) : (
-          transcript.map((utterance, index) => {
-            const isUser = utterance.speaker === "user";
-            return (
-              <article
-                key={`${index}-${utterance.speaker}`}
-                className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}
-              >
-                <SpeakerAvatar speaker={utterance.speaker} language={language} size="small" />
-                <div className={`max-w-[88%] rounded-xl px-3 py-2 ${isUser ? "bg-emerald-900 text-white" : "bg-stone-100 text-stone-800"}`}>
-                  <p className={`text-[10px] font-bold ${isUser ? "text-emerald-100" : "text-stone-500"}`}>
-                    {localizedSpeakerName(utterance.speaker, language)}
-                  </p>
-                  <p className="mt-0.5 text-sm leading-6">{utterance.text}</p>
-                </div>
-              </article>
-            );
-          })
-        )}
-      </div>
-    </section>
-  );
 }
 
 function RenderedRecap({ markdown }: { markdown: string }) {
@@ -740,8 +914,6 @@ export function App() {
   const [screen, setScreen] = useState<Screen>("setup");
   const [stage, setStage] = useState<StageId>("INTRO");
   const [transcript, setTranscript] = useState<Utterance[]>([]);
-  const [status, setStatus] = useState("");
-  const [pendingTurn, setPendingTurn] = useState("");
   const [canAdvance, setCanAdvance] = useState(false);
   const [busy, setBusy] = useState(false);
   const [inputRequest, setInputRequest] = useState<InputRequest>();
@@ -753,20 +925,12 @@ export function App() {
   const [recapCopyStatus, setRecapCopyStatus] = useState<CopyStatus>("idle");
   const [recapView, setRecapView] = useState<RecapView>("recap");
   const [transcriptOpen, setTranscriptOpen] = useState(false);
-  const [autoAdvance, setAutoAdvance] = useState(true);
-  const [playbackPaused, setPlaybackPaused] = useState(false);
+  const [userAvatarId, setUserAvatarId] = useState<UserAvatarId>("reader-1");
+  const [userDisplayName, setUserDisplayName] = useState("");
   const [activeSpeaker, setActiveSpeaker] = useState<string>();
   const [upcomingSpeaker, setUpcomingSpeaker] = useState<string>();
-  const advanceResolver = useRef<(() => void) | null>(null);
   const inputResolver = useRef<((value: string) => void) | null>(null);
   const discussionDecisionResolver = useRef<((value: DiscussionAction) => void) | null>(null);
-  const autoAdvanceRef = useRef(true);
-  const playbackPausedRef = useRef(false);
-  const playbackPauseReasonRef = useRef<PlaybackPauseReason>(null);
-  const lastUtteranceRef = useRef<Utterance | null>(null);
-  const playbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const playbackDeadlineRef = useRef(0);
-  const playbackRemainingRef = useRef(0);
   const playbackActionRef = useRef<(() => void) | null>(null);
   const generationClientRef = useRef<GenerationClient | null>(null);
   const copy = COPY[language];
@@ -797,88 +961,23 @@ export function App() {
               : copy.liveGenerationFailed;
   };
 
-  const clearPlaybackTimers = useCallback(() => {
-    if (playbackTimeoutRef.current) clearTimeout(playbackTimeoutRef.current);
-    playbackTimeoutRef.current = null;
-  }, []);
-
   const runPlaybackAction = useCallback(() => {
     const action = playbackActionRef.current;
     if (!action) return;
-    clearPlaybackTimers();
     playbackActionRef.current = null;
-    playbackRemainingRef.current = 0;
     setCanAdvance(false);
     setBusy(true);
-    setPendingTurn(COPY[language].generating);
     action();
-  }, [clearPlaybackTimers, language]);
+  }, []);
 
-  const startPlaybackClock = useCallback(
-    (durationMs: number) => {
-      clearPlaybackTimers();
-      const safeDuration = Math.max(0, durationMs);
-      playbackRemainingRef.current = safeDuration;
-      playbackDeadlineRef.current = Date.now() + safeDuration;
-      playbackTimeoutRef.current = setTimeout(runPlaybackAction, safeDuration);
-    },
-    [clearPlaybackTimers, runPlaybackAction],
-  );
-
-  const queuePlayback = useCallback(
-    (durationMs: number, action: () => void) => {
-      clearPlaybackTimers();
+  const queueManualAdvance = useCallback(
+    (action: () => void) => {
       playbackActionRef.current = action;
-      playbackRemainingRef.current = durationMs;
       setCanAdvance(true);
       setBusy(false);
-      if (autoAdvanceRef.current && !playbackPausedRef.current) {
-        startPlaybackClock(durationMs);
-      }
     },
-    [clearPlaybackTimers, startPlaybackClock],
+    [],
   );
-
-  const pausePlayback = useCallback((reason: Exclude<PlaybackPauseReason, null> = "manual") => {
-    if (!playbackActionRef.current || playbackPausedRef.current) return;
-    const remaining = Math.max(0, playbackDeadlineRef.current - Date.now());
-    playbackRemainingRef.current = remaining;
-    clearPlaybackTimers();
-    playbackPausedRef.current = true;
-    playbackPauseReasonRef.current = reason;
-    setPlaybackPaused(true);
-  }, [clearPlaybackTimers]);
-
-  const resumePlayback = useCallback((expectedReason?: Exclude<PlaybackPauseReason, null>) => {
-    if (!playbackActionRef.current || !playbackPausedRef.current) return;
-    if (expectedReason && playbackPauseReasonRef.current !== expectedReason) return;
-    playbackPausedRef.current = false;
-    playbackPauseReasonRef.current = null;
-    setPlaybackPaused(false);
-    startPlaybackClock(playbackRemainingRef.current);
-  }, [startPlaybackClock]);
-
-  const toggleAutoAdvance = useCallback(() => {
-    if (autoAdvanceRef.current) {
-      if (playbackActionRef.current && !playbackPausedRef.current) {
-        const remaining = Math.max(0, playbackDeadlineRef.current - Date.now());
-        playbackRemainingRef.current = remaining;
-        clearPlaybackTimers();
-      }
-      autoAdvanceRef.current = false;
-      playbackPausedRef.current = false;
-      playbackPauseReasonRef.current = null;
-      setAutoAdvance(false);
-      setPlaybackPaused(false);
-      return;
-    }
-
-    autoAdvanceRef.current = true;
-    setAutoAdvance(true);
-    if (playbackActionRef.current) {
-      startPlaybackClock(playbackRemainingRef.current);
-    }
-  }, [clearPlaybackTimers, startPlaybackClock]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -899,24 +998,11 @@ export function App() {
     return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && autoAdvanceRef.current) {
-        pausePlayback("hidden");
-      } else if (!document.hidden) {
-        resumePlayback("hidden");
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [pausePlayback, resumePlayback]);
-
   useEffect(
     () => () => {
-      clearPlaybackTimers();
       playbackActionRef.current = null;
     },
-    [clearPlaybackTimers],
+    [],
   );
 
   const invalidateBookConfirmation = () => {
@@ -976,21 +1062,11 @@ export function App() {
         : copy.copyTranscript;
 
   const openTranscript = () => {
-    if (autoAdvance && canAdvance && !busy && !playbackPaused) pausePlayback("transcript");
     setTranscriptOpen(true);
   };
 
   const closeTranscript = () => {
     setTranscriptOpen(false);
-    resumePlayback("transcript");
-  };
-
-  const handleHistoryReading = (readingHistory: boolean) => {
-    if (readingHistory) {
-      if (autoAdvance && canAdvance && !busy && !playbackPaused) pausePlayback("history");
-      return;
-    }
-    resumePlayback("history");
   };
 
   const copyRecap = async () => {
@@ -1036,12 +1112,9 @@ export function App() {
       setIdentificationError(copy.verificationBlocked);
       return;
     }
-    clearPlaybackTimers();
     playbackActionRef.current = null;
-    playbackPausedRef.current = false;
-    playbackPauseReasonRef.current = null;
-    lastUtteranceRef.current = null;
     setScreen("session");
+    window.scrollTo(0, 0);
     setTranscript([]);
     setRecap("");
     setRecapView("recap");
@@ -1050,9 +1123,6 @@ export function App() {
     setRecapCopyStatus("idle");
     setError("");
     setBusy(true);
-    setStatus(copy.preparing);
-    setPendingTurn(copy.readersSeated);
-    setPlaybackPaused(false);
     setActiveSpeaker(undefined);
     setUpcomingSpeaker(undefined);
     setRoomAtmosphere(undefined);
@@ -1069,23 +1139,9 @@ export function App() {
         if (message.startsWith("Stage: ")) {
           const nextStage = message.slice("Stage: ".length) as StageId;
           setStage(nextStage);
-          setStatus(STAGE_LABELS[language][nextStage]);
-        } else if (message === "Generating meeting recap") {
-          setStatus(language === "ko" ? "모임 기록을 만들고 있습니다" : message);
-        } else if (message === "Generating private reading notes in parallel") {
-          setStatus(language === "ko" ? "세 독자의 독서 노트를 준비하고 있습니다" : message);
-        } else if (message.startsWith("Reading notes ready: ")) {
-          setStatus(copy.readingNotesReady(message.slice("Reading notes ready: ".length)));
-        } else if (message.startsWith("Retrying reading notes: ")) {
-          setStatus(copy.retryingReadingNotes);
-        } else if (message === "Identifying book") {
-          setStatus(language === "ko" ? "책을 확인하고 있습니다" : message);
-        } else {
-          setStatus(message);
         }
       },
       onUtterance(utterance) {
-        lastUtteranceRef.current = utterance;
         setActiveSpeaker(utterance.speaker);
         setUpcomingSpeaker(undefined);
         setCopyStatus("idle");
@@ -1103,32 +1159,19 @@ export function App() {
         seed,
         waitForAdvance(turn) {
           return new Promise<void>((resolve) => {
-            advanceResolver.current = resolve;
             const speakerId = turn.speaker === "moderator" ? "moderator" : turn.speaker.id;
             setUpcomingSpeaker(speakerId);
-            setPendingTurn(copy.readyToSpeak(pendingSpeakerName(turn.speaker, language)));
-            const duration = lastUtteranceRef.current
-              ? calculateReadingDelay(lastUtteranceRef.current.text, language)
-              : 1_200;
-            queuePlayback(duration, () => {
-              advanceResolver.current = null;
-              resolve();
-            });
+            queueManualAdvance(resolve);
           });
         },
         requestUserInput(turn) {
           return new Promise<string>((resolve) => {
             setUpcomingSpeaker("user");
-            setPendingTurn(copy.readyToSpeak(localizedSpeakerName("user", language)));
-            const duration = lastUtteranceRef.current
-              ? calculateReadingDelay(lastUtteranceRef.current.text, language)
-              : 1_200;
-            queuePlayback(duration, () => {
+            queueManualAdvance(() => {
               inputResolver.current = resolve;
               setActiveSpeaker("user");
               setUpcomingSpeaker(undefined);
               setInputRequest(turn);
-              setPendingTurn(copy.waitingForYou);
               setCanAdvance(false);
               setBusy(false);
             });
@@ -1137,26 +1180,20 @@ export function App() {
         requestDiscussionAction(turn) {
           return new Promise<DiscussionAction>((resolve) => {
             setUpcomingSpeaker(undefined);
-            setPendingTurn(copy.discussionChoice);
-            const duration = lastUtteranceRef.current
-              ? calculateReadingDelay(lastUtteranceRef.current.text, language)
-              : 1_200;
-            queuePlayback(duration, () => {
+            queueManualAdvance(() => {
               discussionDecisionResolver.current = resolve;
               setDiscussionDecision(turn);
               setActiveSpeaker(undefined);
               setUpcomingSpeaker(undefined);
-              setPendingTurn(copy.discussionChoice);
               setCanAdvance(false);
               setBusy(false);
             });
           });
         },
-        waitForSessionComplete(summary) {
+        waitForSessionComplete() {
           return new Promise<void>((resolve) => {
             setUpcomingSpeaker(undefined);
-            setPendingTurn(copy.movingToRecap);
-            queuePlayback(calculateReadingDelay(summary.text, language), resolve);
+            queueManualAdvance(resolve);
           });
         },
       })
@@ -1164,14 +1201,11 @@ export function App() {
         setRecap(result.recapMarkdown);
         setTranscriptOpen(false);
         setScreen("recap");
-        clearPlaybackTimers();
         playbackActionRef.current = null;
         setBusy(false);
-        setStatus(copy.sessionComplete);
       })
       .catch((caught: unknown) => {
         setError(generationErrorMessage(caught));
-        clearPlaybackTimers();
         playbackActionRef.current = null;
         setBusy(false);
         setCanAdvance(false);
@@ -1189,7 +1223,6 @@ export function App() {
     setInputRequest(undefined);
     setInputText("");
     setBusy(true);
-    setPendingTurn(value.trim() ? copy.considering : copy.passed);
     resolve(value);
   };
 
@@ -1199,7 +1232,6 @@ export function App() {
     discussionDecisionResolver.current = null;
     setDiscussionDecision(undefined);
     setBusy(true);
-    setPendingTurn(copy.generating);
     resolve(value);
   };
 
@@ -1209,9 +1241,7 @@ export function App() {
   };
 
   const startNewSession = () => {
-    clearPlaybackTimers();
     playbackActionRef.current = null;
-    advanceResolver.current = null;
     inputResolver.current = null;
     discussionDecisionResolver.current = null;
     setScreen("setup");
@@ -1230,11 +1260,8 @@ export function App() {
     setInputRequest(undefined);
     setDiscussionDecision(undefined);
     setStage("INTRO");
-    setStatus(copy.ready);
     setActiveSpeaker(undefined);
     setUpcomingSpeaker(undefined);
-    playbackPausedRef.current = false;
-    playbackPauseReasonRef.current = null;
   };
 
   if (screen === "setup") {
@@ -1503,24 +1530,46 @@ export function App() {
             </section>
           )}
 
-          <div className="mt-5 flex items-center justify-between gap-4 rounded-2xl border border-stone-200 bg-white p-5">
-            <div>
-              <p className="text-sm font-semibold">{copy.autoMode}</p>
-              <p className="mt-1 text-xs leading-5 text-stone-500">{copy.autoHint}</p>
-            </div>
-            <button
-              type="button"
-              aria-pressed={autoAdvance}
-              onClick={toggleAutoAdvance}
-              className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition ${
-                autoAdvance
-                  ? "bg-emerald-800 text-white"
-                  : "border border-stone-300 bg-stone-100 text-stone-700"
-              }`}
-            >
-              {autoAdvance ? copy.autoOn : copy.autoOff}
-            </button>
-          </div>
+          {confirmedBook && (
+            <section className="mt-5 rounded-2xl border border-amber-200 bg-[#2a1a10] p-5 text-amber-50">
+              <p className="font-serif text-xl">{copy.identityTitle}</p>
+              <p className="mt-1 text-xs leading-5 text-amber-100/65">{copy.identityHint}</p>
+              <label className="mt-4 block text-xs font-semibold text-amber-100" htmlFor="display-name">
+                {copy.displayName}
+              </label>
+              <input
+                id="display-name"
+                type="text"
+                maxLength={32}
+                value={userDisplayName}
+                onChange={(event) => setUserDisplayName(event.target.value)}
+                placeholder={copy.displayNamePlaceholder}
+                className="mt-2 w-full rounded-xl border border-amber-100/20 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-amber-100/35 focus:border-amber-300"
+              />
+              <fieldset className="mt-4">
+                <legend className="text-xs font-semibold text-amber-100">{copy.avatarLabel}</legend>
+                <div className="mt-2 grid grid-cols-4 gap-2">
+                  {USER_AVATARS.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-label={label}
+                      aria-pressed={userAvatarId === id}
+                      onClick={() => setUserAvatarId(id)}
+                      className={`overflow-hidden rounded-xl border-2 transition ${
+                        userAvatarId === id
+                          ? "border-amber-300 ring-2 ring-amber-300/35"
+                          : "border-transparent opacity-65 hover:opacity-100"
+                      }`}
+                    >
+                      <UserAvatarArtwork avatarId={id} className="aspect-square w-full" />
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <p className="mt-4 text-xs text-amber-100/60">{copy.manualHint}</p>
+            </section>
+          )}
 
           <div className="mt-5 rounded-2xl bg-stone-900 p-5 text-sm leading-6 text-stone-200">
             <p className="font-semibold text-white">{copy.privacyTitle}</p>
@@ -1647,33 +1696,18 @@ export function App() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 text-stone-900">
-      <header className="sticky top-0 z-10 border-b border-stone-200 bg-stone-100/95 px-4 py-4 backdrop-blur sm:px-6">
-        <div className="mx-auto max-w-[88rem]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-serif text-xl">The Reading Table</p>
-              <p className="text-xs text-stone-500">
-                {generationMode === "live"
-                  ? copy.liveSessionLabel(confirmedBook?.title ?? "")
-                  : copy.sessionLabel(confirmedBook?.title ?? "")}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-900">
-                {generationMode === "live" ? copy.liveCredits : copy.noCredits}
-              </span>
-              <button
-                type="button"
-                onClick={openTranscript}
-                disabled={transcript.length === 0}
-                className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {copy.viewTranscript(transcript.length)}
-              </button>
-            </div>
+    <main className="min-h-screen bg-[#0d0907] text-stone-100">
+      <header className="relative z-20 border-b border-amber-100/10 bg-[#130d09] px-3 py-3 sm:px-5">
+        <div className="mx-auto flex max-w-[100rem] items-center gap-4">
+          <div className="min-w-0 shrink-0">
+            <p className="font-serif text-lg text-amber-50 sm:text-xl">The Reading Table</p>
+            <p className="max-w-48 truncate text-[10px] text-amber-100/45 sm:max-w-64">
+              {generationMode === "live"
+                ? copy.liveSessionLabel(confirmedBook?.title ?? "")
+                : copy.sessionLabel(confirmedBook?.title ?? "")}
+            </p>
           </div>
-          <ol className="mt-4 flex gap-1 overflow-x-auto pb-1" aria-label={copy.stagesLabel}>
+          <ol className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex" aria-label={copy.stagesLabel}>
             {STAGES.map((item) => {
               const activeIndex = STAGES.findIndex((id) => id === stage);
               const itemIndex = STAGES.findIndex((id) => id === item);
@@ -1683,12 +1717,12 @@ export function App() {
                 <li
                   key={item}
                   aria-current={isActive ? "step" : undefined}
-                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  className={`whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-bold ${
                     isActive
-                      ? "bg-stone-900 text-white"
+                      ? "bg-amber-300 text-amber-950"
                       : isComplete
-                        ? "bg-amber-200 text-amber-950"
-                        : "bg-white text-stone-500"
+                        ? "bg-amber-950 text-amber-200"
+                        : "bg-white/5 text-stone-500"
                   }`}
                 >
                   {STAGE_LABELS[language][item]}
@@ -1696,174 +1730,109 @@ export function App() {
               );
             })}
           </ol>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="hidden rounded-full bg-emerald-950 px-3 py-1 text-[10px] font-semibold text-emerald-200 sm:inline-flex">
+              {generationMode === "live" ? copy.liveCredits : copy.noCredits}
+            </span>
+            <button
+              type="button"
+              onClick={openTranscript}
+              disabled={transcript.length === 0}
+              className="rounded-lg border border-amber-100/20 bg-white/5 px-3 py-2 text-xs font-semibold text-amber-50 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              {copy.viewTranscript(transcript.length)}
+            </button>
+          </div>
         </div>
       </header>
 
-      <section className="mx-auto grid min-h-[calc(100vh-9rem)] max-w-[88rem] px-4 py-6 sm:px-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(25rem,1fr)] xl:items-start xl:gap-6">
-        <div className="min-w-0">
-          <ConversationStage
-            language={language}
-            stage={stage}
-            book={confirmedBook!}
-            personas={sessionPersonas}
-            latestUtterance={transcript.at(-1)}
-            inputRequest={inputRequest}
-            activeSpeaker={activeSpeaker}
-            upcomingSpeaker={upcomingSpeaker}
-          />
-        </div>
-
-        <aside className="min-w-0 xl:sticky xl:top-36">
-          <RecentDialogueDock
-            transcript={transcript}
-            language={language}
-            onReadingHistory={handleHistoryReading}
-          />
-
-          <div className="sticky bottom-0 z-[2] mt-4 border-t border-stone-200 bg-stone-100 py-4 xl:static xl:border-0 xl:bg-transparent xl:py-0">
-          {error && (
-            <p role="alert" className="mb-3 rounded-xl bg-red-100 p-3 text-sm text-red-900">
-              {error}
-            </p>
-          )}
-          {discussionDecision ? (
-            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-lg">
-              <p className="font-serif text-xl text-amber-950">{copy.discussionChoice}</p>
-              <p className="mt-1 text-sm leading-6 text-amber-900/75">
-                {language === "ko"
-                  ? "직접 의견을 보태거나, 두 독자의 논쟁을 조금 더 듣거나, 남은 쟁점을 그대로 두고 마무리할 수 있습니다."
-                  : "Join with your own view, hear one more exchange, or leave the remaining tension open and wrap up."}
+      <section className="mx-auto h-[calc(100dvh-4.5rem)] min-h-[37rem] max-w-[100rem] p-2 sm:p-4">
+        <ConversationStage
+          language={language}
+          stage={stage}
+          book={confirmedBook!}
+          personas={sessionPersonas}
+          transcript={transcript}
+          inputRequest={inputRequest}
+          activeSpeaker={activeSpeaker}
+          upcomingSpeaker={upcomingSpeaker}
+          canAdvance={canAdvance}
+          busy={busy}
+          onAdvance={advance}
+          userAvatarId={userAvatarId}
+          userDisplayName={userDisplayName}
+          interactionPanel={
+            error ? (
+              <p role="alert" className="rounded-xl border border-red-300/40 bg-red-950/95 p-4 text-sm text-red-100 shadow-2xl">
+                {error}
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => submitDiscussionDecision("join")}
-                  className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white"
-                >
-                  {copy.joinDiscussion}
-                </button>
-                {discussionDecision.canListen && (
-                  <button
-                    type="button"
-                    onClick={() => submitDiscussionDecision("listen")}
-                    className="rounded-xl border border-amber-400 bg-white px-4 py-2 text-sm font-semibold text-amber-950"
-                  >
-                    {copy.keepListening}
+            ) : discussionDecision ? (
+              <div className="rounded-2xl border border-amber-200/30 bg-stone-950/95 p-5 text-stone-100 shadow-2xl backdrop-blur-md">
+                <p className="font-serif text-xl text-amber-100">{copy.discussionChoice}</p>
+                <p className="mt-1 text-sm leading-6 text-stone-400">
+                  {language === "ko"
+                    ? "직접 의견을 보태거나, 두 독자의 논쟁을 조금 더 듣거나, 남은 쟁점을 그대로 두고 마무리할 수 있습니다."
+                    : "Join with your own view, hear one more exchange, or leave the remaining tension open and wrap up."}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => submitDiscussionDecision("join")} className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-bold text-amber-950">
+                    {copy.joinDiscussion}
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => submitDiscussionDecision("wrap")}
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-stone-600 hover:bg-white"
-                >
-                  {copy.wrapDiscussion}
-                </button>
-              </div>
-            </div>
-          ) : inputRequest ? (
-            <form onSubmit={handleSubmit} className="rounded-2xl border border-stone-300 bg-white p-4 shadow-lg">
-              <div className="flex items-center gap-3">
-                <SpeakerAvatar speaker="user" language={language} size="small" />
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
-                    {copy.waitingForYou}
-                  </p>
-                  <label htmlFor="user-turn" className="text-sm font-semibold">
-                    {INPUT_PROMPTS[language][inputRequest.kind]}
-                  </label>
-                </div>
-              </div>
-              <textarea
-                id="user-turn"
-                autoFocus
-                rows={2}
-                maxLength={4000}
-                value={inputText}
-                onChange={(event) => setInputText(event.target.value)}
-                placeholder={copy.placeholder}
-                className="mt-2 min-h-24 w-full resize-none rounded-xl border border-stone-300 p-3 leading-6 outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200 xl:min-h-32"
-              />
-              <div className="mt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => submitUserInput("")}
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100"
-                >
-                  {copy.pass}
-                </button>
-                <button
-                  type="submit"
-                  disabled={!inputText.trim()}
-                  className="rounded-xl bg-stone-900 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {copy.share}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-lg">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                    {status}
-                  </p>
-                  <p className="mt-1 truncate text-sm text-stone-700">{pendingTurn}</p>
-                </div>
-
-                <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                  {autoAdvance ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => playbackPaused ? resumePlayback() : pausePlayback("manual")}
-                        disabled={!canAdvance || busy}
-                        className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {playbackPaused ? copy.resume : copy.pause}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={runPlaybackAction}
-                        disabled={!canAdvance || busy}
-                        className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-40"
-                      >
-                        {busy ? copy.thinking : copy.skipNow}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={advance}
-                      disabled={!canAdvance || busy}
-                      className="rounded-xl bg-stone-900 px-6 py-3 font-semibold text-white disabled:cursor-wait disabled:opacity-40"
-                    >
-                      {busy ? copy.thinking : copy.next}
+                  {discussionDecision.canListen && (
+                    <button type="button" onClick={() => submitDiscussionDecision("listen")} className="rounded-lg border border-amber-200/30 bg-white/10 px-4 py-2 text-sm font-semibold text-amber-50">
+                      {copy.keepListening}
                     </button>
                   )}
+                  <button type="button" onClick={() => submitDiscussionDecision("wrap")} className="rounded-lg px-4 py-2 text-sm font-semibold text-stone-400 hover:bg-white/10">
+                    {copy.wrapDiscussion}
+                  </button>
                 </div>
               </div>
-
-              <button
-                type="button"
-                aria-pressed={autoAdvance}
-                onClick={toggleAutoAdvance}
-                className="mt-3 text-xs font-semibold text-stone-500 underline decoration-stone-300 underline-offset-4 hover:text-stone-900"
-              >
-                {autoAdvance ? copy.autoOn : copy.autoOff}
-              </button>
-            </div>
-          )}
-          </div>
-        </aside>
+            ) : inputRequest ? (
+              <form onSubmit={handleSubmit} className="rounded-2xl border border-amber-200/30 bg-stone-950/95 p-4 text-stone-100 shadow-2xl backdrop-blur-md">
+                <div className="flex items-start gap-3">
+                  <UserAvatarArtwork avatarId={userAvatarId} className="h-11 w-11 shrink-0 rounded-xl" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300">{copy.waitingForYou}</p>
+                    <label htmlFor="user-turn" className="text-sm font-semibold text-amber-50">{INPUT_PROMPTS[language][inputRequest.kind]}</label>
+                    {inputRequest.kind === "discussion_reply" && transcript.at(-1) && (
+                      <p className="mt-1 max-h-12 overflow-y-auto text-xs leading-5 text-stone-400">
+                        {copy.challengedLine}: {transcript.at(-1)?.text}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <textarea
+                  id="user-turn"
+                  autoFocus
+                  rows={2}
+                  maxLength={4000}
+                  value={inputText}
+                  onChange={(event) => setInputText(event.target.value)}
+                  placeholder={copy.placeholder}
+                  className="mt-3 h-20 w-full resize-none rounded-xl border border-white/15 bg-black/25 p-3 text-sm leading-6 text-white outline-none placeholder:text-stone-600 focus:border-amber-300"
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="hidden text-[10px] text-stone-500 sm:block">{copy.manualHint}</p>
+                  <div className="ml-auto flex gap-2">
+                    <button type="button" onClick={() => submitUserInput("")} className="rounded-lg px-4 py-2 text-sm font-semibold text-stone-400 hover:bg-white/10">{copy.pass}</button>
+                    <button type="submit" disabled={!inputText.trim()} className="rounded-lg bg-amber-300 px-5 py-2 text-sm font-bold text-amber-950 disabled:cursor-not-allowed disabled:opacity-40">{copy.share}</button>
+                  </div>
+                </div>
+              </form>
+            ) : undefined
+          }
+        />
       </section>
 
       {transcriptOpen && (
-        <div className="fixed inset-0 z-50 bg-stone-950/45 p-4 backdrop-blur-sm sm:p-8">
+        <div className="fixed inset-0 z-50 flex justify-end bg-stone-950/60 backdrop-blur-sm" onClick={closeTranscript}>
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="transcript-dialog-title"
-            className="mx-auto flex h-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-[#fffdf8] shadow-2xl"
+            className="flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-amber-100/15 bg-[#f8f1e5] text-stone-900 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 bg-white px-5 py-4">
               <div>
@@ -1893,7 +1862,12 @@ export function App() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-5 pb-8 sm:px-8">
-              <TranscriptList transcript={transcript} language={language} />
+              <TranscriptList
+                transcript={transcript}
+                language={language}
+                userAvatarId={userAvatarId}
+                userDisplayName={userDisplayName}
+              />
             </div>
           </section>
         </div>

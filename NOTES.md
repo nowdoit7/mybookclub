@@ -40,3 +40,5 @@
 - 2026-07-19: Expanded the desktop session into an unobstructed portrait stage plus a recent-dialogue/response rail; narrow screens keep the stacked flow and sticky response access.
 - 2026-07-19: Removed the artificial mood selector; the drawn readers now establish a deterministic room atmosphere that evolves with user wording and code-owned debate events without another model call.
 - 2026-07-19: Exposed the current atmosphere only in development diagnostics and hid it from production and automated tests so it stays a tuning aid rather than a user control.
+- 2026-07-19: Replaced timer-driven playback and the always-open recent-chat rail with reader-controlled sentence-safe pages, fast typewriter reveal, previous/next navigation, and an on-demand transcript drawer.
+- 2026-07-19: Expanded the reading room into a full-viewport visual-novel stage with persistent participant spotlights and four selectable presentation-only user portraits; the engine still owns every speaker and transition.

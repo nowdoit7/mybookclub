@@ -25,14 +25,17 @@ pressure while retaining the round table as an establishing scene.
 6. **Atmosphere emerges instead of being selected.** The drawn readers establish
    a baseline; user wording and scheduled conversation events adjust it gradually.
    It changes delivery, never truth, identity, flow, or model-call count.
-7. **Playback never loses its reason.** Transcript viewing and page visibility
-   pause automatic playback temporarily; manual pause remains manual.
+7. **Reading pace belongs to the reader.** Dialogue never advances on a timer.
+   A click completes the current typewriter page, then a second click advances;
+   transcript review never changes the live dialogue cursor or engine flow.
 
 ## Session experience
 
 ### Setup
 
 - Keep language, generation mode, and book-scope selection.
+- Let the user choose one of four presentation-only portraits and an optional
+  local display name before entering the room.
 - Do not add a mood selector. Each persona carries numeric social-temperament
   data; the selected trio deterministically establishes the initial room state.
 - Recent user wording may warm, enliven, or sharpen the room. Code-scheduled
@@ -78,7 +81,8 @@ supporter after the user joins. No one speaks merely to complete a round.
 - Keep the user's closing thought first.
 - The two people most involved respond briefly.
 - Return to the full table for Alex's spoken summary.
-- Preserve the full transcript and generate the recap after the reading delay.
+- Preserve the full transcript and generate the recap after the reader acknowledges
+  the final spoken summary.
 
 ## Interface architecture
 
@@ -92,29 +96,19 @@ supporter after the user joins. No one speaks merely to complete a round.
   visible while the user writes.
 - Use generated portraits when available and fall back to colored initials.
 
-### Recent conversation dock
+### Dialogue paging and transcript
 
-- Fixed-height, internally scrollable history in a desktop right rail, returning
-  beneath the stage on narrower screens.
-- Keep the user response/playback card in the same rail so it never covers the
-  challenged line or active portrait on wide screens.
-- Auto-scroll to the newest turn only when the user is already near the bottom.
-- Scrolling upward temporarily pauses automatic playback.
-- Returning to the bottom resumes only a dock-caused pause.
-- Full transcript drawer remains available for review, copy, and evaluation.
-
-### Playback state
-
-Track pause reason explicitly:
-
-```ts
-type PlaybackPauseReason = "manual" | "transcript" | "history" | "hidden" | null;
-```
-
-- Closing the transcript resumes a `transcript` pause.
-- Returning to the visible tab resumes a `hidden` pause.
-- Returning the history dock to its bottom resumes a `history` pause.
-- A `manual` pause never resumes without an explicit user action.
+- Keep the active utterance in a fixed-height visual-novel dialogue box so long
+  text never covers the speaker portrait.
+- Split only at sentence-safe boundaries and retain the untouched utterance in
+  the transcript and model context. Oversized single sentences may use a bounded
+  display-only fallback split.
+- Reveal a fresh page with a fast typewriter effect. Clicking while it types
+  completes the page; clicking again moves to the next page or engine-owned turn.
+- Previous navigates only already revealed pages. Returning to the live edge must
+  not regenerate dialogue or resolve an engine transition.
+- Keep the complete chat-style transcript closed by default. Open it in an overlay
+  drawer for review and copy, then return to the exact same dialogue page.
 
 ## Portrait assets
 
@@ -122,7 +116,7 @@ type PlaybackPauseReason = "manual" | "transcript" | "history" | "hidden" | null
 - One asset must work as both a circular face crop and a larger bust.
 - Keep a unified medium, lighting direction, crop, and warm-library palette.
 - Do not imitate or reuse any specific commercial game character or visual style.
-- The user remains a neutral silhouette in MVP.
+- Provide four consistent user portraits cropped from one lightweight sprite sheet.
 - Expression variants are roadmap scope; MVP uses one readable neutral expression.
 
 ## Contracts and state
@@ -148,9 +142,10 @@ type PlaybackPauseReason = "manual" | "transcript" | "history" | "hidden" | null
   - the initial atmosphere is deterministic and all values remain bounded;
   - user wording and scheduled tasks update atmosphere gradually;
   - atmosphere and `refersTo` reach every relevant request.
-- Playback tests:
-  - transient pauses resume from their remaining delay;
-  - manual pauses never auto-resume.
+- Dialogue presentation tests:
+  - page splitting preserves text and stays within the display budget;
+  - one click advances exactly one page or one code-owned turn;
+  - transcript review is closed by default and does not affect engine flow.
 - Mock evaluations:
   - join route, observer route, immediate-wrap route;
   - varied persona-derived atmosphere baselines and user-language changes;
@@ -161,7 +156,7 @@ type PlaybackPauseReason = "manual" | "transcript" | "history" | "hidden" | null
 
 1. Spec, types, and deterministic engine loop.
 2. Prompt behavior and mock simulation.
-3. Pause-reason fix and challenged-line context.
-4. Focused conversation stage and recent-history dock.
-5. Portrait generation and integration.
+3. Challenged-line context and explicit discussion checkpoint.
+4. Full-viewport focused stage, manual dialogue paging, and transcript drawer.
+5. Reader and user portrait generation and integration.
 6. Full verification, browser QA, one final live smoke test with user approval.
