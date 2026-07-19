@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   bookIdentificationSchema,
+  discussionFocusSchema,
   readingNotesSchema,
   recapSchema,
   userStanceSchema,
@@ -11,16 +12,24 @@ import {
 describe("structured output contracts", () => {
   it("accepts a strict book identification", () => {
     const result = bookIdentificationSchema.parse({
-      canonical_title: "The Stranger",
-      author: "Albert Camus",
+      canonical_title: "A Reader-Selected Book",
+      author: "A. Reader",
+      work_scope: "single_book",
+      included_titles: ["A Reader-Selected Book"],
       summary:
-        "A detached clerk in French Algeria faces social judgment after a killing, while the novel examines absurdity, alienation, responsibility, and the demand for conventional emotion.",
-      main_characters: ["Meursault"],
-      candidate_topics: ["Detachment", "Judgment", "The absurd"],
-      confidence: "high",
+        "A reader-selected book is represented by a sufficiently detailed summary for this schema boundary test, without depending on any particular published work or its characters.",
+      main_characters: ["Ari"],
+      candidate_topics: ["Form", "Interpretation", "Context"],
+      verification_status: "verified",
+      verification_note: "Two independent sources match the title and author.",
+      sources: [
+        { url: "https://publisher.example/book" },
+        { url: "https://library.example/record" },
+      ],
     });
 
     expect(result.candidate_topics).toHaveLength(3);
+    expect(result.verification_status).toBe("verified");
   });
 
   it("rejects undeclared properties", () => {
@@ -40,8 +49,12 @@ describe("structured output contracts", () => {
           { topic: "B", stance: 0, reason: "Reason B" },
           { topic: "C", stance: 2, reason: "Reason C" },
         ],
-        key_scenes: ["The funeral", "The final confrontation"],
+        key_scenes: ["The opening passage", "A later turning point"],
         shelf_connections: [],
+        personal_reaction: "The silence around the victim stayed with this reader.",
+        unresolved_question: "Is this lens hiding another part of the scene?",
+        possible_revision: "Stronger scene evidence could revise this position.",
+        question_for_table: "What did another reader notice first in this scene?",
       }).overall_stance,
     ).toBe(1);
 
@@ -57,5 +70,18 @@ describe("structured output contracts", () => {
     expect(
       recapSchema.parse({ markdown: `# Recap\n\n${"A careful discussion. ".repeat(12)}` }).markdown,
     ).toContain("# Recap");
+
+    expect(
+      discussionFocusSchema.parse({
+        topic_scores: ["A", "B", "C"].map((topic, index) => ({
+          topic,
+          relevance: index,
+          evidence: `Evidence ${index}`,
+        })),
+        emergent_question: null,
+        emergent_relevance: 0,
+        emergent_evidence: null,
+      }).topic_scores,
+    ).toHaveLength(3);
   });
 });

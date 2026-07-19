@@ -45,23 +45,27 @@ describe("server boundary", () => {
       .post("/api/generate/book-identification")
       .set("Origin", "http://localhost:5173")
       .set("x-session-id", "test-session")
-      .send({ title: "The Stranger" });
+      .send({ title: "A Reader-Selected Book" });
 
     expect(response.status).toBe(200);
-    expect(response.body.canonical_title).toBe("The Stranger");
+    expect(response.body.canonical_title).toBe("A Reader-Selected Book");
   });
 
   it("serves every generation operation needed by a browser session", async () => {
     const app = testApp();
     const client = new MockGenerationClient();
-    const identified = await client.identifyBook({ title: "The Stranger", language: "en" });
+    const identified = await client.identifyBook({ title: "A Reader-Selected Book", language: "en" });
     const book = {
       title: identified.canonical_title,
       author: identified.author,
+      workScope: identified.work_scope,
+      includedTitles: identified.included_titles,
       confirmedSummary: identified.summary,
       mainCharacters: identified.main_characters,
       candidateTopics: identified.candidate_topics,
-      confidence: identified.confidence,
+      verificationStatus: identified.verification_status,
+      verificationNote: identified.verification_note,
+      sources: identified.sources,
     };
     const personas = selectPersonas("demo");
     const sessionHeaders = { "x-session-id": "browser-session" };
@@ -127,11 +131,11 @@ describe("server boundary", () => {
     await request(app)
       .post("/api/generate/book-identification")
       .set("x-session-id", "limited-session")
-      .send({ title: "The Stranger" });
+      .send({ title: "A Reader-Selected Book" });
     const response = await request(app)
       .post("/api/generate/book-identification")
       .set("x-session-id", "limited-session")
-      .send({ title: "The Stranger" });
+      .send({ title: "A Reader-Selected Book" });
 
     expect(response.status).toBe(429);
     expect(response.body.error).toBe("session_call_limit_reached");
@@ -153,7 +157,7 @@ describe("server boundary", () => {
 
     const response = await request(app)
       .post("/api/generate/book-identification")
-      .send({ title: "The Stranger" });
+      .send({ title: "A Reader-Selected Book" });
 
     expect(response.status).toBe(502);
     expect(response.body).toMatchObject({
@@ -189,7 +193,7 @@ describe("server boundary", () => {
       exposeErrorDetails: true,
       logger: { info() {}, error() {} },
     });
-    const identified = await generationClient.identifyBook({ title: "The Stranger" });
+    const identified = await generationClient.identifyBook({ title: "A Reader-Selected Book" });
     const persona = selectPersonas("demo")[0];
 
     const response = await request(app)
@@ -199,10 +203,14 @@ describe("server boundary", () => {
         book: {
           title: identified.canonical_title,
           author: identified.author,
+          workScope: identified.work_scope,
+          includedTitles: identified.included_titles,
           confirmedSummary: identified.summary,
           mainCharacters: identified.main_characters,
           candidateTopics: identified.candidate_topics,
-          confidence: identified.confidence,
+          verificationStatus: identified.verification_status,
+          verificationNote: identified.verification_note,
+          sources: identified.sources,
         },
         persona,
       });

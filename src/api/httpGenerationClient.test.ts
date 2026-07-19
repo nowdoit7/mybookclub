@@ -26,12 +26,19 @@ describe("HttpGenerationClient", () => {
       text: "I sympathize with him without excusing him.",
       target: "overall_impression",
       book: {
-        title: "The Stranger",
-        author: "Albert Camus",
+        title: "A Reader-Selected Book",
+        author: "A. Reader",
+        workScope: "single_book",
+        includedTitles: ["A Reader-Selected Book"],
         confirmedSummary: "A sufficiently long confirmed summary used only for this client boundary test and no model call.",
-        mainCharacters: ["Meursault"],
+        mainCharacters: ["Ari"],
         candidateTopics: ["Topic one?", "Topic two?", "Topic three?"],
-        confidence: "high",
+        verificationStatus: "verified",
+        verificationNote: "Two sources matched this book.",
+        sources: [
+          { url: "https://publisher.example/book" },
+          { url: "https://library.example/record" },
+        ],
       },
     });
 
@@ -66,7 +73,7 @@ describe("HttpGenerationClient", () => {
     );
     const client = new HttpGenerationClient("/api/generate", "session-123");
 
-    const failure = client.identifyBook({ title: "The Stranger", language: "en" });
+    const failure = client.identifyBook({ title: "A Reader-Selected Book", language: "en" });
     await expect(failure).rejects.toBeInstanceOf(GenerationApiError);
     await expect(failure).rejects.toMatchObject({
       code: "server_not_configured",
@@ -98,7 +105,7 @@ describe("HttpGenerationClient", () => {
     );
     const client = new HttpGenerationClient("/api/generate", "session-123");
 
-    const request = client.identifyBook({ title: "The Stranger", language: "en" });
+    const request = client.identifyBook({ title: "A Reader-Selected Book", language: "en" });
     expect(getGenerationDiagnostics()).toMatchObject([
       { endpoint: "book-identification", outcome: "pending", status: 0 },
     ]);
@@ -106,13 +113,20 @@ describe("HttpGenerationClient", () => {
     resolveFetch(
       new Response(
         JSON.stringify({
-          canonical_title: "The Stranger",
-          author: "Albert Camus",
+          canonical_title: "A Reader-Selected Book",
+          author: "A. Reader",
+          work_scope: "single_book",
+          included_titles: ["A Reader-Selected Book"],
           summary:
-            "A detached clerk moves through grief, intimacy, violence, and judgment in colonial Algiers. His refusal to perform expected emotion becomes central at trial. The court reads character through social ritual. The novel tests absurdity, responsibility, and moral legibility.",
-          main_characters: ["Meursault"],
+            "The opening establishes a central question for the reader. A later change complicates the first interpretation. The structure makes two readings plausible. The ending leaves their tension unresolved.",
+          main_characters: ["Ari"],
           candidate_topics: ["Topic one?", "Topic two?", "Topic three?"],
-          confidence: "high",
+          verification_status: "verified",
+          verification_note: "Two sources matched this book.",
+          sources: [
+            { url: "https://publisher.example/book" },
+            { url: "https://library.example/record" },
+          ],
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),

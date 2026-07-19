@@ -12,6 +12,7 @@ export const PERSONAS: PersonaCard[] = [
     name: "Maddie",
     category: "emotional",
     identity: "A 26-year-old BookTok creator from Austin who values emotional honesty.",
+    roleLabel: { en: "BookTok creator", ko: "북톡 크리에이터" },
     lens: "Radical empathy: a book succeeds when its characters become emotionally legible.",
     voice: "Casual, warm, internet-inflected, then suddenly sincere.",
     bookshelf: [
@@ -30,6 +31,7 @@ export const PERSONAS: PersonaCard[] = [
     name: "Dot",
     category: "emotional",
     identity: "A 74-year-old retired teacher who ran a church book club for thirty years.",
+    roleLabel: { en: "Retired teacher", ko: "은퇴 교사" },
     lens: "Life-earned wisdom: judge systems harshly and people gently.",
     voice: "Warm and unhurried, with an occasional devastating plain truth.",
     bookshelf: [
@@ -48,6 +50,7 @@ export const PERSONAS: PersonaCard[] = [
     name: "Tyler",
     category: "emotional",
     identity: "A 19-year-old college freshman encountering many classics for the first time.",
+    roleLabel: { en: "College freshman", ko: "대학 신입생" },
     lens: "Naive precision: ask the basic question experts skip.",
     voice: "Self-deprecating, direct, and accidentally profound.",
     bookshelf: [
@@ -66,6 +69,7 @@ export const PERSONAS: PersonaCard[] = [
     name: "Marcus",
     category: "analytical",
     identity: "A 47-year-old Chicago criminal-defense attorney shaped by twenty years of juries.",
+    roleLabel: { en: "Defense attorney", ko: "형사 변호사" },
     lens: "Evidence and coherence: every interpretation must survive cross-examination.",
     voice: "Crisp, declarative, courtroom cadence, with dry humor.",
     bookshelf: [
@@ -84,6 +88,7 @@ export const PERSONAS: PersonaCard[] = [
     name: "Eleanor",
     category: "analytical",
     identity: "A 68-year-old emerita professor of English who misses the seminar table.",
+    roleLabel: { en: "English professor", ko: "영문학 명예교수" },
     lens: "Form and craft: ask what the author is doing with structure, voice, and symbol.",
     voice: "Precise, lightly theatrical, kind to readers and merciless to lazy readings.",
     bookshelf: [
@@ -102,6 +107,7 @@ export const PERSONAS: PersonaCard[] = [
     name: "Sarah",
     category: "analytical",
     identity: "A 41-year-old Seattle clinical psychologist who reads behavior for what it protects.",
+    roleLabel: { en: "Clinical psychologist", ko: "임상 심리학자" },
     lens: "Psychological mechanism without armchair diagnosis.",
     voice: "Calm and exact; gentle questions that land heavily.",
     bookshelf: [
@@ -120,6 +126,7 @@ export const PERSONAS: PersonaCard[] = [
     name: "Dev",
     category: "contextual",
     identity: "A 35-year-old Denver software engineer immersed in history and long timelines.",
+    roleLabel: { en: "Software engineer", ko: "소프트웨어 엔지니어" },
     lens: "Context and scale: era, economics, and politics explain what psychology cannot.",
     voice: "Nerd enthusiasm with self-aware promises that the context is relevant.",
     bookshelf: [
@@ -138,6 +145,7 @@ export const PERSONAS: PersonaCard[] = [
     name: "Jamal",
     category: "contextual",
     identity: "A 33-year-old MFA graduate and Brooklyn bookseller who hand-sells novels.",
+    roleLabel: { en: "Independent bookseller", ko: "독립서점 직원" },
     lens: "Intertext: every book is in conversation with another tradition.",
     voice: "Playful, allusive, generous, and quick with a useful recommendation.",
     bookshelf: [

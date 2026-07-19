@@ -5,12 +5,21 @@ import remarkGfm from "remark-gfm";
 
 import { GenerationApiError, HttpGenerationClient } from "./api/httpGenerationClient";
 import { MockGenerationClient } from "./api/mockGenerationClient";
+import type { GenerationClient } from "./api/generationClient";
 import { calculateReadingDelay } from "./engine/playbackTiming";
-import { SessionEngine } from "./engine/sessionEngine";
-import { localizedSpeakerName, STAGE_LABELS } from "./localization";
+import { SessionEngine, toConfirmedBook } from "./engine/sessionEngine";
+import { localizedSpeakerName, localizedSpeakerRole, STAGE_LABELS } from "./localization";
 import { PERSONAS, selectPersonas } from "./personas";
 import { formatTranscriptAsMarkdown } from "./transcriptExport";
-import type { AppLanguage, PersonaCard, StageId, Utterance } from "./types";
+import type {
+  AppLanguage,
+  BookScope,
+  ConfirmedBook,
+  PersonaCard,
+  StageId,
+  UserTurnKind,
+  Utterance,
+} from "./types";
 import { DiagnosticsPanel } from "./ui/DiagnosticsPanel";
 
 const STAGES: StageId[] = [
@@ -21,20 +30,22 @@ const STAGES: StageId[] = [
   "WRAP_UP",
 ];
 
-const INPUT_PROMPTS: Record<AppLanguage, Record<StageId, string>> = {
+const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
   en: {
-    INTRO: "What brings you to this book?",
-    FIRST_IMPRESSIONS: "What was your first impression?",
-    MEMORABLE_SCENES: "Which scene stayed with you?",
-    DISCUSSION: "Where do you land on this question?",
-    WRAP_UP: "What are you leaving the table with?",
+    intro: "Tell us a little about yourself and what brought you to the table.",
+    first_impression: "What was your first impression?",
+    memorable_scene: "Which scene stayed with you?",
+    discussion_position: "Where do you land on this question?",
+    discussion_reply: "How do you answer that challenge?",
+    wrap_up: "What are you leaving the table with?",
   },
   ko: {
-    INTRO: "어떤 이유로 이 책을 펼치게 되었나요?",
-    FIRST_IMPRESSIONS: "이 책의 첫인상은 어땠나요?",
-    MEMORABLE_SCENES: "어떤 장면이 가장 오래 남았나요?",
-    DISCUSSION: "이 질문에 대해 어디에 서 있나요?",
-    WRAP_UP: "오늘 테이블에서 무엇을 가지고 떠나시나요?",
+    intro: "어떤 분인지, 오늘 이 테이블에 오게 된 이유와 함께 소개해 주세요.",
+    first_impression: "이 책의 첫인상은 어땠나요?",
+    memorable_scene: "어떤 장면이 가장 오래 남았나요?",
+    discussion_position: "이 질문에 대해 어디에 서 있나요?",
+    discussion_reply: "그 반론에는 어떻게 답하시겠어요?",
+    wrap_up: "오늘 테이블에서 무엇을 가지고 떠나시나요?",
   },
 };
 
@@ -45,12 +56,46 @@ const COPY = {
     liveBadge: "Live · GPT-5.6 API",
     description:
       "Test the pacing before the room gets decorated. Reader turns advance at a natural reading pace, and the table stops when it is your turn.",
-    demoBook: "Demo book",
-    bookTitle: "The Stranger",
-    bookMeta: "Albert Camus · Maddie, Marcus, and Eleanor",
+    bookSetup: "Bring a book to the table",
+    scopeLabel: "Discussion scope",
+    scopeLabels: { single_book: "One book", series: "Full series" },
+    singleBookHint: "Discuss one volume or one standalone work.",
+    seriesHint: "Verify and discuss every published volume in the series.",
+    includedTitles: "Books included in this series",
+    bookTitleLabel: "Book title",
+    seriesTitleLabel: "Series title",
+    bookTitlePlaceholder: "The book you recently finished",
+    seriesTitlePlaceholder: "The series you recently finished",
+    authorLabel: "Author (optional)",
+    authorPlaceholder: "Helps identify books with similar titles",
+    identifyBook: "Identify this book",
+    identifySeries: "Identify this series",
+    verifyBook: "Search and verify this book",
+    verifySeries: "Search and verify this series",
+    identifyingBook: "Identifying the book…",
+    identifyingSeries: "Identifying the series…",
+    verifyingBook: "Searching the web and verifying this book…",
+    verifyingSeries: "Searching the web and verifying this series…",
+    identifiedBook: "Web-verified book",
+    identifiedSeries: "Web-verified series",
+    mockIdentifiedBook: "Mock preview · details are not verified",
+    verificationStatus: "Verification",
+    verificationLabels: {
+      verified: "verified",
+      ambiguous: "ambiguous match",
+      not_found: "not found",
+      mock: "mock only",
+    },
+    verificationSources: "Verification sources",
+    verificationBlocked: "Correct the title or author and search again before starting a live session.",
+    confirmBook: "Yes, this is my book — start the session",
+    confirmSeries: "Yes, this is my series — start the session",
+    bookRequired: "Enter a book title first.",
+    identificationFailed: "The book could not be identified. Check the details and try again.",
+    currentBook: "Tonight's book",
     privacyTitle: "Data & privacy",
     privacy:
-      "Your book title and messages are sent to OpenAI to generate this discussion. This session is stored only in this browser and is not saved by The Reading Table's server.",
+      "In live mode, your book title is sent to OpenAI for web verification, and your messages are sent to generate the discussion. This session is stored only in this browser and is not saved by The Reading Table's server.",
     mockPrivacy:
       "This prototype uses deterministic mock responses, so nothing is sent to OpenAI during this walkthrough.",
     start: "Start mock session",
@@ -74,8 +119,8 @@ const COPY = {
     recapTitle: "Meeting recap",
     newSession: "Start a new session",
     sessionFailed: "The session could not continue.",
-    sessionLabel: "The Stranger · Mock session",
-    liveSessionLabel: "The Stranger · Live GPT-5.6 session",
+    sessionLabel: (title: string) => `${title} · Mock session`,
+    liveSessionLabel: (title: string) => `${title} · Live GPT-5.6 session`,
     stagesLabel: "Session stages",
     copyTranscript: "Copy full transcript",
     copied: "Copied",
@@ -102,7 +147,7 @@ const COPY = {
     mockMode: "Mock",
     liveMode: "Live GPT-5.6",
     mockModeHint: "Fast deterministic responses for UI testing.",
-    liveModeHint: "Real generated discussion. This uses your API credits.",
+    liveModeHint: "Web-verifies the book, then generates a real discussion using API credits.",
     liveChecking: "Checking the local API server…",
     liveReady: (model: string) => `${model} is ready on the server.`,
     liveUnavailable: "Live mode is unavailable. Check the server API key and restart it.",
@@ -126,12 +171,46 @@ const COPY = {
     liveBadge: "실제 연결 · GPT-5.6 API",
     description:
       "원탁을 꾸미기 전에 대화의 호흡부터 확인합니다. 참여자 발언은 읽을 시간에 맞춰 자동으로 이어지고, 사용자 차례가 오면 테이블이 멈춥니다.",
-    demoBook: "데모 도서",
-    bookTitle: "이방인",
-    bookMeta: "알베르 카뮈 · 매디, 마커스, 엘리너",
+    bookSetup: "읽은 책을 테이블에 올려주세요",
+    scopeLabel: "토론 범위",
+    scopeLabels: { single_book: "한 권", series: "시리즈 전체" },
+    singleBookHint: "한 권 또는 단독 작품만 이야기합니다.",
+    seriesHint: "시리즈에 포함된 모든 출간 도서를 검증하고 이야기합니다.",
+    includedTitles: "시리즈에 포함된 도서",
+    bookTitleLabel: "책 제목",
+    seriesTitleLabel: "시리즈 제목",
+    bookTitlePlaceholder: "최근에 다 읽은 책",
+    seriesTitlePlaceholder: "최근에 다 읽은 시리즈",
+    authorLabel: "저자 (선택)",
+    authorPlaceholder: "같은 제목의 책을 구분하는 데 도움이 됩니다",
+    identifyBook: "이 책 확인하기",
+    identifySeries: "이 시리즈 확인하기",
+    verifyBook: "웹에서 도서 검증하기",
+    verifySeries: "웹에서 시리즈 검증하기",
+    identifyingBook: "책을 확인하고 있습니다…",
+    identifyingSeries: "시리즈를 확인하고 있습니다…",
+    verifyingBook: "웹에서 도서 정보를 검색하고 검증하고 있습니다…",
+    verifyingSeries: "웹에서 시리즈 구성 정보를 검색하고 검증하고 있습니다…",
+    identifiedBook: "웹에서 검증된 책",
+    identifiedSeries: "웹에서 검증된 시리즈",
+    mockIdentifiedBook: "모의 미리보기 · 도서 정보는 검증되지 않음",
+    verificationStatus: "검증 상태",
+    verificationLabels: {
+      verified: "도서 확인 완료",
+      ambiguous: "동일하거나 유사한 책이 여러 권 발견됨",
+      not_found: "신뢰할 수 있는 도서 정보를 찾지 못함",
+      mock: "모의 정보",
+    },
+    verificationSources: "검증에 사용한 출처",
+    verificationBlocked: "제목이나 저자를 수정한 뒤 다시 검색해야 실제 세션을 시작할 수 있습니다.",
+    confirmBook: "네, 이 책이 맞습니다 — 모임 시작",
+    confirmSeries: "네, 이 시리즈가 맞습니다 — 모임 시작",
+    bookRequired: "먼저 책 제목을 입력해주세요.",
+    identificationFailed: "책을 확인하지 못했습니다. 입력 내용을 확인하고 다시 시도해주세요.",
+    currentBook: "오늘의 책",
     privacyTitle: "데이터 및 개인정보",
     privacy:
-      "책 제목과 메시지는 토론을 생성하기 위해 OpenAI로 전송됩니다. 이 세션은 현재 브라우저에만 저장되며 리딩 테이블 서버에는 저장되지 않습니다.",
+      "실제 모드에서는 도서 검증을 위해 책 제목이 OpenAI 웹 검색에 사용되고, 토론 생성을 위해 메시지가 전송됩니다. 이 세션은 현재 브라우저에만 저장되며 리딩 테이블 서버에는 저장되지 않습니다.",
     mockPrivacy:
       "이 프로토타입은 결정론적 모의 응답을 사용하므로 이번 체험에서는 OpenAI로 아무 내용도 전송되지 않습니다.",
     start: "모의 세션 시작",
@@ -155,8 +234,8 @@ const COPY = {
     recapTitle: "모임 기록",
     newSession: "새 세션 시작",
     sessionFailed: "세션을 계속 진행할 수 없습니다.",
-    sessionLabel: "이방인 · 모의 세션",
-    liveSessionLabel: "이방인 · 실제 GPT-5.6 세션",
+    sessionLabel: (title: string) => `${title} · 모의 세션`,
+    liveSessionLabel: (title: string) => `${title} · 실제 GPT-5.6 세션`,
     stagesLabel: "세션 단계",
     copyTranscript: "전체 대화 복사",
     copied: "복사됨",
@@ -183,7 +262,7 @@ const COPY = {
     mockMode: "모의 응답",
     liveMode: "실제 GPT-5.6",
     mockModeHint: "UI 확인용으로 빠르고 동일한 응답을 사용합니다.",
-    liveModeHint: "실제로 토론을 생성하며 API 크레딧을 사용합니다.",
+    liveModeHint: "도서를 웹에서 검증한 뒤 실제 토론을 생성하며 API 크레딧을 사용합니다.",
     liveChecking: "로컬 API 서버를 확인하고 있습니다…",
     liveReady: (model: string) => `서버의 ${model} 연결 준비가 완료되었습니다.`,
     liveUnavailable: "실제 모드를 사용할 수 없습니다. 서버 API 키와 재시작 상태를 확인해주세요.",
@@ -204,7 +283,7 @@ const COPY = {
 };
 
 type Screen = "setup" | "session" | "recap";
-type InputRequest = { stage: StageId; target?: string };
+type InputRequest = { stage: StageId; target?: string; kind: UserTurnKind };
 type CopyStatus = "idle" | "copied" | "failed";
 type RecapView = "recap" | "transcript";
 type GenerationMode = "mock" | "live";
@@ -241,11 +320,13 @@ function pendingSpeakerName(
   return localizedSpeakerName(speaker.id, language);
 }
 
-const DEMO_SPEAKERS = [
-  "moderator",
-  ...selectPersonas("demo").map(({ id }) => id),
-  "user",
-];
+function sourceHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./u, "");
+  } catch {
+    return url;
+  }
+}
 
 function SpeakerAvatar({
   speaker,
@@ -270,24 +351,29 @@ function SpeakerAvatar({
   );
 }
 
-const ROUND_TABLE_POSITIONS: Record<string, string> = {
-  moderator: "left-1/2 top-3 -translate-x-1/2",
-  maddie: "left-3 top-[34%] sm:left-8",
-  marcus: "right-3 top-[34%] sm:right-8",
-  dev: "bottom-3 left-[18%] -translate-x-1/2 sm:left-[22%]",
-  user: "bottom-3 right-[18%] translate-x-1/2 sm:right-[22%]",
-};
+const ROUND_TABLE_POSITIONS = [
+  "left-1/2 top-3 -translate-x-1/2",
+  "left-3 top-[34%] sm:left-8",
+  "right-3 top-[34%] sm:right-8",
+  "bottom-3 left-[18%] -translate-x-1/2 sm:left-[22%]",
+  "bottom-3 right-[18%] translate-x-1/2 sm:right-[22%]",
+] as const;
 
 function RoundTable({
   language,
+  book,
+  personas,
   activeSpeaker,
   upcomingSpeaker,
 }: {
   language: AppLanguage;
+  book: ConfirmedBook;
+  personas: PersonaCard[];
   activeSpeaker?: string;
   upcomingSpeaker?: string;
 }) {
   const copy = COPY[language];
+  const speakers = ["moderator", ...personas.map(({ id }) => id), "user"];
   return (
     <section
       className="relative h-[300px] overflow-hidden rounded-[2rem] border border-amber-900/10 bg-[#f7efe1] shadow-sm sm:h-[340px]"
@@ -299,15 +385,17 @@ function RoundTable({
       >
         <div className="w-full max-w-md">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-950/55">
-            {copy.demoBook}
+            {copy.currentBook}
           </p>
-          <p className="mt-1 font-serif text-xl text-amber-950 sm:text-2xl">{copy.bookTitle}</p>
-          <p className="mt-2 text-xs text-amber-950/65">{copy.bookMeta}</p>
+          <p className="mt-1 font-serif text-xl text-amber-950 sm:text-2xl">{book.title}</p>
+          <p className="mt-2 text-xs text-amber-950/65">
+            {book.author} · {personas.map(({ id }) => localizedSpeakerName(id, language)).join(", ")}
+          </p>
         </div>
       </div>
 
       <div role="list">
-        {DEMO_SPEAKERS.map((speaker) => {
+        {speakers.map((speaker, index) => {
           const isActive = activeSpeaker === speaker;
           const isNext = !isActive && upcomingSpeaker === speaker;
           return (
@@ -315,7 +403,7 @@ function RoundTable({
               key={speaker}
               role="listitem"
               aria-current={isActive ? "true" : undefined}
-              className={`absolute z-[1] w-[4.5rem] text-center ${ROUND_TABLE_POSITIONS[speaker]}`}
+              className={`absolute z-[1] w-[7rem] text-center ${ROUND_TABLE_POSITIONS[index]}`}
             >
               <div
                 className={`relative mx-auto w-fit rounded-full p-0.5 transition duration-300 ${
@@ -340,6 +428,9 @@ function RoundTable({
               <p className="mt-2 truncate text-[11px] font-semibold text-stone-700">
                 {localizedSpeakerName(speaker, language)}
               </p>
+              <p className="mt-0.5 text-[9px] leading-3 text-stone-500">
+                {localizedSpeakerRole(speaker, language)}
+              </p>
             </div>
           );
         })}
@@ -362,7 +453,7 @@ function CurrentDialogue({
   const copy = COPY[language];
   const speaker = inputRequest ? "user" : (latestUtterance?.speaker ?? upcomingSpeaker ?? "moderator");
   const text = inputRequest
-    ? INPUT_PROMPTS[language][inputRequest.stage]
+    ? INPUT_PROMPTS[language][inputRequest.kind]
     : (latestUtterance?.text ?? copy.tableReady);
 
   return (
@@ -377,6 +468,7 @@ function CurrentDialogue({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-bold text-stone-900">{localizedSpeakerName(speaker, language)}</p>
+          <span className="text-xs text-stone-500">{localizedSpeakerRole(speaker, language)}</span>
           {inputRequest && (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
               {copy.yourTurn}
@@ -487,6 +579,13 @@ export function App() {
   const [generationMode, setGenerationMode] = useState<GenerationMode>("mock");
   const [liveAvailability, setLiveAvailability] = useState<LiveAvailability>("checking");
   const [liveModel, setLiveModel] = useState("gpt-5.6");
+  const [bookScope, setBookScope] = useState<BookScope>("single_book");
+  const [bookTitleInput, setBookTitleInput] = useState("");
+  const [bookAuthorInput, setBookAuthorInput] = useState("");
+  const [confirmedBook, setConfirmedBook] = useState<ConfirmedBook>();
+  const [sessionPersonas, setSessionPersonas] = useState<PersonaCard[]>([]);
+  const [identifyingBook, setIdentifyingBook] = useState(false);
+  const [identificationError, setIdentificationError] = useState("");
   const [screen, setScreen] = useState<Screen>("setup");
   const [stage, setStage] = useState<StageId>("INTRO");
   const [transcript, setTranscript] = useState<Utterance[]>([]);
@@ -515,7 +614,34 @@ export function App() {
   const playbackDeadlineRef = useRef(0);
   const playbackRemainingRef = useRef(0);
   const playbackActionRef = useRef<(() => void) | null>(null);
+  const generationClientRef = useRef<GenerationClient | null>(null);
   const copy = COPY[language];
+  const confirmedVerificationStatus =
+    confirmedBook?.verificationStatus ?? (generationMode === "mock" ? "mock" : "ambiguous");
+  const confirmedSources = confirmedBook?.sources ?? [];
+  const confirmedWorkScope = confirmedBook?.workScope ?? bookScope;
+  const confirmedIncludedTitles = confirmedBook?.includedTitles ?? [];
+  const canStartSession = Boolean(
+    confirmedBook &&
+      (generationMode === "mock" || confirmedVerificationStatus === "verified"),
+  );
+
+  const generationErrorMessage = (caught: unknown): string => {
+    if (!(caught instanceof GenerationApiError)) {
+      return caught instanceof Error ? caught.message : copy.sessionFailed;
+    }
+    return caught.code === "server_not_configured"
+      ? copy.serverNotConfigured
+      : caught.code === "session_call_limit_reached"
+        ? copy.sessionLimitReached
+        : caught.code === "model_refusal"
+          ? copy.modelRefused
+          : caught.code === "incomplete_output"
+            ? copy.incompleteOutput
+            : caught.code === "invalid_structured_output"
+              ? copy.invalidStructuredOutput
+              : copy.liveGenerationFailed;
+  };
 
   const clearPlaybackTimers = useCallback(() => {
     if (playbackTimeoutRef.current) clearTimeout(playbackTimeoutRef.current);
@@ -631,6 +757,45 @@ export function App() {
     [clearPlaybackTimers],
   );
 
+  const invalidateBookConfirmation = () => {
+    setConfirmedBook(undefined);
+    setIdentificationError("");
+    generationClientRef.current = null;
+  };
+
+  const identifyBook = async (event: FormEvent) => {
+    event.preventDefault();
+    const title = bookTitleInput.trim();
+    if (!title) {
+      setIdentificationError(copy.bookRequired);
+      return;
+    }
+    setIdentifyingBook(true);
+    setIdentificationError("");
+    setConfirmedBook(undefined);
+    const client =
+      generationMode === "live" ? new HttpGenerationClient() : new MockGenerationClient();
+    generationClientRef.current = client;
+    try {
+      const identified = await client.identifyBook({
+        title,
+        author: bookAuthorInput.trim() || undefined,
+        scope: bookScope,
+        language,
+      });
+      setConfirmedBook(toConfirmedBook(identified));
+    } catch (caught) {
+      generationClientRef.current = null;
+      setIdentificationError(
+        caught instanceof GenerationApiError
+          ? generationErrorMessage(caught)
+          : copy.identificationFailed,
+      );
+    } finally {
+      setIdentifyingBook(false);
+    }
+  };
+
   const copyTranscript = async () => {
     if (transcript.length === 0) return;
     try {
@@ -671,17 +836,31 @@ export function App() {
         : copy.copyRecap;
 
   const downloadRecap = () => {
-    if (!recap) return;
+    if (!recap || !confirmedBook) return;
     const blob = new Blob([recap], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `recap-${language === "ko" ? "이방인" : "the-stranger"}-${new Date().toISOString().slice(0, 10)}.md`;
+    const safeTitle = confirmedBook.title
+      .normalize("NFKD")
+      .replace(/[^\p{L}\p{N}]+/gu, "-")
+      .replace(/^-+|-+$/gu, "")
+      .toLocaleLowerCase()
+      .slice(0, 80) || "book";
+    anchor.download = `recap-${safeTitle}-${new Date().toISOString().slice(0, 10)}.md`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
 
   const startSession = () => {
+    if (!confirmedBook) {
+      setIdentificationError(copy.bookRequired);
+      return;
+    }
+    if (generationMode === "live" && confirmedBook.verificationStatus !== "verified") {
+      setIdentificationError(copy.verificationBlocked);
+      return;
+    }
     clearPlaybackTimers();
     playbackActionRef.current = null;
     playbackPausedRef.current = false;
@@ -701,7 +880,12 @@ export function App() {
     setUpcomingSpeaker(undefined);
 
     const generationClient =
-      generationMode === "live" ? new HttpGenerationClient() : new MockGenerationClient();
+      generationClientRef.current ??
+      (generationMode === "live" ? new HttpGenerationClient() : new MockGenerationClient());
+    const requestedSeed = new URLSearchParams(window.location.search).get("seed");
+    const seed = requestedSeed || crypto.randomUUID();
+    const personas = selectPersonas(seed);
+    setSessionPersonas(personas);
     const engine = new SessionEngine(generationClient, {
       onStatus(message) {
         if (message.startsWith("Stage: ")) {
@@ -733,10 +917,9 @@ export function App() {
 
     void engine
       .run({
-        title: "The Stranger",
-        author: "Albert Camus",
+        confirmedBook,
         language,
-        seed: "demo",
+        seed,
         waitForAdvance(turn) {
           return new Promise<void>((resolve) => {
             advanceResolver.current = resolve;
@@ -788,21 +971,7 @@ export function App() {
         setStatus(copy.sessionComplete);
       })
       .catch((caught: unknown) => {
-        const apiMessage =
-          caught instanceof GenerationApiError
-            ? caught.code === "server_not_configured"
-              ? copy.serverNotConfigured
-              : caught.code === "session_call_limit_reached"
-                ? copy.sessionLimitReached
-                : caught.code === "model_refusal"
-                  ? copy.modelRefused
-                  : caught.code === "incomplete_output"
-                    ? copy.incompleteOutput
-                    : caught.code === "invalid_structured_output"
-                      ? copy.invalidStructuredOutput
-                  : copy.liveGenerationFailed
-            : undefined;
-        setError(apiMessage ?? (caught instanceof Error ? caught.message : copy.sessionFailed));
+        setError(generationErrorMessage(caught));
         clearPlaybackTimers();
         playbackActionRef.current = null;
         setBusy(false);
@@ -836,6 +1005,12 @@ export function App() {
     advanceResolver.current = null;
     inputResolver.current = null;
     setScreen("setup");
+    setBookTitleInput("");
+    setBookAuthorInput("");
+    setConfirmedBook(undefined);
+    setSessionPersonas([]);
+    setIdentificationError("");
+    generationClientRef.current = null;
     setTranscript([]);
     setRecap("");
     setRecapView("recap");
@@ -870,7 +1045,10 @@ export function App() {
                   key={option}
                   type="button"
                   aria-pressed={language === option}
-                  onClick={() => setLanguage(option)}
+                  onClick={() => {
+                    setLanguage(option);
+                    invalidateBookConfirmation();
+                  }}
                   className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
                     language === option
                       ? "bg-stone-900 text-white"
@@ -888,20 +1066,15 @@ export function App() {
           </p>
 
           <div className="mt-10 rounded-2xl border border-stone-200 bg-white p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
-              {copy.demoBook}
-            </p>
-            <p className="mt-2 font-serif text-2xl">{copy.bookTitle}</p>
-            <p className="mt-1 text-sm text-stone-600">{copy.bookMeta}</p>
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-stone-200 bg-white p-5">
             <p className="text-sm font-semibold">{copy.modeTitle}</p>
             <div className="mt-3 grid grid-cols-2 gap-2" role="group" aria-label={copy.modeTitle}>
               <button
                 type="button"
                 aria-pressed={generationMode === "mock"}
-                onClick={() => setGenerationMode("mock")}
+                onClick={() => {
+                  setGenerationMode("mock");
+                  invalidateBookConfirmation();
+                }}
                 className={`rounded-xl border p-3 text-left transition ${
                   generationMode === "mock"
                     ? "border-stone-900 bg-stone-900 text-white"
@@ -917,7 +1090,10 @@ export function App() {
                 type="button"
                 aria-pressed={generationMode === "live"}
                 disabled={liveAvailability !== "available"}
-                onClick={() => setGenerationMode("live")}
+                onClick={() => {
+                  setGenerationMode("live");
+                  invalidateBookConfirmation();
+                }}
                 className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   generationMode === "live"
                     ? "border-emerald-800 bg-emerald-800 text-white"
@@ -943,6 +1119,175 @@ export function App() {
                   : copy.liveUnavailable}
             </p>
           </div>
+
+          <form onSubmit={(event) => void identifyBook(event)} className="mt-5 rounded-2xl border border-stone-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
+              {copy.bookSetup}
+            </p>
+            <div className="mt-4">
+              <p className="text-sm font-semibold text-stone-700">{copy.scopeLabel}</p>
+              <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label={copy.scopeLabel}>
+                {(["single_book", "series"] as const).map((scope) => (
+                  <button
+                    key={scope}
+                    type="button"
+                    aria-pressed={bookScope === scope}
+                    onClick={() => {
+                      setBookScope(scope);
+                      invalidateBookConfirmation();
+                    }}
+                    className={`rounded-xl border p-3 text-left transition ${
+                      bookScope === scope
+                        ? "border-amber-800 bg-amber-50 text-amber-950"
+                        : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">{copy.scopeLabels[scope]}</span>
+                    <span className="mt-1 block text-xs leading-5 text-stone-500">
+                      {scope === "single_book" ? copy.singleBookHint : copy.seriesHint}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-semibold text-stone-700">
+                {bookScope === "series" ? copy.seriesTitleLabel : copy.bookTitleLabel}
+                <input
+                  aria-label={bookScope === "series" ? copy.seriesTitleLabel : copy.bookTitleLabel}
+                  value={bookTitleInput}
+                  onChange={(event) => {
+                    setBookTitleInput(event.target.value);
+                    invalidateBookConfirmation();
+                  }}
+                  placeholder={
+                    bookScope === "series" ? copy.seriesTitlePlaceholder : copy.bookTitlePlaceholder
+                  }
+                  maxLength={200}
+                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 font-normal outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200"
+                />
+              </label>
+              <label className="text-sm font-semibold text-stone-700">
+                {copy.authorLabel}
+                <input
+                  value={bookAuthorInput}
+                  onChange={(event) => {
+                    setBookAuthorInput(event.target.value);
+                    invalidateBookConfirmation();
+                  }}
+                  placeholder={copy.authorPlaceholder}
+                  maxLength={120}
+                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 font-normal outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200"
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={identifyingBook || !bookTitleInput.trim()}
+              className="mt-4 rounded-xl border border-stone-300 bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-800 hover:bg-stone-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {identifyingBook
+                ? generationMode === "live"
+                  ? bookScope === "series"
+                    ? copy.verifyingSeries
+                    : copy.verifyingBook
+                  : bookScope === "series"
+                    ? copy.identifyingSeries
+                    : copy.identifyingBook
+                : generationMode === "live"
+                  ? bookScope === "series"
+                    ? copy.verifySeries
+                    : copy.verifyBook
+                  : bookScope === "series"
+                    ? copy.identifySeries
+                    : copy.identifyBook}
+            </button>
+            {identificationError && (
+              <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">
+                {identificationError}
+              </p>
+            )}
+          </form>
+
+          {confirmedBook && (
+            <section
+              className={`mt-5 rounded-2xl border p-5 ${
+                confirmedVerificationStatus === "verified"
+                  ? "border-emerald-200 bg-emerald-50"
+                  : confirmedVerificationStatus === "mock"
+                    ? "border-sky-200 bg-sky-50"
+                    : "border-amber-200 bg-amber-50"
+              }`}
+              aria-label={
+                confirmedWorkScope === "series" ? copy.identifiedSeries : copy.identifiedBook
+              }
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+                    {generationMode === "mock"
+                      ? copy.mockIdentifiedBook
+                      : confirmedWorkScope === "series"
+                        ? copy.identifiedSeries
+                        : copy.identifiedBook}
+                  </p>
+                  <h2 className="mt-2 font-serif text-2xl">{confirmedBook.title}</h2>
+                  <p className="mt-1 text-sm text-stone-600">{confirmedBook.author}</p>
+                  <span className="mt-2 inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-600">
+                    {copy.scopeLabels[confirmedWorkScope]}
+                  </span>
+                </div>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-stone-600">
+                  {copy.verificationStatus}: {copy.verificationLabels[confirmedVerificationStatus]}
+                </span>
+              </div>
+              <p className="mt-4 text-sm leading-7 text-stone-700">{confirmedBook.confirmedSummary}</p>
+              {confirmedBook.verificationNote && (
+                <p className="mt-3 rounded-xl bg-white/80 p-3 text-sm text-stone-700">
+                  {confirmedBook.verificationNote}
+                </p>
+              )}
+              {confirmedWorkScope === "series" && confirmedIncludedTitles.length > 0 && (
+                <div className="mt-4 rounded-xl bg-white/80 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+                    {copy.includedTitles}
+                  </p>
+                  <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-stone-700">
+                    {confirmedIncludedTitles.map((title) => <li key={title}>{title}</li>)}
+                  </ol>
+                </div>
+              )}
+              {confirmedSources.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+                    {copy.verificationSources}
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {confirmedSources.map(({ url }) => (
+                      <li key={url}>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2"
+                        >
+                          {sourceHost(url)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {generationMode === "live" && confirmedVerificationStatus !== "verified" && (
+                <p className="mt-3 rounded-xl bg-amber-100 p-3 text-sm text-amber-950">
+                  {copy.verificationBlocked}
+                </p>
+              )}
+              <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-600">
+                {confirmedBook.candidateTopics.map((topic) => <li key={topic}>{topic}</li>)}
+              </ul>
+            </section>
+          )}
 
           <div className="mt-5 flex items-center justify-between gap-4 rounded-2xl border border-stone-200 bg-white p-5">
             <div>
@@ -974,10 +1319,16 @@ export function App() {
           <button
             type="button"
             onClick={startSession}
-            disabled={generationMode === "live" && liveAvailability !== "available"}
+            disabled={!canStartSession || (generationMode === "live" && liveAvailability !== "available")}
             className="mt-8 w-full rounded-2xl bg-stone-900 px-5 py-4 font-semibold text-white transition hover:bg-stone-700 focus:outline-none focus:ring-4 focus:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {generationMode === "live" ? copy.startLive : copy.start}
+            {confirmedBook
+              ? confirmedWorkScope === "series"
+                ? copy.confirmSeries
+                : copy.confirmBook
+              : generationMode === "live"
+                ? copy.startLive
+                : copy.start}
           </button>
         </section>
         <DiagnosticsPanel language={language} />
@@ -1089,7 +1440,9 @@ export function App() {
             <div>
               <p className="font-serif text-xl">The Reading Table</p>
               <p className="text-xs text-stone-500">
-                {generationMode === "live" ? copy.liveSessionLabel : copy.sessionLabel}
+                {generationMode === "live"
+                  ? copy.liveSessionLabel(confirmedBook?.title ?? "")
+                  : copy.sessionLabel(confirmedBook?.title ?? "")}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1135,6 +1488,8 @@ export function App() {
       <section className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-4xl flex-col px-4 py-6 sm:px-6">
         <RoundTable
           language={language}
+          book={confirmedBook!}
+          personas={sessionPersonas}
           activeSpeaker={activeSpeaker}
           upcomingSpeaker={upcomingSpeaker}
         />
@@ -1161,7 +1516,7 @@ export function App() {
                     {copy.waitingForYou}
                   </p>
                   <label htmlFor="user-turn" className="text-sm font-semibold">
-                    {INPUT_PROMPTS[language][inputRequest.stage]}
+                    {INPUT_PROMPTS[language][inputRequest.kind]}
                   </label>
                 </div>
               </div>
@@ -1169,6 +1524,7 @@ export function App() {
                 id="user-turn"
                 autoFocus
                 rows={2}
+                maxLength={4000}
                 value={inputText}
                 onChange={(event) => setInputText(event.target.value)}
                 placeholder={copy.placeholder}
@@ -1258,7 +1614,7 @@ export function App() {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 bg-white px-5 py-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                  {copy.bookTitle}
+                  {confirmedBook?.title}
                 </p>
                 <h2 id="transcript-dialog-title" className="mt-1 font-serif text-2xl">
                   {copy.transcriptTitle}

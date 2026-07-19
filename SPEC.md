@@ -37,9 +37,9 @@ friendly narrator. A real book club **collides**. This app is different because:
 
 ### Target user story (for demo + README)
 The developer is a member of a real corporate book club in Korea. The demo
-compares an actual meeting recap from that club (discussion of Camus'
-*The Stranger*, July 2026) with the recap this app generates — same book,
-same collision of interpretations.
+starts with a book selected by the evaluator and compares the resulting recap
+with the kind of record a real club would keep — same reading experience,
+different interpretations preserved rather than flattened.
 
 ---
 
@@ -85,7 +85,8 @@ same collision of interpretations.
   that the session uses API credits
 - **Meeting recap document** auto-generated at session end (rendered + downloadable as Markdown)
 - Session persistence in `localStorage` (refresh-safe)
-- Demo seed mode: fixed trio + fixed book via URL param (e.g. `?seed=demo`)
+- Reproducible seed mode: the seed controls persona selection and deterministic
+  mock behavior only; it never chooses or pre-fills the user's book
 
 ### OUT (roadmap slide only — do not build)
 - Voice input/output
@@ -112,8 +113,9 @@ Google Cloud Secret Manager for Firebase deployment. It never enters the client
 bundle, browser storage, or repository.
 
 The browser implements the same `GenerationClient` contract for both modes.
-Live mode sends strict inputs to five same-origin server routes for book
-identification, reading notes, utterances, user stance, and recap generation.
+Live mode sends strict inputs to six same-origin server routes for book
+identification, reading notes, discussion-focus extraction, utterances, user
+stance, and recap generation.
 The server validates every request before calling OpenAI and validates every
 structured response before returning it.
 
@@ -184,12 +186,14 @@ a hard project usage limit in the OpenAI Platform before publishing the demo.
 
 ```ts
 type Category = "emotional" | "analytical" | "contextual";
+type BookScope = "single_book" | "series";
 
 interface PersonaCard {
   id: string;              // "maddie"
   name: string;
   category: Category;
   identity: string;        // 1-2 sentences
+  roleLabel: { en: string; ko: string }; // short persistent UI label
   lens: string;            // interpretive lens description
   voice: string;           // speech style rules
   bookshelf: ShelfBook[];  // exactly 5
@@ -210,6 +214,10 @@ interface ReadingNotes {          // generated once per session per persona, PRI
   stanceByTopic: { topic: string; stance: number; reason: string }[]; // stance: -2..+2
   keyScenes: string[];            // 2-3 scenes to cite (incl. easily-missed ones)
   shelfConnections: string[];     // 1-2 prepared links to own bookshelf
+  personalReaction: string;       // what genuinely moved, irritated, or puzzled them
+  unresolvedQuestion: string;     // doubt they bring to the table
+  possibleRevision: string;       // evidence that could change their mind
+  questionForTable: string;       // a real question for another reader
 }
 
 interface Utterance {
@@ -224,7 +232,13 @@ interface Utterance {
 type StageId = "INTRO" | "FIRST_IMPRESSIONS" | "MEMORABLE_SCENES" | "DISCUSSION" | "WRAP_UP";
 
 interface SessionState {
-  book: { title: string; author: string; confirmedSummary: string };
+  book: {
+    title: string;
+    author: string;
+    workScope: BookScope;
+    includedTitles: string[];
+    confirmedSummary: string;
+  };
   personas: PersonaCard[];        // the drawn 3
   notes: Record<string, ReadingNotes>;
   transcript: Utterance[];
@@ -232,6 +246,12 @@ interface SessionState {
   stageTurnCount: number;
   activeTopic?: string;
   userStance?: number;
+  userStances: Record<string, { stance: number; paraphrase: string }>;
+  discussionRoles?: {
+    challenger: string;           // persona id | "moderator"
+    supporter: string;            // persona id
+    observer?: string;            // seated but intentionally silent in discussion
+  };
   seed?: string;
 }
 ```
@@ -255,6 +275,12 @@ the API's explicit refusal output before reading parsed content.
   "properties": {
     "canonical_title": { "type": "string", "minLength": 1, "maxLength": 200 },
     "author": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "work_scope": { "type": "string", "enum": ["single_book", "series"] },
+    "included_titles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 200 },
+      "maxItems": 12
+    },
     "summary": { "type": "string", "minLength": 80, "maxLength": 1200 },
     "main_characters": {
       "type": "array",
@@ -268,9 +294,25 @@ the API's explicit refusal output before reading parsed content.
       "minItems": 3,
       "maxItems": 3
     },
-    "confidence": { "type": "string", "enum": ["high", "medium", "low"] }
+    "verification_status": {
+      "type": "string",
+      "enum": ["verified", "ambiguous", "not_found", "mock"]
+    },
+    "verification_note": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "minLength": 8, "maxLength": 2000 }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "maxItems": 3
+    }
   },
-  "required": ["canonical_title", "author", "summary", "main_characters", "candidate_topics", "confidence"],
+  "required": ["canonical_title", "author", "work_scope", "included_titles", "summary", "main_characters", "candidate_topics", "verification_status", "verification_note", "sources"],
   "additionalProperties": false
 }
 ```
@@ -308,9 +350,13 @@ the API's explicit refusal output before reading parsed content.
       "type": "array",
       "items": { "type": "string", "minLength": 1, "maxLength": 300 },
       "maxItems": 2
-    }
+    },
+    "personal_reaction": { "type": "string", "minLength": 20, "maxLength": 400 },
+    "unresolved_question": { "type": "string", "minLength": 10, "maxLength": 300 },
+    "possible_revision": { "type": "string", "minLength": 10, "maxLength": 300 },
+    "question_for_table": { "type": "string", "minLength": 10, "maxLength": 300 }
   },
-  "required": ["overall_take", "overall_stance", "stance_by_topic", "key_scenes", "shelf_connections"],
+  "required": ["overall_take", "overall_stance", "stance_by_topic", "key_scenes", "shelf_connections", "personal_reaction", "unresolved_question", "possible_revision", "question_for_table"],
   "additionalProperties": false
 }
 ```
@@ -344,6 +390,47 @@ schema fields to optional TypeScript properties.
     "paraphrase": { "type": "string", "minLength": 1, "maxLength": 240 }
   },
   "required": ["stance", "paraphrase"],
+  "additionalProperties": false
+}
+```
+
+#### Discussion-focus extraction
+
+After Stage 3, one strict structured-output call scores how strongly the actual
+Stage 2/3 conversation supports each of the three confirmed candidate topics and
+may propose one grounded emergent question. The model extracts evidence; code
+combines relevance with persona stance spread and makes the final topic choice.
+This preserves the rule that the model never controls session flow.
+
+The full transcript remains in browser state and recap export. Model requests use
+a code-prepared context window of at most 12 utterances and roughly 9,000
+characters. The latest user turn is preserved up to the 4,000-character input
+limit; only older context may be compacted.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "topic_scores": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "relevance": { "type": "number", "minimum": 0, "maximum": 2 },
+          "evidence": { "type": "string", "minLength": 1, "maxLength": 240 }
+        },
+        "required": ["topic", "relevance", "evidence"],
+        "additionalProperties": false
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "emergent_question": { "type": ["string", "null"], "maxLength": 160 },
+    "emergent_relevance": { "type": "number", "minimum": 0, "maximum": 2 },
+    "emergent_evidence": { "type": ["string", "null"], "maxLength": 240 }
+  },
+  "required": ["topic_scores", "emergent_question", "emergent_relevance", "emergent_evidence"],
   "additionalProperties": false
 }
 ```
@@ -384,57 +471,91 @@ Global rules enforced by code:
   never auto-passes or submits on the user's behalf.
 
 ### Stage 0 — Book identification and user confirmation (pre-session)
-1. User enters a book title (+ optional author).
-2. One GPT-5.6 call returns: canonical title, author, 4-6 sentence spoiler-tolerant
-   summary, main characters, 3 candidate discussion topics, and a
-   `confidence: high|medium|low` self-assessment.
-3. Label the result as model-identified, not externally verified. Show the
-   summary → user confirms "Yes, that's the book." Only then store it as
-   `confirmedSummary` and begin the session.
-4. If `confidence: low`, warn: "I may not know this book well enough for a good
-   discussion" and suggest a well-known alternative. The confidence field is a
-   hallucination guard, not factual verification.
+1. User chooses `single_book` or `series`, then enters a book/series title
+   (+ optional author). The selected scope is binding for verification and every
+   later generation call.
+2. Mock/live mode is selected before identification. Mock mode returns an
+   explicitly unverified, book-agnostic preview and never claims book knowledge.
+3. In live mode, one GPT-5.6 Responses API call must use the hosted `web_search`
+   tool with `tool_choice: required`. It returns a strict structured result with
+   canonical title, author, selected scope, included component titles, 4-6
+   sentence spoiler-tolerant summary, main characters, 3 candidate discussion
+   topics, and a verification status. A verified single book has exactly one
+   included title; a verified series has at least two titles in publication order.
+4. Code extracts up to 3 HTTPS URLs from the API's actual web-search source
+   metadata; the model never invents source URLs. `verified` requires the model's
+   match plus at least two distinct retrieved sources. Otherwise downgrade to
+   `ambiguous` or `not_found`.
+5. Show verification status, scope, series component titles when applicable,
+   note, and clearly visible clickable source links. URLs and citation markup are
+   forbidden in the summary and topic fields; source links live only in the
+   dedicated source area.
+   Live `ambiguous`/`not_found` results cannot begin a session; the user must
+   correct the title/author and search again. A verified result still requires
+   the user's "Yes, that's the book" confirmation before becoming
+   `confirmedSummary`.
 
 **Copyright rule (bake into every prompt):** discuss themes, scenes, and
 interpretations; quote at most a short phrase; never reproduce passages.
 
 ### Stage 1 — INTRO
-- Moderator welcomes, names the book, introduces the three readers (one line each).
-- Each persona introduces itself in character (1 utterance each, order: random).
-- Moderator invites the user: "And you — what brings you to this book?"
+- Moderator welcomes the user, briefly names the book, and lowers the social
+  temperature: before discussing it, everyone will first say who they are.
+- Each persona gives a social introduction in character: name, occupation/life
+  context, and reading habit only. They do **not** offer an interpretation of the
+  current book yet. Keep this to 2 short sentences.
+- The UI keeps each person's short occupation/role visible beside their name so
+  the user does not have to memorize three biographies.
+- Moderator invites the user to share their name/background and what brought
+  them to the table. The answer need not be about the book.
 - **User turn** (free text, may skip).
 
 ### Stage 2 — FIRST_IMPRESSIONS
 - Moderator: "Let's go around — first impressions?"
-- Each persona: 1 utterance, must express a clear overall take from its notes.
+- Each persona: 1 independently prepared utterance expressing a clear overall
+  take from its notes. Persona impressions are generated before any of them are
+  revealed, so they do not mechanically echo the previous reader.
 - **User turn**: user shares their impression.
-- One persona (most opposed stance vs. user, see §9) responds briefly — first
-  taste of friction, kept polite.
+- First impressions are personal testimony, not debate. No persona rebuts the
+  user in this stage; the extracted stance is retained for later topic selection.
 
 ### Stage 3 — MEMORABLE_SCENES
 - Moderator: "A scene or line that stuck with you?"
-- Each persona: 1 utterance citing a specific scene. **At least one persona must
-  surface an easily-missed scene** from its `keyScenes` ("Did anyone else catch…").
-- **User turn**: user shares theirs. Personas react (1-2 utterances).
+- Code selects two personas with meaningfully different overall positions to
+  share one specific scene each. **At least one must surface an easily-missed
+  scene** from its `keyScenes` ("Did anyone else catch…").
+- **User turn**: user shares theirs. One of those readers reacts once. The third
+  persona may remain silent; being seated does not create a speaking obligation.
 
 ### Stage 4 — DISCUSSION (the main event)
-- Moderator selects **1 topic by default** from the confirmed book's candidate
-  topic list (or from Stage 2/3 friction) and states the question crisply. A
-  second topic is optional only when the live session remains within its
+- Code selects **1 topic by default** from the confirmed book's candidate topic
+  list or one grounded emergent question. It combines structured relevance
+  scores from the real Stage 2/3 conversation with persona stance spread. The
+  moderator explains the conversational thread that led to the selected question
+  and states it crisply. A second topic is optional only when the live session remains within its
   latency/call budget.
 - Round structure per topic (code-controlled):
-  1. Two personas with the most divergent `stanceByTopic` values open (1 utterance each).
-  2. **User is directly addressed by the moderator**: "Where do you land?"
-  3. User answers → stance extraction (§8) → **rebuttal enforcement** (§9).
-  4. One more persona-vs-persona exchange (2-3 utterances), personas may revise
-     stance only with explicit acknowledgment ("You've got a point about X, but…").
-  5. Moderator closes the topic with a one-line tension summary (not a resolution).
-- Max ~10-12 utterances per topic to keep sessions tight.
+  1. Moderator names the user-grounded controversy and asks the user to state a position.
+  2. User answers → stance extraction (§8).
+  3. The persona furthest from the user becomes the **primary challenger**,
+     directly rebuts the claim, and asks one pointed question (§9).
+  4. **The next turn must belong to the user.** The challenge is not complete
+     until the user can answer it; extract and update the user's stance again.
+  5. The same challenger responds once to that answer without asking another
+     question or resetting the topic.
+  6. The persona closest to the user's updated stance becomes the **supporter**
+     and contributes once: strengthen the user's case with different evidence
+     while naming one limit. The third persona is the **observer** and does not
+     speak merely to complete a round.
+  7. Moderator closes with a one-line tension summary, never a resolution.
+- This creates a spotlight conflict: **user ↔ challenger**, with one supporting
+  intervention. Max ~8 generated/user utterances per topic.
 
 ### Stage 5 — WRAP_UP
-- Moderator asks each participant for a closing line ("Did this discussion move you?").
-- Each persona: 1 utterance; must state whether/how its view shifted.
-- **User turn**: closing thought.
+- Moderator asks the user first for a closing thought ("Did this discussion move you?").
+- **User turn** comes before AI closings so a new final idea is not ignored.
+- The discussion's challenger and supporter each give one short response to the
+  user's closing thought. The observer is not forced to speak.
 - Moderator gives a substantive 2–3 sentence spoken summary: central
   disagreement, what shifted, and what remains unresolved. After the summary's
   normal reading delay, trigger **recap generation** (§10) → recap screen.
@@ -461,9 +582,9 @@ placeholder varies by stage ("Your first impression…").
 
 ## 9. Rebuttal enforcement (anti-sycophancy) — core differentiator
 
-When the user states a position in DISCUSSION (and once in FIRST_IMPRESSIONS),
+When the user states a position in DISCUSSION,
 resolve `personaStance` from `stanceByTopic[activeTopic]` or from
-`overallStance` when the target is `overall_impression`:
+`overallStance` only for ranking context; Stage 2 never triggers a rebuttal:
 
 ```
 challenger = persona whose notes.stanceByTopic[activeTopic]
@@ -475,6 +596,10 @@ directive to challenger:
    ({stance}, because {reason}). Respectfully but firmly challenge them.
    Ask them one pointed question. Do NOT concede. 2-4 sentences."
 ```
+
+The pointed question opens a second user turn immediately. After the user
+answers, the challenger responds once and the supporter contributes once. No
+other persona exchange is scheduled for symmetry.
 
 If `|userStance - all persona stances| < 0.5` (everyone genuinely agrees),
 the moderator itself plays devil's advocate: "Let me push back for a moment…"
@@ -505,16 +630,16 @@ Template (mirrors a real book-club recap):
 | {topic 1} | {stance + 1-line} | … | … | … |
 
 ## Sparks — moments of real disagreement
-- {short excerpts of the best app-generated exchanges, incl. the user's}
+- {at most 2 short excerpts of the best app-generated exchanges, incl. the user's}
 
 ## Scenes you might have missed
-- {from personas' keyScenes that surfaced}
+- {at most 3 items from personas' keyScenes that surfaced}
 
 ## From the shelves
 - {bookshelf citations made during the session, with why they fit}
 
 ## A question to sleep on
-{one open question the moderator leaves the user with}
+{exactly one open question the moderator leaves the user with}
 ```
 
 The stance map final state is embedded as the table above. This document is the
@@ -536,7 +661,7 @@ Layout (desktop, single screen):
 │  ● stage progress: Intro ─ Impressions ─ …     │
 ├────────────────────────────────────────────────┤
 │                ROUND TABLE (top ~40%)          │
-│     [Maddie]      [Marcus]      [Eleanor]      │
+│     [Maddie]      [Marcus]        [Dev]         │
 │         \            |            /            │
 │          (oval table, book title in center)    │
 │                    [You]                       │
@@ -609,8 +734,18 @@ sans for chat. Keep it simple; polish > features.
 ### 12.1 Draw rules
 - Pool of 8, categories: emotional ×3, analytical ×3, contextual ×2.
 - Draw **one persona per category** in normal sessions (guarantees productive friction).
-- `?seed=demo` is an intentional curated exception: fixed trio **Maddie + Marcus
-  + Eleanor** and book pre-filled to *The Stranger* (Camus). Used for the demo video.
+- A supplied seed may reproduce a persona trio for testing or a demo video, but
+  the book always comes from Stage 0 user input. No seed may inject book facts,
+  characters, scenes, topics, or scripted user opinions.
+
+### 12.1.1 Mock-mode truthfulness
+- Mock mode must accept any title so the entire session flow can be tested
+  without credits, but it must not pretend to know that book's plot or context.
+- Mock output may use the entered title, author, persona data, candidate
+  questions, and statements already present in the transcript. It must not
+  invent book-specific people, scenes, quotations, or historical claims.
+- Live mode is responsible for model-identified, book-specific content. The UI
+  labels mock identification as a structural preview rather than verification.
 
 ### 12.2 System prompt assembly (per utterance)
 ```
@@ -626,6 +761,8 @@ sans for chat. Keep it simple; polish > features.
 ### 12.3 House rules (shared by all personas)
 ```
 - Speak as your character. 2-4 sentences. No monologues.
+- On social introductions, say what you do and how you tend to read; save all
+  opinions about the current book for FIRST_IMPRESSIONS.
 - Never act as a neutral narrator or summarize "both sides."
 - Never invent plot details. If unsure about a scene, hedge in character
   ("if I'm remembering right…").
@@ -633,6 +770,10 @@ sans for chat. Keep it simple; polish > features.
   passages from the book.
 - Disagree when your notes disagree. Concede only explicitly.
 - Address others by name. React to what was actually said.
+- Let earlier remarks put pressure on your thinking. Refer to a precise phrase,
+  admit uncertainty when it is real, and avoid polishing every turn into a conclusion.
+- Avoid repetitive debate templates such as "both can coexist," "not A but B,"
+  or automatic praise followed by "however."
 - Reply with the JSON object only.
 ```
 
@@ -654,8 +795,16 @@ Produce your PRIVATE reading notes as JSON:
   casual reader easily misses
 - shelfConnections: 1-2 genuine links between this book and your bookshelf
   (only if truly illuminating; otherwise fewer)
+- personalReaction: the scene or idea that genuinely moved, irritated, or puzzled you
+- unresolvedQuestion: a doubt you cannot neatly settle before the meeting
+- possibleRevision: what evidence or argument could genuinely move your position
+- questionForTable: one question you actually want to ask another reader
 Stay in character. These notes are your anchor for the whole session.
 ```
+
+Generate these private notes with GPT-5.6 at medium reasoning effort. Keep live
+utterance calls latency-sensitive at low effort. The three note calls remain
+parallel and persona introductions are prefetched as each note becomes ready.
 
 ---
 
@@ -837,8 +986,9 @@ Context: {last few utterances}. 1-3 sentences, warm and crisp. JSON only.
   safe stage-appropriate message, and preserve the pending engine turn for retry.
 - **User writes something off-topic/blank:** moderator gently redirects once;
   blank = "pass," moderator moves on without stance extraction.
-- **Obscure book (low confidence):** warn during Stage 0 identification; if the user insists,
-  personas hedge harder (house rule already covers invention).
+- **Obscure or ambiguous book:** show the retrieved evidence and keep the live
+  start action disabled until title and author are verified; never silently fall
+  back to model memory or invent scenes.
 - **User tries to jailbreak personas:** house rules keep them in character;
   moderator redirects to the book.
 - **Rate limit reached:** return a typed 429 response with a retry delay; preserve
@@ -859,7 +1009,7 @@ Context: {last few utterances}. 1-3 sentences, warm and crisp. JSON only.
 - Use transient, in-memory per-IP throttling and a client session id for a
   best-effort per-session call ceiling. These are abuse guards, not authentication.
 - Set a hard OpenAI project usage limit before the URL is shared.
-- Provide `?seed=demo`, `.env.example`, sample data where needed, and exact test
+- Provide a reproducible seed, `.env.example`, sample data where needed, and exact test
   instructions plus Data & Privacy in `README.md`.
 
 ---
@@ -889,8 +1039,8 @@ session. Everything after is presentation. Protect that order.
 
 ## 17. Roadmap (README/demo slide — not built)
 
-- Personal library: cross-book memory ("Last month you defended Meursault —
-  but you're hard on Raskolnikov. What changed?")
+- Personal library: cross-book memory ("Last month you defended one character's
+  choice, but you're harder on this one. What changed?")
 - User's own formative bookshelf → personas engage with *your* canon
 - Voice mode; moderator personalities; real-club companion mode
   (pre-meeting warm-up, post-meeting recap merge)

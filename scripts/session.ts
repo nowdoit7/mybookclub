@@ -12,7 +12,16 @@ import type {
 import { SessionEngine } from "../src/engine/sessionEngine";
 import { PERSONAS } from "../src/personas";
 
-const title = process.argv.slice(2).join(" ").trim() || "The Stranger";
+const args = process.argv.slice(2);
+const scope = args.includes("--series") ? "series" : "single_book";
+const author = args.find((argument) => argument.startsWith("--author="))?.slice("--author=".length);
+const title = args
+  .filter((argument) => !argument.startsWith("--author=") && argument !== "--series")
+  .join(" ")
+  .trim();
+if (!title) {
+  throw new Error('Usage: npm run session -- "Book title" --author="Optional author" [--series]');
+}
 
 class InstrumentedGenerationClient implements GenerationClient {
   private callCount = 0;
@@ -40,6 +49,10 @@ class InstrumentedGenerationClient implements GenerationClient {
 
   generateReadingNotes(input: ReadingNotesRequest) {
     return this.track("reading-notes", () => this.inner.generateReadingNotes(input));
+  }
+
+  extractDiscussionFocus(input: Parameters<GenerationClient["extractDiscussionFocus"]>[0]) {
+    return this.track("discussion-focus", () => this.inner.extractDiscussionFocus(input));
   }
 
   generateUtterance(input: UtteranceRequest) {
@@ -83,6 +96,11 @@ const engine = new SessionEngine(client, {
   },
 });
 
-const result = await engine.run({ title, seed: "demo" });
+const result = await engine.run({
+  title,
+  author,
+  scope,
+  seed: `console:${scope}:${title}:${author ?? ""}`,
+});
 console.log(`\n${result.recapMarkdown}`);
 client.report();

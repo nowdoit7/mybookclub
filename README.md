@@ -30,7 +30,9 @@ variable or commit the file.
 
 Open `http://localhost:5173`, wait for the server-ready message, and explicitly
 select **Live GPT-5.6** to use the API. Mock remains the default and never makes
-an OpenAI request.
+an OpenAI request. Choose **One book** or **Full series** before searching; Live
+mode verifies that exact scope, shows the retrieved sources, and lists component
+volumes before a series discussion can begin.
 
 ## Commands
 
@@ -52,7 +54,7 @@ npm run build
 - Server-only OpenAI Responses API client
 - Strict Zod contracts for every browser request and model response
 - One browser `GenerationClient` contract with explicit Mock and Live implementations
-- Five same-origin generation routes protected by origin, rate, body-size, and session-call limits
+- Six same-origin generation routes protected by origin, rate, body-size, and session-call limits
 - Korean/English generation selected once at session start
 - Language-aware 3–10 second reading pace with pause, skip-now, and manual mode
 - Compact participant icons with current/next-speaker highlighting

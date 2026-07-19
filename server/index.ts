@@ -27,6 +27,9 @@ const generationClient: GenerationClient = process.env.OPENAI_API_KEY
       async generateReadingNotes() {
         throw new MissingConfigurationError("OPENAI_API_KEY is not configured.");
       },
+      async extractDiscussionFocus() {
+        throw new MissingConfigurationError("OPENAI_API_KEY is not configured.");
+      },
       async generateUtterance() {
         throw new MissingConfigurationError("OPENAI_API_KEY is not configured.");
       },

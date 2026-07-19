@@ -9,6 +9,7 @@ import { ZodError } from "zod";
 
 import {
   bookIdentificationRequestSchema,
+  discussionFocusRequestSchema,
   readingNotesRequestSchema,
   recapRequestSchema,
   userStanceRequestSchema,
@@ -319,6 +320,20 @@ export function createApp({
       try {
         const input = readingNotesRequestSchema.parse(request.body);
         response.json(await generationClient.generateReadingNotes(input));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/generate/discussion-focus",
+    generationRateLimit,
+    sessionCallLimiter,
+    async (request, response, next) => {
+      try {
+        const input = discussionFocusRequestSchema.parse(request.body);
+        response.json(await generationClient.extractDiscussionFocus(input));
       } catch (error) {
         next(error);
       }

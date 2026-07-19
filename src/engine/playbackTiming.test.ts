@@ -11,7 +11,7 @@ describe("calculateReadingDelay", () => {
   it("gives longer turns more reading time", () => {
     const short = calculateReadingDelay("이 장면이 남았어요.", "ko");
     const long = calculateReadingDelay(
-      "이 장면이 남았어요. 재판정은 살인보다 장례식의 태도를 더 크게 심판하고 있는 것처럼 보였습니다.",
+      "이 장면이 남았어요. 앞에서 이해한 내용을 뒤집어 보게 만드는 대목이라 오래 생각하게 됐습니다.",
       "ko",
     );
 

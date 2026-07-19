@@ -10,6 +10,41 @@ export function validateBookIdentificationQuality(output: BookIdentificationOutp
   const issues: string[] = [];
   const summarySentences = countSentences(output.summary);
 
+  if (output.verification_status === "verified" && output.sources.length < 2) {
+    issues.push("verified books must include at least two retrieved web sources");
+  }
+  if (output.verification_status === "mock" && output.sources.length > 0) {
+    issues.push("mock identification must not claim external sources");
+  }
+  if (output.sources.some(({ url }) => !url.startsWith("https://"))) {
+    issues.push("book verification sources must use HTTPS URLs");
+  }
+  if (
+    output.summary.includes("https://") ||
+    output.summary.includes("http://") ||
+    output.summary.includes("](")
+  ) {
+    issues.push("book summary must not contain URLs or inline citation markup");
+  }
+  if (
+    output.verification_status === "verified" &&
+    output.work_scope === "single_book" &&
+    output.included_titles.length !== 1
+  ) {
+    issues.push("a verified single book must include exactly one title");
+  }
+  if (
+    output.verification_status === "verified" &&
+    output.work_scope === "series" &&
+    output.included_titles.length < 2
+  ) {
+    issues.push("a verified series must include at least two component titles");
+  }
+  const normalizedIncludedTitles = output.included_titles.map((title) => title.trim().toLowerCase());
+  if (new Set(normalizedIncludedTitles).size !== output.included_titles.length) {
+    issues.push("included titles must be unique");
+  }
+
   if (summarySentences < 4 || summarySentences > 6) {
     issues.push(`summary must contain 4-6 sentences; received ${summarySentences}`);
   }
@@ -117,6 +152,13 @@ export function validateRecapQuality(markdown: string, language: AppLanguage = "
   const longQuotedPassage = markdown.match(/[“"][^”"\n]{180,}[”"]/u);
   if (longQuotedPassage) {
     issues.push("recap contains a quotation too long for the short-phrase copyright rule");
+  }
+
+  const finalHeading = RECAP_HEADINGS[language].at(-1)!;
+  const finalSection = markdown.slice(markdown.indexOf(finalHeading) + finalHeading.length);
+  const questionMarkCount = finalSection.match(/[?？]/gu)?.length ?? 0;
+  if (questionMarkCount !== 1) {
+    issues.push("recap must end with exactly one question to sleep on");
   }
 
   return issues;

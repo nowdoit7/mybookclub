@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import {
   bookIdentificationSchema,
+  discussionFocusSchema,
   readingNotesSchema,
   recapSchema,
   userStanceSchema,
@@ -10,6 +11,7 @@ import {
 import type { BookIdentificationRequest } from "./contracts";
 import type {
   GenerationClient,
+  DiscussionFocusRequest,
   ReadingNotesRequest,
   RecapRequest,
   UserStanceRequest,
@@ -132,6 +134,10 @@ export class HttpGenerationClient implements GenerationClient {
 
   generateReadingNotes(input: ReadingNotesRequest) {
     return this.post("reading-notes", input, readingNotesSchema);
+  }
+
+  extractDiscussionFocus(input: DiscussionFocusRequest) {
+    return this.post("discussion-focus", input, discussionFocusSchema);
   }
 
   generateUtterance(input: UtteranceRequest) {

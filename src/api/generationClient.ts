@@ -1,6 +1,7 @@
 import type {
   BookIdentificationOutput,
   BookIdentificationRequest,
+  DiscussionFocusOutput,
   ReadingNotesOutput,
   RecapOutput,
   UserStanceOutput,
@@ -38,6 +39,13 @@ export interface UtteranceRequest {
   userArgument?: { stance: number; paraphrase: string; personaReason?: string };
   allowShelfReference: boolean;
   validationError?: string;
+  discussionFocus?: string;
+}
+
+export interface DiscussionFocusRequest {
+  language: AppLanguage;
+  book: ConfirmedBook;
+  transcript: Utterance[];
 }
 
 export interface UserStanceRequest {
@@ -61,6 +69,7 @@ export interface RecapRequest {
 export interface GenerationClient {
   identifyBook(input: BookIdentificationRequest): Promise<BookIdentificationOutput>;
   generateReadingNotes(input: ReadingNotesRequest): Promise<ReadingNotesOutput>;
+  extractDiscussionFocus(input: DiscussionFocusRequest): Promise<DiscussionFocusOutput>;
   generateUtterance(input: UtteranceRequest): Promise<UtteranceOutput>;
   extractUserStance(input: UserStanceRequest): Promise<UserStanceOutput>;
   generateRecap(input: RecapRequest): Promise<RecapOutput>;

@@ -5,7 +5,10 @@ import {
   InvalidStructuredOutputError,
   ModelRefusalError,
 } from "../src/api/errors";
-import { requireParsedOutput } from "./openaiGenerationClient";
+import {
+  extractWebSearchSources,
+  requireParsedOutput,
+} from "./openaiGenerationClient";
 
 describe("OpenAI structured response handling", () => {
   it("recognizes an explicit safety refusal", () => {
@@ -54,5 +57,49 @@ describe("OpenAI structured response handling", () => {
         output: [],
       }),
     ).toBe(parsed);
+  });
+});
+
+describe("book verification source extraction", () => {
+  it("uses only actual HTTPS sources returned by web search and removes duplicates", () => {
+    expect(
+      extractWebSearchSources({
+        output: [
+          {
+            type: "web_search_call",
+            action: {
+              type: "search",
+              sources: [
+                { type: "url", url: "https://publisher.example/book" },
+                { type: "url", url: "http://unsafe.example/book" },
+              ],
+            },
+          },
+          {
+            type: "message",
+            content: [
+              {
+                type: "output_text",
+                annotations: [
+                  {
+                    type: "url_citation",
+                    url: "https://publisher.example/book",
+                    title: "Publisher",
+                  },
+                  {
+                    type: "url_citation",
+                    url: "https://library.example/record",
+                    title: "Library",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual([
+      { url: "https://publisher.example/book" },
+      { url: "https://library.example/record" },
+    ]);
   });
 });

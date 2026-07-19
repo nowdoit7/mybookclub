@@ -3,6 +3,18 @@ import { z } from "zod";
 const boundedString = (minLength: number, maxLength: number) =>
   z.string().min(minLength).max(maxLength);
 
+export const bookVerificationStatusSchema = z.enum([
+  "verified",
+  "ambiguous",
+  "not_found",
+  "mock",
+]);
+export const bookScopeSchema = z.enum(["single_book", "series"]);
+
+const bookSourceSchema = z
+  .object({ url: boundedString(8, 2_000) })
+  .strict();
+
 export const stageIdSchema = z.enum([
   "INTRO",
   "FIRST_IMPRESSIONS",
@@ -23,9 +35,9 @@ export const utteranceTaskSchema = z.enum([
   "MEMORABLE_SCENE",
   "REACT_TO_USER_SCENE",
   "TOPIC_OPEN",
-  "TOPIC_POSITION",
   "ASK_USER_POSITION",
-  "PERSONA_EXCHANGE",
+  "RESPOND_TO_USER_REPLY",
+  "SUPPORT_USER",
   "TOPIC_CLOSE",
   "WRAP_OPEN",
   "CLOSING_REFLECTION",
@@ -46,6 +58,9 @@ const personaCardSchema = z
     name: boundedString(1, 100),
     category: z.enum(["emotional", "analytical", "contextual"]),
     identity: boundedString(1, 600),
+    roleLabel: z
+      .object({ en: boundedString(1, 100), ko: boundedString(1, 100) })
+      .strict(),
     lens: boundedString(1, 600),
     voice: boundedString(1, 400),
     bookshelf: z.array(shelfBookSchema).max(8),
@@ -59,10 +74,14 @@ const confirmedBookSchema = z
   .object({
     title: boundedString(1, 200),
     author: boundedString(1, 120),
+    workScope: bookScopeSchema,
+    includedTitles: z.array(boundedString(1, 200)).max(12),
     confirmedSummary: boundedString(80, 1200),
-    mainCharacters: z.array(boundedString(1, 100)).min(1).max(8),
+    mainCharacters: z.array(boundedString(1, 100)).max(8),
     candidateTopics: z.array(boundedString(1, 160)).length(3),
-    confidence: z.enum(["high", "medium", "low"]),
+    verificationStatus: bookVerificationStatusSchema,
+    verificationNote: boundedString(1, 500),
+    sources: z.array(bookSourceSchema).max(3),
   })
   .strict();
 
@@ -83,13 +102,17 @@ const internalReadingNotesSchema = z
       .length(3),
     keyScenes: z.array(boundedString(1, 240)).min(2).max(3),
     shelfConnections: z.array(boundedString(1, 300)).max(2),
+    personalReaction: boundedString(20, 400),
+    unresolvedQuestion: boundedString(10, 300),
+    possibleRevision: boundedString(10, 300),
+    questionForTable: boundedString(10, 300),
   })
   .strict();
 
 const transcriptUtteranceSchema = z
   .object({
     speaker: boundedString(1, 100),
-    text: boundedString(1, 600),
+    text: boundedString(1, 4000),
     stance: z.number().min(-2).max(2).optional(),
     refersTo: boundedString(1, 100).optional(),
     shelfRef: boundedString(1, 200).optional(),
@@ -101,18 +124,29 @@ export const bookIdentificationRequestSchema = z
   .object({
     title: boundedString(1, 200),
     author: boundedString(1, 120).optional(),
+    scope: bookScopeSchema.optional(),
     language: z.enum(["en", "ko"]).optional(),
   })
   .strict();
 
-export const bookIdentificationSchema = z
+export const bookIdentificationModelSchema = z
   .object({
     canonical_title: boundedString(1, 200),
     author: boundedString(1, 120),
+    work_scope: bookScopeSchema,
+    included_titles: z.array(boundedString(1, 200)).max(12),
     summary: boundedString(80, 1200),
-    main_characters: z.array(boundedString(1, 100)).min(1).max(8),
+    main_characters: z.array(boundedString(1, 100)).max(8),
     candidate_topics: z.array(boundedString(1, 160)).length(3),
-    confidence: z.enum(["high", "medium", "low"]),
+    verification_status: z.enum(["verified", "ambiguous", "not_found"]),
+    verification_note: boundedString(1, 500),
+  })
+  .strict();
+
+export const bookIdentificationSchema = bookIdentificationModelSchema
+  .extend({
+    verification_status: bookVerificationStatusSchema,
+    sources: z.array(bookSourceSchema).max(3),
   })
   .strict();
 
@@ -146,6 +180,7 @@ export const utteranceRequestSchema = z
       .optional(),
     allowShelfReference: z.boolean(),
     validationError: boundedString(1, 1200).optional(),
+    discussionFocus: boundedString(1, 240).optional(),
   })
   .strict();
 
@@ -196,6 +231,37 @@ export const readingNotesSchema = z
       .length(3),
     key_scenes: z.array(boundedString(1, 240)).min(2).max(3),
     shelf_connections: z.array(boundedString(1, 300)).max(2),
+    personal_reaction: boundedString(20, 400),
+    unresolved_question: boundedString(10, 300),
+    possible_revision: boundedString(10, 300),
+    question_for_table: boundedString(10, 300),
+  })
+  .strict();
+
+export const discussionFocusRequestSchema = z
+  .object({
+    language: z.enum(["en", "ko"]),
+    book: confirmedBookSchema,
+    transcript: z.array(transcriptUtteranceSchema).min(1).max(40),
+  })
+  .strict();
+
+export const discussionFocusSchema = z
+  .object({
+    topic_scores: z
+      .array(
+        z
+          .object({
+            topic: boundedString(1, 160),
+            relevance: z.number().min(0).max(2),
+            evidence: boundedString(1, 240),
+          })
+          .strict(),
+      )
+      .length(3),
+    emergent_question: boundedString(1, 160).nullable(),
+    emergent_relevance: z.number().min(0).max(2),
+    emergent_evidence: boundedString(1, 240).nullable(),
   })
   .strict();
 
@@ -224,7 +290,9 @@ export const recapSchema = z
 export type BookIdentificationRequest = z.infer<typeof bookIdentificationRequestSchema>;
 export type UtteranceTask = z.infer<typeof utteranceTaskSchema>;
 export type BookIdentificationOutput = z.infer<typeof bookIdentificationSchema>;
+export type BookIdentificationModelOutput = z.infer<typeof bookIdentificationModelSchema>;
 export type ReadingNotesOutput = z.infer<typeof readingNotesSchema>;
+export type DiscussionFocusOutput = z.infer<typeof discussionFocusSchema>;
 export type UtteranceOutput = z.infer<typeof utteranceSchema>;
 export type UserStanceOutput = z.infer<typeof userStanceSchema>;
 export type RecapOutput = z.infer<typeof recapSchema>;

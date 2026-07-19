@@ -35,3 +35,9 @@ export function localizedSpeakerName(speaker: string, language: AppLanguage): st
   if (language === "ko") return KOREAN_PERSONA_NAMES[speaker] ?? speaker;
   return PERSONAS.find((persona) => persona.id === speaker)?.name ?? speaker;
 }
+
+export function localizedSpeakerRole(speaker: string, language: AppLanguage): string {
+  if (speaker === "moderator") return language === "ko" ? "진행자" : "Moderator";
+  if (speaker === "user") return language === "ko" ? "모임 참여자" : "Club member";
+  return PERSONAS.find((persona) => persona.id === speaker)?.roleLabel[language] ?? "";
+}
