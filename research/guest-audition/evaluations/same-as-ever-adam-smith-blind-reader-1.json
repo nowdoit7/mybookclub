@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-adam-smith",
+  "evaluatorId": "blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a4",
+        "a7"
+      ],
+      "rationale": "bookSpecificity: It connects Arkhipov, safety margins, veto procedures, and the returning-aircraft image, although some institutional claims extend beyond the supplied episodes (a4, a7). novelInterpretation: The shift from personal prudence to rules acceptable to people bearing the risk introduces a strong normative dimension not already explicit in the prompt (a4, a7). personaCoherence: Both turns sustain a coherent moral-institutional perspective focused on shared exposure, legitimate rules, and ordinary people’s capacity to object (a4, a7). conversationalParticipation: It answers the user’s veto dilemma, then directly takes up Reader A’s question about missing voices and advances the exchange each time (a4, a7). humanNaturalness: The responses are readable and responsive, though their balanced clauses and polished conclusions occasionally sound more essayistic than spontaneous (a4, a7). authorityBalance: It explicitly rejects a simple individual-versus-system answer, recognizes delay costs, and states its final preference without claiming certainty (a4, a7). bookCenteredness: The book’s safety-margin and survivorship-bias motifs remain visible, but the stakeholder-legitimacy argument is a substantial interpretive extension (a4, a7). repeatResistance: The focus on risk-bearers and ordinary objections is distinctive, although it could become a reusable moral test across unrelated books (a7). discussionContribution: It converts a narrow veto-design problem into a richer question about whose warnings and risks institutions systematically fail to register (a4, a7). returnInterest: The reader offers a recognizable perspective that is neither merely heroic nor procedural, making future disagreements likely to be substantive (a4, a7)."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "b4",
+        "b7"
+      ],
+      "rationale": "bookSpecificity: Arkhipov’s restraint, the consent procedure, command structure, information flow, and the aircraft example are all made operationally relevant (b4, b7). novelInterpretation: Testing for a fallback when one judgment fails and preserving ignored warnings are useful extensions, though they are fairly conventional institutional design moves (b4, b7). personaCoherence: A consistent systems-oriented voice examines redundancy, information flow, records, and review, but it lacks a highly distinctive personal signature (b4, b7). conversationalParticipation: Each turn directly addresses the preceding dilemma and supplies a concrete next test rather than restating the user or reader’s position (b4, b7). humanNaturalness: The Korean is clear and appropriately conversational, although the procedural density makes the speaker sound somewhat like an organizational consultant (b4, b7). authorityBalance: It uses cautious formulations, preserves the importance of individual judgment, and identifies unanswered procedural questions rather than declaring a complete solution (b4, b7). bookCenteredness: Both interventions remain tightly anchored to the named episodes and translate their implications without abandoning the book-club question (b4, b7). repeatResistance: The fallback-and-record framework is specific enough here, though a systems reader could reuse the same procedural checklist too often (b4, b7). discussionContribution: It gives the group concrete criteria—fallback procedures, recorded dissent, and review—that turn an abstract preference into a testable institutional proposal (b4, b7). returnInterest: The reader would reliably improve practical rigor, but its operational style is somewhat less surprising than the competing sample’s normative intervention (b4, b7)."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Locked preference rationale: This is close: Sample B is more operational and tightly book-grounded, but Sample A contributes the less replaceable book-club move by asking whether rules are acceptable from the standpoint of those bearing the danger (a4, a7). That distinct normative pressure narrowly outweighs B’s procedural clarity. Historical-safety red team after disclosure: a4 and a7 contain no quotation, invented biography, copied passage, cross-book leak, genre mismatch, moderator takeover, authority submission, or structural violation; both guest turns contain three sentences and explicitly leave veto design contestable. The move from Smithian prudence and justice to modern veto and review procedures is an imaginative analogy, not presented as a historical blueprint. The phrase “책에서 거듭 나온” in a4 creates a mild risk of sounding as though Smith personally read the modern book. Because it refers to shared table evidence inside an explicitly imagined-reader frame and makes no biographical claim, I do not record a literal_modern_experience hard failure, but production wording should prefer “이 대화에서 거듭 나온” to remove the ambiguity."
+}

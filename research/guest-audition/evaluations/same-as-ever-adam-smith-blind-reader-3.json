@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-adam-smith",
+  "evaluatorId": "blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a4",
+        "a7"
+      ],
+      "rationale": "bookSpecificity: a4 and a7 use Arkhipov, safety margins, vetoes, review, and the returning-aircraft analogy, though the stakeholder-acceptability test goes beyond the supplied evidence. novelInterpretation: a4 translates personal prudence into institutional restraint, while a7 recasts anti-heroic design as creating an audible place for ordinary objection before catastrophe. personaCoherence: Both a4 and a7 sustain a coherent normative concern with distributing voice, responsibility, and protection rather than celebrating exceptional individual virtue. conversationalParticipation: a4 directly answers the user's paralysis concern, and a7 develops Reader A's missing-voices question into a concrete standard for judging institutions. humanNaturalness: The progression feels attentive and humane, but the long balanced clauses in a4 and the polished declaration in a7 sound somewhat composed for publication. authorityBalance: a4 explicitly weighs delay against irreversible error, yet a7 introduces a strong stakeholder-legitimacy principle that the available book context does not itself establish. bookCenteredness: The argument remains connected to Arkhipov and survivor bias, but a7 increasingly becomes an independent theory of legitimate institutional procedure. repeatResistance: The Arkhipov and aircraft linkage is concrete, although the recommendation to amplify affected people's objections could recur across many institutional books. discussionContribution: a4 and a7 move the group beyond counting vetoes toward asking whose exposure and excluded voice reveal whether a system actually contains a safety margin. returnInterest: The candidate makes a substantial and morally serious interpretive contribution while responding closely enough to others to sustain an engaging future discussion."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "b4",
+        "b7"
+      ],
+      "rationale": "bookSpecificity: b4 precisely joins Arkhipov's restraint with consent procedure, while b7 applies the returning-aircraft lesson to missing warnings, failed decisions, records, and review. novelInterpretation: b4's extension of safety margin into command and information flow is strong, and b7's record-preservation idea is useful, though procedurally familiar. personaCoherence: Across b4 and b7, Reader X remains a consistent institutional analyst focused on layered safeguards, information survival, and recoverable review. conversationalParticipation: b4 answers Reader A's either-or question and adds the missing backup-procedure issue; b7 then converts Reader A's next question into observable practices. humanNaturalness: The responses are measured, idiomatic, and appropriately tentative, with a natural movement from acknowledging the prior point to adding one further complication. authorityBalance: b4 treats the competing explanations as different levels rather than dismissing either, and its unanswered backup-procedure question openly marks evidentiary limits. bookCenteredness: Every institutional proposal in b4 and b7 is developed through the supplied Arkhipov, safety-margin, missing-evidence, and review material. repeatResistance: The exact Arkhipov-aircraft synthesis is specific, but preserving objections and conducting review remains a governance framework transferable to other texts. discussionContribution: b4 exposes the need for safeguards when the first dissenter fails, while b7 supplies a concrete mechanism for preventing ordinary warnings from disappearing. returnInterest: Reader X combines textual discipline, intellectual fairness, and actionable elaboration, making the candidate highly valuable for another evidence-centered discussion."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Locked preference rationale: Sample B is the most evidence-bound version: it translates Arkhipov, missing warnings, command structure, and review into a concrete institutional argument without claiming more than the supplied context supports. After disclosure, the imagined Adam Smith guest is sample-a. No hard failure is supported: a4 and a7 contain no historical quotation, autobiographical claim, invented biography, copyrighted passage, cross-book claim, or structural violation; each has three sentences. The prudence-to-procedure and affected-person standpoint are acknowledged analogies from documented Smithian ideas, not claims that Smith designed modern veto systems. Because a4 says '책에서 거듭 나온', the product must retain the explicit 'imagined' framing so knowledge of the modern book is not mistaken for literal historical experience; the turn does not itself claim that Smith read it. The normative stakeholder test slightly exceeds the book evidence, matching the locked authority and book-centeredness scores of 4, but no participant defers to fame, and Reader X neither takes moderator control nor mismatches the business-economics discussion."
+}

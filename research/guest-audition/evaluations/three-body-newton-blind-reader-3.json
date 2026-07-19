@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "three-body-newton",
+  "evaluatorId": "blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "bookSpecificity: a-candidate-1 uses Luo Ji, Zhang Beihai, and Cheng Xin as distinct evidence, while a-candidate-2 returns specifically to the Wallfacer mandate. novelInterpretation: a-candidate-2 distinguishes authorization from meaningful supervision, an incisive extension of the topic, though it closely follows Woochan's own institutional framing. personaCoherence: Across a-candidate-1 and a-candidate-2, Reader X remains a demanding institutional skeptic who can concede evidence without abandoning the central objection. conversationalParticipation: a-candidate-1 asks Woochan for a falsifying scene, and a-candidate-2 directly incorporates his answer rather than delivering an isolated prepared thesis. humanNaturalness: The challenge and partial concession sound responsive and lively, although phrases such as 'nasty exhibit for democracy' feel slightly crafted for rhetorical impact. authorityBalance: a-candidate-1 invites specific counterevidence and a-candidate-2 genuinely narrows the objection, but the initial claim that the evidence 'cuts against' Woochan overstates the record. bookCenteredness: Both candidate turns remain anchored to named trilogy decisions and institutions rather than replacing literary interpretation with a generic political-theory lecture. repeatResistance: The contrast among deterrence, escape, swordholder selection, and Wallfacer supervision is sufficiently case-specific that these turns could not be reused unchanged elsewhere. discussionContribution: a-candidate-1 makes the claim testable, while a-candidate-2 exposes the important unresolved gap between democratically granting power and retaining control afterward. returnInterest: The combination of forceful challenge, evidence-seeking, and precise concession in a-candidate-1 and a-candidate-2 would make this reader worth inviting back."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "bookSpecificity: b-candidate-1 and b-candidate-2 cite Luo Ji, Zhang Beihai, the Wallfacers, and Wade, but examine their concrete differences less deeply than sample A. novelInterpretation: b-candidate-2's 'hypothesis about crisis, not a demonstrated law' is a useful interpretive distinction, although it largely ratifies Woochan's existing conclusion. personaCoherence: Both candidate turns sustain a cautious evidence-testing voice that consistently separates observed successes from universal institutional conclusions. conversationalParticipation: b-candidate-1 asks a relevant question and b-candidate-2 synthesizes the answer, but the exchange produces less genuine resistance or interpersonal friction. humanNaturalness: The prose is clear and responsive, though expressions such as 'imperfect observations' and 'sound principle' feel more like an analytical essay than spontaneous table talk. authorityBalance: b-candidate-1 explicitly limits what the evidence proves, and b-candidate-2 offers a provisional conclusion without claiming privileged authority over the text. bookCenteredness: The named examples keep both turns relevant, but their dominant hypothesis-versus-law framework could readily become a general lesson about inference. repeatResistance: Character and institution names provide specificity, yet the structure about several successes failing to establish a universal law is broadly reusable. discussionContribution: b-candidate-2 clarifies the appropriate scope of inference, but does not uncover a new practical difficulty comparable to post-delegation accountability. returnInterest: This reader would be a reliable and fair analytical presence, though the low-conflict agreement in b-candidate-2 makes the exchange less memorable."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Locked preference rationale: Sample A creates the stronger book discussion: it tests Woochan's claim against named counterexamples, then makes a bounded concession while preserving the unresolved supervision problem. After disclosure, the imagined Newton guest is sample-b. No hard failure is supported: b-candidate-1 and b-candidate-2 contain no historical quotation, literal modern experience, invented biography, or reproduced book passage; all trilogy claims stay within the supplied context, and each turn has three sentences. The guest applies a documented evidence-and-generalization style to science-fiction politics, an explicit imaginative extrapolation rather than a claim about Newton's views. It asks Woochan for evidence and remains provisional, so neither celebrity authority submission nor moderator takeover occurs. The method can feel essay-like and broadly reusable, matching the locked naturalness and repeat-resistance limits, but it neither leaks another book nor mismatches the discussion genre."
+}

@@ -51,3 +51,6 @@
 - 2026-07-19: Reframed WRAP_UP as a social closing: all three readers prepare distinct two-sentence takeaways and farewells in parallel, then Alex thanks the table and hands off to the written recap.
 - 2026-07-19: Planned `Guest at the Table` as a rare, code-selected same-category replacement rather than a fourth reader; the branch stops at an approval boundary before changing the fixed eight-reader SPEC or runtime.
 - 2026-07-19: Added a Korean companion translation of the guest-reader plan so product decisions can be reviewed without changing the English submission document.
+- 2026-07-19: Replaced title allowlists in the guest plan with controlled genre affinities and a low-confidence regular-reader fallback so every verified book keeps the same entry path.
+- 2026-07-19: Added a credit-free blind A/B guest audition lab with strict schemas, evidence citations, three independent evaluator passes, and post-reveal historical-safety review.
+- 2026-07-19: Round 1 rejected all three portrayals at the pre-registered gate; Pascal was closest, while Newton proved that a recognizable guest can still lose to a stronger ordinary reader, so runtime and SPEC remain unchanged.

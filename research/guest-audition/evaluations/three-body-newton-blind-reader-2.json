@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "caseId": "three-body-newton",
+  "evaluatorId": "blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-user-2",
+        "a-candidate-2"
+      ],
+      "rationale": "At a-candidate-1 it challenges Woochan with Luo Ji, Zhang Beihai, and Cheng Xin, then asks for counterevidence. At a-candidate-2 it genuinely incorporates a-user-2’s concession while preserving a precise disagreement about supervision after delegation. The phrase “nasty exhibit for democracy” is slightly staged, but the exchange remains distinctive, responsive, and productively adversarial."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-user-2",
+        "b-candidate-2"
+      ],
+      "rationale": "At b-candidate-1 it carefully distinguishes what Luo Ji and Zhang Beihai establish from the broader law readers might infer, and its question successfully elicits b-user-2’s refinement. At b-candidate-2 it integrates Wallfacer and Wade evidence, but largely ratifies the user’s position; the result is intelligent synthesis with less live friction or surprising contribution."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "The disclosed guest is an imagined Isaac Newton in sample-b. The guest paraphrases a narrow evidentiary method without quotation, invented biography, or any literal claim that the historical Newton read the trilogy. In b-candidate-1 Woochan is asked for further evidence, and b-candidate-2 revises the claim in response rather than invoking fame or submitting to another speaker. The natural-philosophy-to-literary-discussion analogy is explicit and bounded; it does not become a genre mismatch, moderator takeover, or authority-submission event."
+}

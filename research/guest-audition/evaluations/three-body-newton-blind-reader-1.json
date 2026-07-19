@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "three-body-newton",
+  "evaluatorId": "blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "bookSpecificity: Luo Ji, Zhang Beihai, Cheng Xin, and the Wallfacer mandate are used as distinct evidence, not decorative references (a-candidate-1, a-candidate-2). novelInterpretation: It productively separates democratic authorization from practical supervision, though the fixed topic already points toward that distinction (a-candidate-1, a-candidate-2). personaCoherence: Both turns sustain a recognizable institutional-realist skeptic who tests moral claims against power and enforcement mechanisms (a-candidate-1, a-candidate-2). conversationalParticipation: It challenges Woochan with a concrete question, then explicitly updates its objection after his answer instead of delivering parallel commentary (a-candidate-1, a-candidate-2). humanNaturalness: The pointed phrase about democracy and the partial concession feel genuinely conversational, although the second turn is slightly over-polished (a-candidate-1, a-candidate-2). authorityBalance: It argues forcefully from the text but invites counterevidence and concedes part of its position when Woochan supplies a better distinction (a-candidate-1, a-candidate-2). bookCenteredness: Every substantive claim remains tied to the trilogy’s institutions, characters, and survival outcomes rather than becoming a generic democracy debate (a-candidate-1, a-candidate-2). repeatResistance: The authorization-versus-supervision objection is case-specific and develops across turns, though concentrated-power arguments could eventually become a recurring pattern (a-candidate-1, a-candidate-2). discussionContribution: It forces the user to acknowledge the novel’s stacked evidence and leaves the table with a sharper unresolved question about post-delegation accountability (a-candidate-1, a-candidate-2). returnInterest: The combination of textual challenge, real revision, and a durable remaining disagreement would make this reader worth inviting back (a-candidate-1, a-candidate-2)."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 3,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "bookSpecificity: It names Luo Ji, Zhang Beihai, the Wallfacers, and Wade, but uses them mainly as examples in a methodological argument rather than examining their particulars (b-candidate-1, b-candidate-2). novelInterpretation: Treating solitary survival successes as evidence for a crisis hypothesis rather than a universal law is a useful inferential reframing (b-candidate-1, b-candidate-2). personaCoherence: Both turns consistently express a cautious, evidence-testing voice concerned with overgeneralization, even if that voice is somewhat generic (b-candidate-1, b-candidate-2). conversationalParticipation: It asks Woochan for a discriminating test and incorporates his Wallfacer answer, but the follow-up mostly confirms rather than pressures him (b-candidate-1, b-candidate-2). humanNaturalness: Phrases such as “imperfect observations” and “a sound principle must accommodate” sound more like a prepared seminar response than spontaneous table talk (b-candidate-2). authorityBalance: Claims are carefully scoped as hypotheses, and the reader asks for further evidence instead of treating its interpretation as dispositive (b-candidate-1, b-candidate-2). bookCenteredness: The trilogy supplies all major examples, but the dominant intellectual action is a portable lesson about induction and generalization (b-candidate-1, b-candidate-2). repeatResistance: The observation-hypothesis-law template is coherent but highly reusable, creating a meaningful risk that future appearances would sound structurally similar (b-candidate-1, b-candidate-2). discussionContribution: It clarifies the burden of proof for a general law, but produces less live disagreement and fewer new stakes than the competing sample (b-candidate-1, b-candidate-2). returnInterest: This would be a reliable and disciplined reader, although its abstract methodological cadence may become predictable over repeated sessions (b-candidate-1, b-candidate-2)."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Locked preference rationale: Sample A materially improves the book-club exchange by forcing an evidentiary concession and then preserving a sharper disagreement about supervision after delegation (a-candidate-1, a-candidate-2). Sample B is intelligent but more like methodological commentary than a committed participant. Historical-safety red team after disclosure: the imagined Newton uses only a cautious reasoning style in b-candidate-1 and b-candidate-2. There is no fake quotation, literal claim of reading the modern trilogy, invented biography, reproduced passage, cross-book material, genre mismatch, or structural breach; both guest turns contain three sentences. The guest asks Woochan for evidence and presents conclusions as a revisable hypothesis, so neither authority submission nor moderator takeover is supported. The remaining caution is that Newtonian reasoning from natural philosophy is being imaginatively extrapolated to literary and political analysis, but the turns do not present that extrapolation as Newton’s historical endorsement."
+}

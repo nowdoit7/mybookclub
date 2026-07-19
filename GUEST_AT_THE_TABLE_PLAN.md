@@ -63,21 +63,29 @@ The model never decides whether a guest appears. A pure code selector requires
 all of the following:
 
 1. The session is Live and the book is `verified`.
-2. The verified canonical title, author, series, or tightly bounded subject
-   matches a static guest rule.
-3. The session seed passes a deterministic rarity gate.
-4. Exactly one eligible guest wins, and only one regular reader is replaced.
+2. Verification returns one controlled primary genre, optional secondary
+   genres, and a confidence level without blocking books that are hard to label.
+3. A curated guest has a weighted affinity for one of those genre families.
+4. The session seed passes a deterministic rarity gate.
+5. Exactly one eligible guest wins, and only one regular reader is replaced.
 
 Initial rarity: 15% among eligible books. A reproducible demo seed bypasses only
 the probability gate, never the book-eligibility gate.
 
 - `?seed=demo` preserves the current ordinary demo trio.
-- `?seed=guest-newton` seats Newton only for an eligible verified work.
-- The same seed on an unrelated book safely returns three regular readers.
+- `?seed=guest-newton` seats Newton only when the verified genre profile matches
+  his affinities; it never injects a title, scene, character, or opinion.
+- Low genre confidence safely returns three regular readers and never blocks the
+  underlying all-books session.
 
-The first release uses exact canonical-title and author aliases. Broad semantic
-topic matching is deferred because the current verification contract does not
-return trusted subject tags.
+No guest card contains a canonical-title allowlist. The book verifier assigns a
+controlled genre profile from retrieved evidence; code then performs the match.
+The initial taxonomy covers literary fiction, science fiction, fantasy/myth,
+mystery/crime, romance, horror/gothic, history/politics, science/nature,
+philosophy/religion, psychology/self-help, business/economics,
+biography/memoir, poetry/drama, and children/young adult. The catalog target is
+at least one reviewed guest per family, while its data shape supports several so
+one famous figure does not become the permanent voice of a whole genre.
 
 ## Proposed data shape
 
@@ -91,12 +99,14 @@ interface GuestPortrayal {
   disclosure: Record<AppLanguage, string>;
   portrayalBasis: string[];
   sourceUrls: string[];
-  eligibility: {
-    canonicalTitles?: string[];
-    authors?: string[];
-    workScopes?: BookScope[];
-  };
+  genreAffinities: Array<{ genre: GenreFamily; weight: number }>;
   rarity: number;
+}
+
+interface BookGenreProfile {
+  primaryGenre: GenreFamily;
+  secondaryGenres: GenreFamily[];
+  confidence: "high" | "medium" | "low";
 }
 
 interface PersonaCard {
@@ -126,32 +136,42 @@ generated lines into historical quotations.
 
 ## First vertical slice
 
-Recommended demo guest: **Isaac Newton** for a small allowlist of verified works
-where cosmology, physical law, or scientific inference is central. The
-*Remembrance of Earth's Past* series is the first explicit eligible title because
-it already produced the strongest live discussion fixture and the surprise is
-globally legible to English-language judges.
+Recommended first audition guest: **Isaac Newton**, whose genre affinities cover
+science fiction, science/nature, and philosophy/religion at different weights.
+*Remembrance of Earth's Past* is an evaluation fixture because it has the
+strongest completed transcript, not a production eligibility rule. Newton must
+also survive adjacent, mismatched, and invented-book cases before implementation.
 
 The vertical slice includes:
 
 1. SPEC amendment for the curated guest exception and disclosure.
 2. `GuestPortrayal` contract and strict validation.
 3. One reviewed Newton persona card and one portrait.
-4. Pure eligibility, rarity, replacement, and seed logic.
+4. Controlled genre profiling plus pure affinity, rarity, replacement, and seed
+   logic with no title-specific branches.
 5. Persistent guest badge and Alex disclosure.
 6. Mock session coverage and one final Live smoke session only after all
    structural checks pass.
 
-Liu Bei is the safer second guest because his eligibility can be limited to one
-public-domain literary work and the portrayal can be named precisely. Aristotle
-should follow only after the first two prove that guests deepen interpretation
-rather than merely provide recognizable costumes.
+The second guest should be chosen from cross-book auditions, not from an exact
+title match. Pascal and Adam Smith are useful early candidates because their
+documented lenses can be tested against very different books in adjacent genre
+families. A literary-character guest such as Liu Bei needs a separate portrayal
+scope review, but must not introduce a title-specific production branch.
+Aristotle should follow only after the first guests prove that they deepen
+interpretation rather than merely provide recognizable costumes.
 
 ## Required tests
 
 - Regular sessions still draw exactly three readers and one per category.
-- An unrelated book never receives a guest, including with a guest demo seed.
-- The same eligible book and seed always produce the same trio.
+- Neutral invented fixtures cover every genre family rather than relying on
+  famous title names.
+- Two very different books in the same genre exercise the same selection rules
+  without receiving copied scenes, characters, or arguments.
+- Low-confidence genre classification never blocks a session and safely returns
+  a regular trio.
+- The same genre profile and seed always produce the same trio, while the seed
+  never decides book content.
 - At most one guest appears.
 - A guest replaces only a reader from the guest's category.
 - `?seed=demo` keeps the existing ordinary trio.
@@ -159,6 +179,8 @@ rather than merely provide recognizable costumes.
 - Guest dialogue remains 2–4 sentences and satisfies all existing rebuttal,
   shelf, recap, and copyright invariants.
 - Mock mode never claims that a guest knows unverified book facts.
+- Cross-book regression rejects any title, character, scene, or claim leaking
+  from another audition case.
 
 ## SPEC conflicts to resolve before implementation
 
@@ -179,6 +201,7 @@ for the separate feature branch.
 - No user-authored celebrity names.
 - No fourth reader or increased model-call budget.
 - No model-selected guest.
+- No title-, author-, character-, or scene-specific selection branch.
 - No runtime biography research.
 - No voice imitation or generated historical quotations.
 - No more than one implemented guest before the first full mock evaluation.

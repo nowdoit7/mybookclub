@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-pascal",
+  "evaluatorId": "blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "bookSpecificity: a-candidate-1 closely interprets the returning-aircraft evidence and a-candidate-2 develops the safety-margin question, though neither addresses the disputed boxing example. novelInterpretation: a-candidate-1 reframes survivor bias as a defect in constructing the decision table, and a-candidate-2 asks who defines loss before probabilities are assigned. personaCoherence: Across both candidate turns, Reader X consistently interrogates hidden premises, classification choices, and the moral ownership of decisions under uncertainty. conversationalParticipation: a-candidate-1 prompts Woochan's reformulation and a-candidate-2 answers the ensuing tradeoff, although it redirects Maddie's concrete resource concern toward a broader ethical frame. humanNaturalness: The Korean is fluid and reflective, but phrases such as '판단의 표를 바로 세우라' are polished and abstract enough to sound somewhat authorial. authorityBalance: a-candidate-2 acknowledges unavoidable choice and shared responsibility, yet its insistence that defining loss comes first can sound like a superior conceptual correction. bookCenteredness: The aircraft and safety-margin ideas remain central, but the claim that a margin should become a collectively owned promise extends beyond the supplied book evidence. repeatResistance: The missing-aircraft interpretation gives the response a concrete anchor, although its framework about hidden categories and defined losses could transfer to many uncertainty discussions. discussionContribution: a-candidate-1 and a-candidate-2 add a genuinely productive question: calculation cannot repair a decision frame that has excluded failures or misdefined ruin. returnInterest: The turns are intellectually distinctive and invite reconsideration of the discussion's premises, making Reader X likely to generate fresh future exchanges."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "bookSpecificity: b-candidate-1 accurately explains why aircraft reinforcement can be reversed by missing cases, while b-candidate-2 connects that lesson to safety margins and recovery. novelInterpretation: The candidate offers a correct survivor-bias explanation and a standard reversible-versus-irreversible risk rule, but neither interpretation substantially exceeds familiar risk-management advice. personaCoherence: b-candidate-1 and b-candidate-2 consistently present a pragmatic analytical voice, though that voice is competent rather than strongly individuated. conversationalParticipation: The responses follow Woochan's concern and supply a usable criterion, but they do not explicitly wrestle with Maddie's point that safety itself consumes present life and opportunity. humanNaturalness: The language is clean and accessible, although b-candidate-1 reads like a concise textbook explanation rather than a spontaneous reaction among readers. authorityBalance: b-candidate-2 makes criteria and costs publicly contestable, but saying margins can be determined through probability and cost understates the context's irreducible unknowns. bookCenteredness: Both turns stay on survivor bias and safety margins, yet the second turn becomes general governance and risk-policy guidance with limited textual interpretation. repeatResistance: Apart from the aircraft setup, the advice about buffers, recoverable experiments, disclosed costs, and accountable decision-makers could be reused almost verbatim. discussionContribution: b-candidate-2 contributes a practical distinction between recoverable and irreversible failure, but it simplifies rather than deepens the hardest uncertainty in the prompt. returnInterest: Reader X would be useful for operational clarity, though the largely familiar recommendations offer less reason to anticipate surprising interpretations in another session."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Locked preference rationale: Sample A offers the more distinctive interpretive move by questioning how the decision frame is constructed before calculation begins, while still recognizing that finite tradeoffs remain unavoidable. After disclosure, the imagined Pascal guest is sample-a. No hard failure is supported: a-candidate-1 and a-candidate-2 contain no attributed Pascal quotation, literal modern experience, invented biography, copyrighted passage, or foreign-book claim, and both contain three sentences. The quoted phrase '보이지 않는 것을 보라' is a paraphrased lesson under discussion, not a claim of historical wording. The portrayal cautiously extrapolates from Pascal's documented concern with uncertain stakes and reason's limits; it does not claim modern risk-management authorship. Its assertion that loss-definition comes first can sound like a conceptual correction, consistent with the locked authority score of 4, but Woochan and Maddie shape the exchange and do not submit to Pascal's name or fame. Reader X neither moderates flow nor departs from the business-economics uncertainty topic."
+}

@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-adam-smith",
+  "evaluatorId": "blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a3",
+        "a4",
+        "a5",
+        "a6",
+        "a7"
+      ],
+      "rationale": "a4는 a3의 개인 대 제도 구도를 거부하면서 개인적 신중함을 거부권과 재검토 절차로 번역하고, 지연 비용과 돌이킬 수 없는 오류의 비용도 함께 비교한다. a7은 a6의 누락된 목소리 질문을 위험 부담자의 관점과 평범한 이의 제기로 발전시킨다. 다소 문어체지만 책의 비행기 사례를 제도 설계에 연결하는 해석이 선명하고 비연극적이다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "b3",
+        "b4",
+        "b5",
+        "b6",
+        "b7"
+      ],
+      "rationale": "b4는 아르히포프의 절제와 동의 절차를 경쟁 설명이 아닌 서로 다른 층위로 정리하고, b7은 b6에 직접 응답해 반대 의견 기록과 재검토라는 구체적 장치를 제시한다. 매우 자연스럽고 균형 잡힌 참여지만, 해석적 긴장은 sample-a보다 작으며 결론이 비교적 익숙한 좋은 거버넌스 조언으로 수렴한다."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "공개된 게스트는 sample-a의 상상된 애덤 스미스다. a4는 신중함을 거부권과 재검토 절차로 옮기고 a7은 위험 부담자의 관점으로 확장하지만, 역사적 인용·전기·현대 사건을 직접 경험했다는 주장은 없다. a4의 ‘책에서 거듭 나온’은 상상된 독자라는 명시적 전제 안에서 책의 논점을 가리키는 가장 가까운 안전 경계이며, 역사적 스미스가 실제로 이 책을 읽었다는 진술로 보기는 어렵다. 다른 참여자들이 쟁점을 설정하고 게스트도 구체 제도를 단정하지 않으므로 권위 복종이나 진행자 역할 침범도 없다."
+}

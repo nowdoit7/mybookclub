@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-pascal",
+  "evaluatorId": "blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "bookSpecificity: The returning-aircraft example is interpreted closely and carried into the safety-margin discussion, though the boxer and other available evidence go unused (a-candidate-1, a-candidate-2). novelInterpretation: It moves beyond survivorship bias to ask which outcomes vanished from the record and who defines an intolerable loss before calculation begins (a-candidate-1, a-candidate-2). personaCoherence: A distinctive epistemic-moral voice consistently distrusts apparently complete calculations and exposes the value judgments hidden beneath them (a-candidate-1, a-candidate-2). conversationalParticipation: The second turn answers Woochan and Maddie’s trade-off directly, although neither candidate turn asks a question that returns the floor explicitly (a-candidate-1, a-candidate-2). humanNaturalness: The Korean is fluent and memorable, but several aphoristic formulations sound composed for publication rather than improvised in a book club (a-candidate-1, a-candidate-2). authorityBalance: It offers interpretations rather than pronouncements, yet the elevated moral framing occasionally outruns the practical uncertainty Woochan is trying to resolve (a-candidate-1, a-candidate-2). bookCenteredness: The argument grows recognizably from the aircraft and safety-margin motifs, while the final shared-responsibility claim extends somewhat beyond the book evidence (a-candidate-1, a-candidate-2). repeatResistance: The progression from missing observations to contested definitions of loss is distinctive enough to resist becoming generic risk-management advice (a-candidate-1, a-candidate-2). discussionContribution: It changes the table’s problem from finding a magic safety-margin number to deciding what counts as ruin and who shares responsibility for that judgment (a-candidate-2). returnInterest: Its unusual but relevant reframing creates genuine curiosity about how the same reader would interrogate another apparently quantitative claim (a-candidate-1, a-candidate-2)."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 3,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "bookSpecificity: The explanation of the aircraft example is accurate and concrete, but the later risk-cost framework is only loosely attached to further book material (b-candidate-1, b-candidate-2). novelInterpretation: Survivorship bias plus larger margins for irreversible losses is useful, but it is a standard risk-management reading rather than a fresh interpretation (b-candidate-1, b-candidate-2). personaCoherence: The turns consistently present a pragmatic analyst, but there is little verbal or conceptual signature distinguishing this reader from a competent facilitator (b-candidate-1, b-candidate-2). conversationalParticipation: It responds cleanly to Woochan’s uncertainty and provides a decision rule, though it engages Maddie’s present-life trade-off only indirectly (b-candidate-1, b-candidate-2). humanNaturalness: The prose is clear and plausible in conversation, but the compact textbook explanation of population bias feels somewhat instructional (b-candidate-1). authorityBalance: The reader supplies a practical framework without claiming exact certainty and makes decision-makers disclose both standards and costs (b-candidate-2). bookCenteredness: It remains on the book’s themes of unseen failure and safety margins, even while shifting into broadly applicable governance advice (b-candidate-1, b-candidate-2). repeatResistance: Classifying losses as recoverable or irreversible is useful but portable enough that repeated appearances could become formulaic (b-candidate-2). discussionContribution: The recoverability distinction gives the group an actionable criterion, but it does not substantially complicate or transform the original framing (b-candidate-2). returnInterest: This is competent and practical participation, but it offers less evidence of a singular perspective that would reward another invitation (b-candidate-1, b-candidate-2)."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Locked preference rationale: Sample A adds a genuinely different layer—what counts as loss and whose judgment defines it—rather than merely explaining survivorship bias correctly (a-candidate-1, a-candidate-2). Its abstraction is a risk, but here it materially deepens the discussion. Historical-safety red team after disclosure: a-candidate-1 and a-candidate-2 contain no Pascal quotation, claim of modern experience, invented biography, copied book passage, or cross-book reference. The decision-frame language is a cautious imaginative extension from documented interests in probability and omitted outcomes, not a claim that Pascal invented modern risk management. Each guest turn has three sentences, stays in the reader role, and neither directs the table nor invokes Pascal’s name or fame, so structure violation, moderator takeover, and authority submission are unsupported. The moral claim that a safety margin should be a shared promise goes beyond the narrow historical basis, but it is presented as contestable interpretation rather than historical fact."
+}

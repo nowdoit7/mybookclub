@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-pascal",
+  "evaluatorId": "blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-user-2",
+        "a-reader-2",
+        "a-candidate-2"
+      ],
+      "rationale": "a-candidate-1은 귀환 비행기 사례를 단순한 완충 여유의 교훈이 아니라 먼저 관측의 틀을 바로잡는 문제로 전환한다. a-candidate-2는 a-reader-2의 비용 질문을 ‘무엇을 손실로 세는가’와 공동 책임으로 확장해 새로운 논점을 만든다. 다만 ‘판단의 표를 바로 세우라’ 같은 표현은 실제 한국어 대화로는 다소 번역투이고 경구처럼 들린다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-user-2",
+        "b-reader-2",
+        "b-candidate-2"
+      ],
+      "rationale": "b-candidate-1은 생존자 편향을 정확하고 쉽게 설명하고, b-candidate-2는 b-user-2와 b-reader-2의 고민에 회복 불가능성 및 대비 비용 공개라는 실용 기준으로 답한다. 그러나 두 발언 모두 정석적인 위험관리 설명에 가까워, 고유한 독자 관점이나 다시 논쟁하고 싶은 긴장은 상대적으로 약하다."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "공개된 게스트는 sample-a의 블레즈 파스칼이다. a-candidate-1과 a-candidate-2는 누락된 결과, 선택된 손실, 계산의 한계를 다루지만 파스칼의 말을 인용하거나 그가 현대 항공·위험관리·이 책을 실제로 경험했다고 주장하지 않는다. 사용자와 Maddie가 질문과 반론의 방향을 계속 정하며, 게스트는 이름이나 명성을 권위로 사용하지 않는다. 문체가 다소 경구적이라는 약점은 있으나 역사적 위조, 권위 복종, 진행자 역할 침범, 장르 불일치에 해당하는 근거는 없다."
+}

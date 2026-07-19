@@ -12,6 +12,7 @@
     "session:mock": "tsx scripts/session.mock.ts",
     "session:mock:ko": "tsx scripts/session.mock.ts --ko",
     "evaluate:mock": "tsx scripts/evaluate.mock.ts",
+    "evaluate:guest-audition": "tsx scripts/evaluate.guest-audition.ts",
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
     "build": "npm run typecheck && vite build",
