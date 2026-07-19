@@ -5,7 +5,6 @@ import type {
   AppLanguage,
   BookScope,
   CompletedSession,
-  TableMood,
 } from "../src/types";
 
 interface Check {
@@ -120,7 +119,6 @@ interface EvaluationCase {
   title: string;
   author: string;
   scope?: BookScope;
-  tableMood?: TableMood;
 }
 
 async function runCase({
@@ -128,13 +126,11 @@ async function runCase({
   title,
   author,
   scope = "single_book",
-  tableMood = "warm",
 }: EvaluationCase): Promise<void> {
   const result = await new SessionEngine(new MockGenerationClient()).run({
     title,
     author,
     scope,
-    tableMood,
     seed: `evaluation:${language}:${title}`,
     language,
     userInputs:
@@ -169,9 +165,11 @@ async function runCase({
       detail: result.state.book.workScope,
     },
     {
-      name: "requested table mood retained",
-      passed: result.state.tableMood === tableMood,
-      detail: result.state.tableMood,
+      name: "emergent atmosphere remains bounded",
+      passed: Object.values(result.state.roomAtmosphere).every(
+        (value) => value >= 0 && value <= 1,
+      ),
+      detail: JSON.stringify(result.state.roomAtmosphere),
     },
   ];
   const passed = checks.filter((check) => check.passed).length;
@@ -188,22 +186,19 @@ const cases: EvaluationCase[] = [
     language: "en",
     title: "The Cartographer's Lantern",
     author: "R. Vale",
-    tableMood: "warm",
   },
   {
     language: "en",
     title: "Notes on Attention",
     author: "M. Rowan",
-    tableMood: "playful",
   },
-  { language: "ko", title: "달의 정원", author: "한여름", tableMood: "intense" },
-  { language: "ko", title: "천천히 읽는 기술", author: "김독자", tableMood: "warm" },
+  { language: "ko", title: "달의 정원", author: "한여름" },
+  { language: "ko", title: "천천히 읽는 기술", author: "김독자" },
   {
     language: "ko",
     title: "독자가 선택한 삼부작",
     author: "김작가",
     scope: "series",
-    tableMood: "playful",
   },
 ];
 

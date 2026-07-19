@@ -15,7 +15,9 @@ describe("SessionEngine", () => {
 
     expect(result.state.stage).toBe("WRAP_UP");
     expect(result.state.transcript).toHaveLength(32);
-    expect(result.state.tableMood).toBe("warm");
+    expect(Object.values(result.state.roomAtmosphere).every((value) => value >= 0 && value <= 1)).toBe(
+      true,
+    );
     expect(new Set(result.state.transcript.map(({ stage }) => stage))).toEqual(
       new Set([
         "INTRO",
@@ -205,24 +207,26 @@ describe("SessionEngine", () => {
     expect(sceneContexts.every(([speaker]) => speaker === "moderator")).toBe(true);
   });
 
-  it("passes the user-selected table mood to every generated turn", async () => {
+  it("derives and updates room atmosphere without another model operation", async () => {
     const client = new MockGenerationClient();
     const originalGenerateUtterance = client.generateUtterance.bind(client);
-    const moods: string[] = [];
+    const atmospheres: string[] = [];
     client.generateUtterance = async (input) => {
-      moods.push(input.tableMood);
+      atmospheres.push(JSON.stringify(input.roomAtmosphere));
       return originalGenerateUtterance(input);
     };
 
     const { state } = await new SessionEngine(client).run({
       title: "A Reader-Selected Book",
       seed: "demo",
-      tableMood: "playful",
+      userInputs: {
+        intro: "반갑습니다. 다른 관점을 듣고 싶어서 왔어요 ㅎㅎ 재미있게 이야기해 봐요!",
+      },
     });
 
-    expect(state.tableMood).toBe("playful");
-    expect(moods.length).toBeGreaterThan(0);
-    expect(new Set(moods)).toEqual(new Set(["playful"]));
+    expect(atmospheres.length).toBeGreaterThan(0);
+    expect(new Set(atmospheres).size).toBeGreaterThan(1);
+    expect(state.roomAtmosphere.playfulness).toBeGreaterThan(0.4);
   });
 
   it("pauses before every generated turn and accepts interactive user input", async () => {

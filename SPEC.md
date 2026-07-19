@@ -78,8 +78,9 @@ different interpretations preserved rather than flattened.
 - **Rebuttal enforcement**: ≥1 persona challenges the user's stated position in the discussion stage
 - At least one directed **persona-to-persona exchange** in the discussion stage;
   the user may join it, observe one bounded extension, or wrap up
-- A user-selected table mood (`warm`, `playful`, or `intense`) that affects
-  delivery without changing the moderator's personality or adding a model call
+- An emergent room atmosphere derived from the drawn readers, then adjusted
+  gradually by user wording and code-scheduled conversation events; it affects
+  delivery without changing persona positions, flow, or adding a model call
 - Text-length-aware **automatic pacing** by default, with pause, skip-now, and
   manual Next controls; every user turn is a hard stop
 - Full-table establishing states plus a portrait-led, visual-novel-style
@@ -198,8 +199,21 @@ a hard project usage limit in the OpenAI Platform before publishing the demo.
 ```ts
 type Category = "emotional" | "analytical" | "contextual";
 type BookScope = "single_book" | "series";
-type TableMood = "warm" | "playful" | "intense";
 type DiscussionAction = "join" | "listen" | "wrap";
+
+interface SocialTemperament {
+  warmth: number;       // 0..1
+  playfulness: number;  // 0..1
+  directness: number;   // 0..1
+  energy: number;       // 0..1
+}
+
+interface RoomAtmosphere {
+  warmth: number;       // 0..1
+  playfulness: number;  // 0..1
+  tension: number;      // 0..1
+  energy: number;       // 0..1
+}
 
 interface PersonaCard {
   id: string;              // "maddie"
@@ -212,6 +226,7 @@ interface PersonaCard {
   bookshelf: ShelfBook[];  // exactly 5
   behaviorRules: string[];
   forbidden: string[];
+  socialTemperament: SocialTemperament;
   avatarColor: string;     // UI chip color
 }
 
@@ -245,7 +260,7 @@ interface Utterance {
 type StageId = "INTRO" | "FIRST_IMPRESSIONS" | "MEMORABLE_SCENES" | "DISCUSSION" | "WRAP_UP";
 
 interface SessionState {
-  tableMood: TableMood;
+  roomAtmosphere: RoomAtmosphere;
   book: {
     title: string;
     author: string;
@@ -716,8 +731,11 @@ Layout (desktop, single screen):
   silhouette in MVP. Expression variants remain roadmap scope.
 - Book entry includes a Korean/English selector. The selected language controls
   UI copy, generated dialogue, and recap headings, and cannot change mid-session.
-- Book entry also includes a table-mood selector: warm, playful, or intense.
-  It changes table-wide delivery, not Alex's identity, and cannot change flow.
+- Book entry does not ask the user to manufacture a mood. The engine derives an
+  initial room atmosphere from the drawn readers' social temperaments, then
+  adjusts it gradually from user wording and code-owned conversation events.
+  The current state may be exposed in development diagnostics, but is hidden in
+  production and automated tests. It changes delivery, never identity or flow.
 - A compact participant row keeps names, occupations, and current/target cues
   visible without exposing the future speaker queue.
 - On wide desktop screens, use a two-column conversation workspace: the focused
@@ -822,9 +840,9 @@ game's characters, assets, or distinctive visual style. Polish > features.
   passages from the book.
 - Disagree when your notes disagree. Concede only explicitly.
 - Address others by name. React to what was actually said.
-- Follow the supplied table mood without performing it mechanically. Let user
-  humor loosen the room naturally, never force a joke, and keep intense
-  disagreement direct without becoming hostile.
+- Follow the current room atmosphere without performing it mechanically. Let
+  user humor loosen the room naturally, never force a joke, preserve each
+  speaker's own voice, and keep tense disagreement direct without hostility.
 - Let earlier remarks put pressure on your thinking. Refer to a precise phrase,
   admit uncertainty when it is real, and avoid polishing every turn into a conclusion.
 - Avoid repetitive debate templates such as "both can coexist," "not A but B,"

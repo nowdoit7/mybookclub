@@ -181,16 +181,20 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
   ).replace(/[.!?。？！]+$/gu, "");
   const shelfRef = input.allowShelfReference ? persona.bookshelf[0]?.title ?? null : null;
   const moodLead = isKorean
-    ? input.tableMood === "playful"
+    ? input.roomAtmosphere.playfulness >= 0.58
       ? "이쯤이면 테이블이 조금 뜨거워져도 재미있겠네요."
-      : input.tableMood === "intense"
+      : input.roomAtmosphere.tension >= 0.55
         ? "핵심부터 직접 말하겠습니다."
-        : "서두르지 않고 제 쪽에서 보이는 것을 말해 볼게요."
-    : input.tableMood === "playful"
+        : input.roomAtmosphere.warmth >= 0.65
+          ? "서두르지 않고 제 쪽에서 보이는 것을 말해 볼게요."
+          : "지금 테이블의 흐름을 따라 제 입장을 말해 보겠습니다."
+    : input.roomAtmosphere.playfulness >= 0.58
       ? "This is where the table can get a little lively."
-      : input.tableMood === "intense"
+      : input.roomAtmosphere.tension >= 0.55
         ? "I will put the disagreement plainly."
-        : "I will start with what I can see from my side of the table.";
+        : input.roomAtmosphere.warmth >= 0.65
+          ? "I will start with what I can see from my side of the table."
+          : "I will follow the room and state my position directly.";
   const responses: Partial<Record<UtteranceRequest["task"], string>> = isKorean
     ? {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),

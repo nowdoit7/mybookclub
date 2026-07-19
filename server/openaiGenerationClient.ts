@@ -39,15 +39,22 @@ const languageRule = (language: "en" | "ko" | undefined) =>
     ? "Write all reader-facing content in natural Korean. Keep book and author names in the form most familiar to Korean readers."
     : "Write all reader-facing content in natural English.";
 
-function tableMoodRule(mood: UtteranceRequest["tableMood"]): string {
-  switch (mood) {
-    case "playful":
-      return "Table mood: playful. Allow light wit or friendly teasing when the actual conversation invites it, but never force a joke or mechanically copy laughter.";
-    case "intense":
-      return "Table mood: intense. Make disagreements direct, specific, and energetic without hostility, contempt, or theatrical aggression.";
-    default:
-      return "Table mood: warm. Leave room for uncertainty and human reaction; gentle humor is welcome only when a participant naturally opens that door.";
-  }
+function roomAtmosphereRule(atmosphere: UtteranceRequest["roomAtmosphere"]): string {
+  const warmth = atmosphere.warmth >= 0.65 ? "open and generous" : atmosphere.warmth < 0.4 ? "reserved" : "attentive";
+  const playfulness =
+    atmosphere.playfulness >= 0.6
+      ? "light wit is naturally available"
+      : atmosphere.playfulness < 0.3
+        ? "humor is currently sparse"
+        : "occasional humor may fit";
+  const tension =
+    atmosphere.tension >= 0.62
+      ? "the disagreement is visibly tense and should stay specific without hostility"
+      : atmosphere.tension < 0.35
+        ? "the room is low-tension"
+        : "the room has a clear but manageable disagreement";
+  const energy = atmosphere.energy >= 0.65 ? "energetic" : atmosphere.energy < 0.4 ? "quiet and reflective" : "measured";
+  return `Emergent room atmosphere: ${warmth}, ${energy}; ${playfulness}; ${tension}. Adapt delivery subtly while preserving the speaker's own voice and position. Do not imitate the user's wording, force jokes, or turn the whole group into one personality.`;
 }
 
 interface GenerationProfile {
@@ -312,7 +319,7 @@ export class OpenAIGenerationClient implements GenerationClient {
           : `You are ${
               input.speaker === "moderator" ? "Alex" : input.speaker.name
             }. Stay in character and anchored to your private notes.`
-      } ${lengthRule} ${taskDirective} ${languageRule(input.language)} ${tableMoodRule(input.tableMood)} On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
+      } ${lengthRule} ${taskDirective} ${languageRule(input.language)} ${roomAtmosphereRule(input.roomAtmosphere)} On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
         input.allowShelfReference ? "allowed once if illuminating" : "not allowed; shelf_ref must be null"
       }. ${COPYRIGHT_RULE}`,
       JSON.stringify({

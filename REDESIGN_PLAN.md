@@ -22,8 +22,9 @@ pressure while retaining the round table as an establishing scene.
    the model.
 5. **Unresolved tension is not a failure.** Alex names what remains open and
    only closes after the user chooses to wrap or the bounded round cap is met.
-6. **Mood shapes delivery, not truth or flow.** A user-selected table mood
-   changes conversational temperature without adding another model call.
+6. **Atmosphere emerges instead of being selected.** The drawn readers establish
+   a baseline; user wording and scheduled conversation events adjust it gradually.
+   It changes delivery, never truth, identity, flow, or model-call count.
 7. **Playback never loses its reason.** Transcript viewing and page visibility
    pause automatic playback temporarily; manual pause remains manual.
 
@@ -32,12 +33,15 @@ pressure while retaining the round table as an establishing scene.
 ### Setup
 
 - Keep language, generation mode, and book-scope selection.
-- Add one table-mood choice:
-  - `warm`: relaxed, generous, allows uncertainty.
-  - `playful`: light wit and friendly teasing when the conversation supports it.
-  - `intense`: direct, evidence-driven disagreement without hostility.
-- Mood is a baseline. Recent user wording may soften or enliven a turn, but the
-  model must not mechanically echo laughter or force jokes.
+- Do not add a mood selector. Each persona carries numeric social-temperament
+  data; the selected trio deterministically establishes the initial room state.
+- Recent user wording may warm, enliven, or sharpen the room. Code-scheduled
+  challenges raise tension while support and closing turns soften it.
+- The model receives the current state in the existing utterance request. It
+  must not mechanically echo laughter, force jokes, or collapse distinct voices
+  into one group personality.
+- Show the room state only in development diagnostics. Hide it in production
+  and automated tests so it remains an implementation aid, not a product control.
 
 ### Introduction and testimony
 
@@ -123,8 +127,9 @@ type PlaybackPauseReason = "manual" | "transcript" | "history" | "hidden" | null
 
 ## Contracts and state
 
-- Add `TableMood` to `SessionState`, run options, utterance requests, and strict
-  HTTP schemas.
+- Add `SocialTemperament` to persona data and `RoomAtmosphere` to `SessionState`,
+  utterance requests, and strict HTTP schemas. Atmosphere updates remain pure,
+  deterministic engine functions and require no additional generation call.
 - Add `DiscussionAction = "join" | "listen" | "wrap"` as a UI/engine callback,
   not a model output.
 - Add persona-to-persona utterance tasks with explicit `targetSpeaker`.
@@ -140,13 +145,15 @@ type PlaybackPauseReason = "manual" | "transcript" | "history" | "hidden" | null
   - `listen` is capped at one extension;
   - a user who joins is challenged and receives the immediate reply turn;
   - `wrap` cannot skip Alex's tension summary;
-  - mood and `refersTo` reach every relevant request.
+  - the initial atmosphere is deterministic and all values remain bounded;
+  - user wording and scheduled tasks update atmosphere gradually;
+  - atmosphere and `refersTo` reach every relevant request.
 - Playback tests:
   - transient pauses resume from their remaining delay;
   - manual pauses never auto-resume.
 - Mock evaluations:
   - join route, observer route, immediate-wrap route;
-  - warm, playful, and intense moods;
+  - varied persona-derived atmosphere baselines and user-language changes;
   - no book-specific hardcoding.
 - Run one paid live session only after all mock and structural checks pass.
 

@@ -17,8 +17,8 @@ import type {
   ConfirmedBook,
   DiscussionAction,
   PersonaCard,
+  RoomAtmosphere,
   StageId,
-  TableMood,
   UserTurnKind,
   Utterance,
 } from "./types";
@@ -59,13 +59,6 @@ const COPY = {
     description:
       "Test the pacing before the room gets decorated. Reader turns advance at a natural reading pace, and the table stops when it is your turn.",
     bookSetup: "Bring a book to the table",
-    moodLabel: "Table mood",
-    moodLabels: { warm: "Warm", playful: "Playful", intense: "Intense" },
-    moodHints: {
-      warm: "Relaxed, generous, and open to uncertainty.",
-      playful: "Light wit when the conversation invites it.",
-      intense: "Direct, energetic disagreement without hostility.",
-    },
     scopeLabel: "Discussion scope",
     scopeLabels: { single_book: "One book", series: "Full series" },
     singleBookHint: "Discuss one volume or one standalone work.",
@@ -187,13 +180,6 @@ const COPY = {
     description:
       "원탁을 꾸미기 전에 대화의 호흡부터 확인합니다. 참여자 발언은 읽을 시간에 맞춰 자동으로 이어지고, 사용자 차례가 오면 테이블이 멈춥니다.",
     bookSetup: "읽은 책을 테이블에 올려주세요",
-    moodLabel: "소모임 분위기",
-    moodLabels: { warm: "편안하게", playful: "유쾌하게", intense: "치열하게" },
-    moodHints: {
-      warm: "서두르지 않고 서로의 생각을 편안하게 듣습니다.",
-      playful: "대화가 허락할 때 가벼운 농담도 자연스럽게 나눕니다.",
-      intense: "적대적이지 않되 근거와 반론을 직접 부딪칩니다.",
-    },
     scopeLabel: "토론 범위",
     scopeLabels: { single_book: "한 권", series: "시리즈 전체" },
     singleBookHint: "한 권 또는 단독 작품만 이야기합니다.",
@@ -744,7 +730,7 @@ export function App() {
   const [liveAvailability, setLiveAvailability] = useState<LiveAvailability>("checking");
   const [liveModel, setLiveModel] = useState("gpt-5.6");
   const [bookScope, setBookScope] = useState<BookScope>("single_book");
-  const [tableMood, setTableMood] = useState<TableMood>("warm");
+  const [roomAtmosphere, setRoomAtmosphere] = useState<RoomAtmosphere>();
   const [bookTitleInput, setBookTitleInput] = useState("");
   const [bookAuthorInput, setBookAuthorInput] = useState("");
   const [confirmedBook, setConfirmedBook] = useState<ConfirmedBook>();
@@ -1069,6 +1055,7 @@ export function App() {
     setPlaybackPaused(false);
     setActiveSpeaker(undefined);
     setUpcomingSpeaker(undefined);
+    setRoomAtmosphere(undefined);
 
     const generationClient =
       generationClientRef.current ??
@@ -1104,13 +1091,15 @@ export function App() {
         setCopyStatus("idle");
         setTranscript((current) => [...current, utterance]);
       },
+      onAtmosphereChange(atmosphere) {
+        setRoomAtmosphere(atmosphere);
+      },
     });
 
     void engine
       .run({
         confirmedBook,
         language,
-        tableMood,
         seed,
         waitForAdvance(turn) {
           return new Promise<void>((resolve) => {
@@ -1228,7 +1217,7 @@ export function App() {
     setScreen("setup");
     setBookTitleInput("");
     setBookAuthorInput("");
-    setTableMood("warm");
+    setRoomAtmosphere(undefined);
     setConfirmedBook(undefined);
     setSessionPersonas([]);
     setIdentificationError("");
@@ -1349,29 +1338,6 @@ export function App() {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
               {copy.bookSetup}
             </p>
-            <div className="mt-4">
-              <p className="text-sm font-semibold text-stone-700">{copy.moodLabel}</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3" role="group" aria-label={copy.moodLabel}>
-                {(["warm", "playful", "intense"] as const).map((mood) => (
-                  <button
-                    key={mood}
-                    type="button"
-                    aria-pressed={tableMood === mood}
-                    onClick={() => setTableMood(mood)}
-                    className={`rounded-xl border p-3 text-left transition ${
-                      tableMood === mood
-                        ? "border-emerald-800 bg-emerald-50 text-emerald-950"
-                        : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
-                    }`}
-                  >
-                    <span className="block text-sm font-semibold">{copy.moodLabels[mood]}</span>
-                    <span className="mt-1 block text-xs leading-5 text-stone-500">
-                      {copy.moodHints[mood]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="mt-4">
               <p className="text-sm font-semibold text-stone-700">{copy.scopeLabel}</p>
               <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label={copy.scopeLabel}>
@@ -1579,7 +1545,7 @@ export function App() {
                 : copy.start}
           </button>
         </section>
-        <DiagnosticsPanel language={language} />
+        <DiagnosticsPanel language={language} roomAtmosphere={roomAtmosphere} />
       </main>
     );
   }
@@ -1675,7 +1641,7 @@ export function App() {
             )}
           </div>
         </section>
-        <DiagnosticsPanel language={language} />
+        <DiagnosticsPanel language={language} roomAtmosphere={roomAtmosphere} />
       </main>
     );
   }
@@ -1932,7 +1898,7 @@ export function App() {
           </section>
         </div>
       )}
-      <DiagnosticsPanel language={language} />
+      <DiagnosticsPanel language={language} roomAtmosphere={roomAtmosphere} />
     </main>
   );
 }

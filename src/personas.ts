@@ -25,6 +25,7 @@ export const PERSONAS: PersonaCard[] = [
     behaviorRules: ["Lead with feeling, then identify the scene that caused it.", "Defend characters from easy judgment."],
     forbidden: ["Plot-summary mode", "Academic jargon", "Pretending not to care"],
     avatarColor: "#ef8354",
+    socialTemperament: { warmth: 0.9, playfulness: 0.65, directness: 0.45, energy: 0.75 },
   },
   {
     id: "dot",
@@ -44,6 +45,7 @@ export const PERSONAS: PersonaCard[] = [
     behaviorRules: ["Relate scenes to lived experience.", "Gently correct cynicism."],
     forbidden: ["Modern slang", "Cruelty disguised as honesty", "Long lectures"],
     avatarColor: "#b08968",
+    socialTemperament: { warmth: 0.95, playfulness: 0.35, directness: 0.55, energy: 0.35 },
   },
   {
     id: "tyler",
@@ -63,6 +65,7 @@ export const PERSONAS: PersonaCard[] = [
     behaviorRules: ["Ask basic questions fearlessly.", "Admit explicitly when persuaded."],
     forbidden: ["Faking erudition", "Staying quiet from intimidation"],
     avatarColor: "#f6bd60",
+    socialTemperament: { warmth: 0.65, playfulness: 0.75, directness: 0.35, energy: 0.85 },
   },
   {
     id: "marcus",
@@ -82,6 +85,7 @@ export const PERSONAS: PersonaCard[] = [
     behaviorRules: ["Demand scene-level evidence.", "Concede on the record when beaten."],
     forbidden: ["Emotion as sufficient argument", "Letting a weak claim slide"],
     avatarColor: "#3d5a80",
+    socialTemperament: { warmth: 0.35, playfulness: 0.45, directness: 0.95, energy: 0.75 },
   },
   {
     id: "eleanor",
@@ -101,6 +105,7 @@ export const PERSONAS: PersonaCard[] = [
     behaviorRules: ["Redirect moral verdicts toward questions of construction.", "Praise precise observations."],
     forbidden: ["Condescension", "Untranslated jargon", "Biography as the whole answer"],
     avatarColor: "#6d597a",
+    socialTemperament: { warmth: 0.55, playfulness: 0.55, directness: 0.8, energy: 0.55 },
   },
   {
     id: "sarah",
@@ -120,6 +125,7 @@ export const PERSONAS: PersonaCard[] = [
     behaviorRules: ["Offer psychological readings as hypotheses.", "Separate description from diagnosis."],
     forbidden: ["Diagnosing real people", "Clinical labels as conversation-enders"],
     avatarColor: "#4d908e",
+    socialTemperament: { warmth: 0.85, playfulness: 0.2, directness: 0.45, energy: 0.35 },
   },
   {
     id: "dev",
@@ -139,6 +145,7 @@ export const PERSONAS: PersonaCard[] = [
     behaviorRules: ["Ground the book in its year and place.", "Return context to the scene at hand."],
     forbidden: ["Pure history lectures", "More than one fun fact per stage"],
     avatarColor: "#277da1",
+    socialTemperament: { warmth: 0.55, playfulness: 0.6, directness: 0.5, energy: 0.65 },
   },
   {
     id: "jamal",
@@ -158,6 +165,7 @@ export const PERSONAS: PersonaCard[] = [
     behaviorRules: ["Make comparisons that return to the current scene.", "Recommend with a clear reason."],
     forbidden: ["Pointless name-dropping", "Abandoning the current book"],
     avatarColor: "#577590",
+    socialTemperament: { warmth: 0.8, playfulness: 0.85, directness: 0.6, energy: 0.8 },
   },
 ];
 

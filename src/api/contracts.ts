@@ -10,7 +10,14 @@ export const bookVerificationStatusSchema = z.enum([
   "mock",
 ]);
 export const bookScopeSchema = z.enum(["single_book", "series"]);
-export const tableMoodSchema = z.enum(["warm", "playful", "intense"]);
+export const roomAtmosphereSchema = z
+  .object({
+    warmth: z.number().min(0).max(1),
+    playfulness: z.number().min(0).max(1),
+    tension: z.number().min(0).max(1),
+    energy: z.number().min(0).max(1),
+  })
+  .strict();
 
 const bookSourceSchema = z
   .object({ url: boundedString(8, 2_000) })
@@ -71,6 +78,14 @@ const personaCardSchema = z
     behaviorRules: z.array(boundedString(1, 300)).max(12),
     forbidden: z.array(boundedString(1, 300)).max(12),
     avatarColor: boundedString(1, 40),
+    socialTemperament: z
+      .object({
+        warmth: z.number().min(0).max(1),
+        playfulness: z.number().min(0).max(1),
+        directness: z.number().min(0).max(1),
+        energy: z.number().min(0).max(1),
+      })
+      .strict(),
   })
   .strict();
 
@@ -166,7 +181,7 @@ export const readingNotesRequestSchema = z
 export const utteranceRequestSchema = z
   .object({
     language: z.enum(["en", "ko"]),
-    tableMood: tableMoodSchema,
+    roomAtmosphere: roomAtmosphereSchema,
     book: confirmedBookSchema,
     speaker: z.union([personaCardSchema, z.literal("moderator")]),
     notes: internalReadingNotesSchema.optional(),

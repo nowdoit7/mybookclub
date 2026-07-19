@@ -6,7 +6,8 @@ import {
   getGenerationDiagnostics,
   subscribeToGenerationDiagnostics,
 } from "../api/diagnostics";
-import type { AppLanguage } from "../types";
+import { describeRoomAtmosphere } from "../engine/roomAtmosphere";
+import type { AppLanguage, RoomAtmosphere } from "../types";
 
 const COPY = {
   en: {
@@ -21,6 +22,11 @@ const COPY = {
     request: "App request",
     upstream: "OpenAI request",
     pending: "IN PROGRESS",
+    atmosphere: "Current room atmosphere",
+    warmth: "Warmth",
+    playfulness: "Playfulness",
+    tension: "Tension",
+    energy: "Energy",
   },
   ko: {
     button: "진단 정보",
@@ -34,6 +40,11 @@ const COPY = {
     request: "앱 요청",
     upstream: "OpenAI 요청",
     pending: "진행 중",
+    atmosphere: "현재 소모임 분위기",
+    warmth: "따뜻함",
+    playfulness: "유쾌함",
+    tension: "긴장감",
+    energy: "활기",
   },
 } satisfies Record<AppLanguage, Record<string, string>>;
 
@@ -54,7 +65,13 @@ async function copyText(text: string): Promise<void> {
   if (!copied) throw new Error("Clipboard copy failed.");
 }
 
-export function DiagnosticsPanel({ language }: { language: AppLanguage }) {
+export function DiagnosticsPanel({
+  language,
+  roomAtmosphere,
+}: {
+  language: AppLanguage;
+  roomAtmosphere?: RoomAtmosphere;
+}) {
   const diagnostics = useSyncExternalStore(
     subscribeToGenerationDiagnostics,
     getGenerationDiagnostics,
@@ -64,7 +81,7 @@ export function DiagnosticsPanel({ language }: { language: AppLanguage }) {
   const [copied, setCopied] = useState(false);
   const copy = COPY[language];
 
-  if (!import.meta.env.DEV) return null;
+  if (!import.meta.env.DEV || import.meta.env.MODE === "test") return null;
 
   const handleCopy = async () => {
     try {
@@ -84,6 +101,7 @@ export function DiagnosticsPanel({ language }: { language: AppLanguage }) {
         className="fixed bottom-4 right-4 z-[60] rounded-full border border-stone-300 bg-white px-4 py-2 text-xs font-semibold text-stone-700 shadow-lg hover:bg-stone-50"
       >
         {copy.button}
+        {roomAtmosphere ? ` · ${describeRoomAtmosphere(roomAtmosphere, language)}` : ""}
         {diagnostics.length > 0 ? ` · ${diagnostics.length}` : ""}
       </button>
     );
@@ -122,6 +140,26 @@ export function DiagnosticsPanel({ language }: { language: AppLanguage }) {
             {copy.clear}
           </button>
         </div>
+        {roomAtmosphere && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-800">
+              {copy.atmosphere}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-amber-950">
+              {describeRoomAtmosphere(roomAtmosphere, language)}
+            </p>
+            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-amber-900/75">
+              {(
+                ["warmth", "playfulness", "tension", "energy"] as const
+              ).map((key) => (
+                <div key={key} className="flex justify-between gap-2">
+                  <dt>{copy[key]}</dt>
+                  <dd className="font-mono">{Math.round(roomAtmosphere[key] * 100)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
       </div>
 
       <div className="overflow-y-auto p-3">

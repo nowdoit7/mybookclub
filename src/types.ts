@@ -1,9 +1,22 @@
 export type Category = "emotional" | "analytical" | "contextual";
 export type AppLanguage = "en" | "ko";
 export type BookScope = "single_book" | "series";
-export type TableMood = "warm" | "playful" | "intense";
 export type DiscussionAction = "join" | "listen" | "wrap";
 export type BookVerificationStatus = "verified" | "ambiguous" | "not_found" | "mock";
+
+export interface SocialTemperament {
+  warmth: number;
+  playfulness: number;
+  directness: number;
+  energy: number;
+}
+
+export interface RoomAtmosphere {
+  warmth: number;
+  playfulness: number;
+  tension: number;
+  energy: number;
+}
 
 export interface BookSource {
   url: string;
@@ -27,6 +40,7 @@ export interface PersonaCard {
   behaviorRules: string[];
   forbidden: string[];
   avatarColor: string;
+  socialTemperament: SocialTemperament;
 }
 
 export interface ReadingNotes {
@@ -87,7 +101,7 @@ export interface Utterance {
 
 export interface SessionState {
   language: AppLanguage;
-  tableMood: TableMood;
+  roomAtmosphere: RoomAtmosphere;
   book: ConfirmedBook;
   personas: PersonaCard[];
   notes: Record<string, ReadingNotes>;

@@ -38,3 +38,5 @@
 - 2026-07-19: Replaced the fixed user-centered panel with two lead readers who must clash before a code-owned join/listen/wrap checkpoint; independent testimony no longer bends around the user's previous answer.
 - 2026-07-19: Added warm/playful/intense delivery as session data, preserved one bounded listening extension, and kept user rebuttal enforcement mandatory whenever the user joins.
 - 2026-07-19: Expanded the desktop session into an unobstructed portrait stage plus a recent-dialogue/response rail; narrow screens keep the stacked flow and sticky response access.
+- 2026-07-19: Removed the artificial mood selector; the drawn readers now establish a deterministic room atmosphere that evolves with user wording and code-owned debate events without another model call.
+- 2026-07-19: Exposed the current atmosphere only in development diagnostics and hid it from production and automated tests so it stays a tuning aid rather than a user control.

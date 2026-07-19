@@ -6,8 +6,8 @@ different lenses and defend their positions.
 > Build status: the full mock and server-backed GPT-5.6 session loops are
 > implemented. The current redesign adds a portrait-led conversation stage,
 > independent reader testimony, directed reader-to-reader disagreement, a
-> bounded join/listen/wrap checkpoint, selectable table mood, and a scrollable
-> recent-dialogue dock. Final deployment polish remains.
+> bounded join/listen/wrap checkpoint, an emergent room atmosphere, and a
+> scrollable recent-dialogue dock. Final deployment polish remains.
 
 The completion screen renders the recap as a styled document and keeps the full
 conversation available in a separate tab for review and export.
@@ -57,7 +57,8 @@ npm run build
 - Six same-origin generation routes protected by origin, rate, body-size, and session-call limits
 - Korean/English generation selected once at session start
 - Language-aware 3–10 second reading pace with pause, skip-now, and manual mode
-- User-selected warm, playful, or intense conversational delivery
+- Persona-derived room atmosphere that evolves with user wording and debate events
+- Development-only atmosphere diagnostics with no additional model call
 - Code-selected lead debaters with explicit persona-to-persona targets
 - A bounded discussion checkpoint: join, listen to one more exchange, or wrap
 - A short round-table establishing scene followed by a portrait-led dialogue stage

@@ -24,9 +24,9 @@ import type {
   ReadingNotes,
   DiscussionFocus,
   DiscussionAction,
+  RoomAtmosphere,
   SessionState,
   StageId,
-  TableMood,
   UserTurnKind,
   Utterance,
 } from "../types";
@@ -36,6 +36,11 @@ import {
   validateUtteranceQuality,
 } from "./qualityValidation";
 import { prepareTranscriptContext } from "./transcriptContext";
+import {
+  deriveInitialAtmosphere,
+  updateAtmosphereForTask,
+  updateAtmosphereFromUser,
+} from "./roomAtmosphere";
 
 export interface ScriptedUserInputs {
   intro: string;
@@ -48,7 +53,6 @@ export interface ScriptedUserInputs {
 
 export interface RunSessionOptions {
   language?: AppLanguage;
-  tableMood?: TableMood;
   title?: string;
   author?: string;
   scope?: "single_book" | "series";
@@ -56,6 +60,7 @@ export interface RunSessionOptions {
   seed?: string;
   userInputs?: Partial<ScriptedUserInputs>;
   onUtterance?: (utterance: Utterance) => void;
+  onAtmosphereChange?: (atmosphere: RoomAtmosphere) => void;
   onStatus?: (message: string) => void;
   waitForAdvance?: (turn: {
     stage: StageId;
@@ -220,6 +225,7 @@ export class SessionEngine {
   private readonly shelfCitations = new Set<string>();
   private lastChallengerId?: string;
   private readonly onUtterance?: (utterance: Utterance) => void;
+  private readonly onAtmosphereChange?: (atmosphere: RoomAtmosphere) => void;
   private readonly onStatus?: (message: string) => void;
   private language: AppLanguage = "en";
   private waitForAdvance?: RunSessionOptions["waitForAdvance"];
@@ -230,9 +236,13 @@ export class SessionEngine {
 
   constructor(
     private readonly client: GenerationClient,
-    callbacks: Pick<RunSessionOptions, "onUtterance" | "onStatus"> = {},
+    callbacks: Pick<
+      RunSessionOptions,
+      "onUtterance" | "onStatus" | "onAtmosphereChange"
+    > = {},
   ) {
     this.onUtterance = callbacks.onUtterance;
+    this.onAtmosphereChange = callbacks.onAtmosphereChange;
     this.onStatus = callbacks.onStatus;
   }
 
@@ -264,7 +274,7 @@ export class SessionEngine {
 
     this.state = {
       language: this.language,
-      tableMood: options.tableMood ?? "warm",
+      roomAtmosphere: deriveInitialAtmosphere(personas),
       book,
       personas,
       notes: {},
@@ -275,6 +285,7 @@ export class SessionEngine {
       discussionListenCount: 0,
       seed,
     };
+    this.onAtmosphereChange?.(structuredClone(this.state.roomAtmosphere));
 
     this.onStatus?.("Generating private reading notes in parallel");
     let readyNoteCount = 0;
@@ -348,7 +359,7 @@ export class SessionEngine {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const output = await this.client.generateUtterance({
         language: this.language,
-        tableMood: this.state.tableMood,
+        roomAtmosphere: updateAtmosphereForTask(this.state.roomAtmosphere, task),
         book: this.state.book,
         speaker,
         notes:
@@ -440,7 +451,7 @@ export class SessionEngine {
       this.prepareGenerated(speaker, task, options),
       advancePromise,
     ]);
-    return this.commitGenerated(prepared.speaker, prepared.output, prepared.shelfKey);
+    return this.commitGenerated(prepared.speaker, prepared.output, prepared.shelfKey, task);
   }
 
   private async appendPrepared(
@@ -452,13 +463,14 @@ export class SessionEngine {
       task,
       speaker: prepared.speaker,
     });
-    return this.commitGenerated(prepared.speaker, prepared.output, prepared.shelfKey);
+    return this.commitGenerated(prepared.speaker, prepared.output, prepared.shelfKey, task);
   }
 
   private commitGenerated(
     speaker: PersonaCard | "moderator",
     output: UtteranceOutput,
     shelfKey: string,
+    task: UtteranceTask,
   ): Utterance {
     const utterance: Utterance = {
       speaker: speaker === "moderator" ? "moderator" : speaker.id,
@@ -471,6 +483,8 @@ export class SessionEngine {
     if (output.shelf_ref && shelfKey) this.shelfCitations.add(shelfKey);
     this.state.transcript.push(utterance);
     this.state.stageTurnCount += 1;
+    this.state.roomAtmosphere = updateAtmosphereForTask(this.state.roomAtmosphere, task);
+    this.onAtmosphereChange?.(structuredClone(this.state.roomAtmosphere));
     this.onUtterance?.(utterance);
     return utterance;
   }
@@ -488,6 +502,11 @@ export class SessionEngine {
     };
     this.state.transcript.push(utterance);
     this.state.stageTurnCount += 1;
+    this.state.roomAtmosphere = updateAtmosphereFromUser(
+      this.state.roomAtmosphere,
+      trimmed,
+    );
+    this.onAtmosphereChange?.(structuredClone(this.state.roomAtmosphere));
     this.onUtterance?.(utterance);
 
     if (!target) return;

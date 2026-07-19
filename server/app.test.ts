@@ -82,7 +82,12 @@ describe("server boundary", () => {
       .set(sessionHeaders)
       .send({
         language: "en",
-        tableMood: "warm",
+        roomAtmosphere: {
+          warmth: 0.7,
+          playfulness: 0.35,
+          tension: 0.25,
+          energy: 0.55,
+        },
         book,
         speaker: "moderator",
         stage: "INTRO",
