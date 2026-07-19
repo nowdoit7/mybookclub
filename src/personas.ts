@@ -161,6 +161,22 @@ export const PERSONAS: PersonaCard[] = [
   },
 ];
 
+const PORTRAIT_URLS: Record<string, string> = {
+  moderator: "/portraits/alex.webp",
+  maddie: "/portraits/maddie.webp",
+  dot: "/portraits/dot.webp",
+  tyler: "/portraits/tyler.webp",
+  marcus: "/portraits/marcus.webp",
+  eleanor: "/portraits/eleanor.webp",
+  sarah: "/portraits/sarah.webp",
+  dev: "/portraits/dev.webp",
+  jamal: "/portraits/jamal.webp",
+};
+
+export function portraitUrlFor(speaker: string): string | undefined {
+  return PORTRAIT_URLS[speaker];
+}
+
 function hashSeed(seed: string): number {
   let hash = 2166136261;
   for (const character of seed) {

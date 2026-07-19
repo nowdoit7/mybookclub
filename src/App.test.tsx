@@ -233,7 +233,7 @@ describe("text prototype", () => {
         ).toBeVisible(),
       { timeout: 2_500 },
     );
-    expect(screen.queryAllByRole("article")).toHaveLength(0);
+    expect(screen.queryAllByRole("article")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "일시정지" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "바로 다음" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "일시정지" }));
@@ -259,15 +259,16 @@ describe("text prototype", () => {
     await waitFor(() =>
       expect(within(dialogue).getByText(/Welcome to The Reading Table/u)).toBeVisible(),
     );
-    expect(screen.queryAllByRole("article")).toHaveLength(0);
+    expect(screen.queryAllByRole("article")).toHaveLength(1);
     expect(within(dialogue).getByText("Alex")).toBeVisible();
+    expect(within(dialogue).getByRole("img", { name: "Alex" })).toBeVisible();
     expect(screen.getByRole("region", { name: "Reading table" })).toBeVisible();
-    expect(screen.getByText("Speaking")).toBeVisible();
-    expect(screen.getByText("Next")).toBeVisible();
+    expect(screen.queryByText(/^Speaking$/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Next$/u)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "View transcript 1" }));
     expect(screen.getByRole("dialog", { name: "Conversation transcript" })).toBeVisible();
-    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Copy full transcript" }));
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining("## Intro\n\n**Alex**"),
@@ -301,6 +302,7 @@ describe("text prototype", () => {
         const readyControl =
           screen.queryByRole("heading", { name: "모임이 끝났습니다" }) ??
           screen.queryByRole("textbox") ??
+          screen.queryByRole("button", { name: "내 의견 보태기" }) ??
           screen.queryByRole("button", { name: "다음 →" });
         expect(readyControl).not.toBeNull();
       });
@@ -308,9 +310,18 @@ describe("text prototype", () => {
 
       const textbox = screen.queryByRole("textbox");
       if (textbox) {
+        if (inputIndex === 4) {
+          expect(
+            within(screen.getByRole("region", { name: "현재 대화" })).getByText(
+              "지금 답변할 발언",
+            ),
+          ).toBeVisible();
+        }
         fireEvent.change(textbox, { target: { value: inputs[inputIndex] } });
         inputIndex += 1;
         fireEvent.click(screen.getByRole("button", { name: "공유" }));
+      } else if (screen.queryByRole("button", { name: "내 의견 보태기" })) {
+        fireEvent.click(screen.getByRole("button", { name: "내 의견 보태기" }));
       } else {
         const next = screen.getByRole("button", { name: "다음 →" });
         await waitFor(() => expect(next).toBeEnabled());
@@ -328,8 +339,8 @@ describe("text prototype", () => {
     expect(screen.queryByText("## 토론 요약")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Markdown 다운로드" })).toBeVisible();
 
-    fireEvent.click(screen.getByRole("tab", { name: "전체 대화 29" }));
-    expect(screen.getAllByRole("article")).toHaveLength(29);
+    fireEvent.click(screen.getByRole("tab", { name: "전체 대화 32" }));
+    expect(screen.getAllByRole("article")).toHaveLength(32);
     expect(screen.getByRole("button", { name: "전체 대화 복사" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("tab", { name: "모임 기록" }));

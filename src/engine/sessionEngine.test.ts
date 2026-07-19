@@ -14,7 +14,8 @@ describe("SessionEngine", () => {
     });
 
     expect(result.state.stage).toBe("WRAP_UP");
-    expect(result.state.transcript).toHaveLength(29);
+    expect(result.state.transcript).toHaveLength(32);
+    expect(result.state.tableMood).toBe("warm");
     expect(new Set(result.state.transcript.map(({ stage }) => stage))).toEqual(
       new Set([
         "INTRO",
@@ -88,7 +89,7 @@ describe("SessionEngine", () => {
     expect(discussionRepliesToUser).toHaveLength(2);
   });
 
-  it("keeps the main discussion focused on the user, one challenger, and one supporter", async () => {
+  it("opens with a directed reader clash before the user joins", async () => {
     const { state } = await new SessionEngine(new MockGenerationClient()).run({
       title: "A Reader-Selected Book",
       seed: "demo",
@@ -98,9 +99,21 @@ describe("SessionEngine", () => {
       turn.speaker === "user" ? [index] : [],
     );
 
-    expect(turns).toHaveLength(8);
+    expect(turns).toHaveLength(11);
     expect(userIndexes).toHaveLength(2);
     expect(state.discussionRoles).toBeDefined();
+    expect(turns[1]).toMatchObject({
+      speaker: state.discussionRoles?.leadA,
+      refersTo: state.discussionRoles?.leadB,
+    });
+    expect(turns[2]).toMatchObject({
+      speaker: state.discussionRoles?.leadB,
+      refersTo: state.discussionRoles?.leadA,
+    });
+    expect(turns[3]).toMatchObject({
+      speaker: state.discussionRoles?.leadA,
+      refersTo: state.discussionRoles?.leadB,
+    });
 
     const challengeIndex = turns.findIndex(
       ({ speaker, refersTo }) =>
@@ -112,9 +125,28 @@ describe("SessionEngine", () => {
     expect(turns[challengeIndex + 2]?.speaker).toBe(state.discussionRoles?.challenger);
     expect(turns[challengeIndex + 3]?.speaker).toBe(state.discussionRoles?.supporter);
 
-    if (state.discussionRoles?.observer) {
-      expect(turns.some(({ speaker }) => speaker === state.discussionRoles?.observer)).toBe(false);
-    }
+  });
+
+  it("lets the user observe one bounded extension and then wrap without a forced position", async () => {
+    const decisions = ["listen", "wrap"] as const;
+    let decisionIndex = 0;
+    const { state } = await new SessionEngine(new MockGenerationClient()).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+      async requestDiscussionAction({ canListen }) {
+        const decision = decisions[decisionIndex];
+        decisionIndex += 1;
+        if (!canListen) expect(decision).not.toBe("listen");
+        return decision;
+      },
+    });
+
+    const discussion = state.transcript.filter(({ stage }) => stage === "DISCUSSION");
+    expect(state.discussionListenCount).toBe(1);
+    expect(decisionIndex).toBe(2);
+    expect(discussion.filter(({ speaker }) => speaker === "user")).toHaveLength(0);
+    expect(discussion).toHaveLength(7);
+    expect(state.userStances[state.activeTopic!]).toBeUndefined();
   });
 
   it("continues safely when the user passes both discussion turns", async () => {
@@ -155,6 +187,44 @@ describe("SessionEngine", () => {
     expect(firstImpressionContexts.every(([speaker]) => speaker === "moderator")).toBe(true);
   });
 
+  it("prepares both memorable scenes as independent testimony", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateUtterance = client.generateUtterance.bind(client);
+    const sceneContexts: string[][] = [];
+    client.generateUtterance = async (input) => {
+      if (input.task === "MEMORABLE_SCENE") {
+        sceneContexts.push(input.recentTranscript.map(({ speaker }) => speaker));
+      }
+      return originalGenerateUtterance(input);
+    };
+
+    await new SessionEngine(client).run({ title: "A Reader-Selected Book", seed: "demo" });
+
+    expect(sceneContexts).toHaveLength(2);
+    expect(sceneContexts.every((speakers) => speakers.length === 1)).toBe(true);
+    expect(sceneContexts.every(([speaker]) => speaker === "moderator")).toBe(true);
+  });
+
+  it("passes the user-selected table mood to every generated turn", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateUtterance = client.generateUtterance.bind(client);
+    const moods: string[] = [];
+    client.generateUtterance = async (input) => {
+      moods.push(input.tableMood);
+      return originalGenerateUtterance(input);
+    };
+
+    const { state } = await new SessionEngine(client).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+      tableMood: "playful",
+    });
+
+    expect(state.tableMood).toBe("playful");
+    expect(moods.length).toBeGreaterThan(0);
+    expect(new Set(moods)).toEqual(new Set(["playful"]));
+  });
+
   it("pauses before every generated turn and accepts interactive user input", async () => {
     const suppliedInputs = [
       "Intro input",
@@ -183,7 +253,7 @@ describe("SessionEngine", () => {
       },
     });
 
-    expect(advanceCount).toBe(23);
+    expect(advanceCount).toBe(26);
     expect(inputCount).toBe(6);
     expect(completionWaitCount).toBe(1);
     expect(state.transcript.filter(({ speaker }) => speaker === "user").map(({ text }) => text)).toEqual(
@@ -284,7 +354,7 @@ describe("SessionEngine", () => {
     });
 
     expect(result.state.book.title).toBe("최근에 읽은 책");
-    expect(result.state.transcript).toHaveLength(29);
+    expect(result.state.transcript).toHaveLength(32);
     expect(result.state.transcript[0].text).toMatch(/[가-힣]/u);
     expect(result.recapMarkdown).toContain("## 토론 요약");
     expect(result.recapMarkdown).toContain("## 잠들기 전 생각할 질문");

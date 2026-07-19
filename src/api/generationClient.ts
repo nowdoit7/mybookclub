@@ -14,6 +14,7 @@ import type {
   PersonaCard,
   ReadingNotes,
   StageId,
+  TableMood,
   Utterance,
 } from "../types";
 
@@ -28,6 +29,7 @@ export interface ReadingNotesRequest {
 
 export interface UtteranceRequest {
   language: AppLanguage;
+  tableMood: TableMood;
   book: ConfirmedBook;
   speaker: PersonaCard | "moderator";
   notes?: ReadingNotes;

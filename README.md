@@ -3,11 +3,11 @@
 An AI book club where three committed readers interpret the same book through
 different lenses and defend their positions.
 
-> Build status: interactive browser prototype complete. Both deterministic mock
-> and server-backed live GPT-5.6 sessions support text-length-aware automatic pacing, pause/skip/manual
-> controls, five hard-stop user turns, current/next-speaker cues,
-> Korean/English selection, a responsive MVP round-table view, and a localized
-> recap screen. The stance map and final visual polish are the next milestones.
+> Build status: the full mock and server-backed GPT-5.6 session loops are
+> implemented. The current redesign adds a portrait-led conversation stage,
+> independent reader testimony, directed reader-to-reader disagreement, a
+> bounded join/listen/wrap checkpoint, selectable table mood, and a scrollable
+> recent-dialogue dock. Final deployment polish remains.
 
 The completion screen renders the recap as a styled document and keeps the full
 conversation available in a separate tab for review and export.
@@ -57,8 +57,12 @@ npm run build
 - Six same-origin generation routes protected by origin, rate, body-size, and session-call limits
 - Korean/English generation selected once at session start
 - Language-aware 3–10 second reading pace with pause, skip-now, and manual mode
-- Compact participant icons with current/next-speaker highlighting
-- Responsive five-seat oval table with a dedicated full current-dialogue panel
+- User-selected warm, playful, or intense conversational delivery
+- Code-selected lead debaters with explicit persona-to-persona targets
+- A bounded discussion checkpoint: join, listen to one more exchange, or wrap
+- A short round-table establishing scene followed by a portrait-led dialogue stage
+- Nine optimized illustrated portraits with a neutral user silhouette fallback
+- A fixed-height recent-dialogue dock that keeps challenged lines in view
 - On-demand transcript view that pauses automatic playback while reviewing history
 - Evaluation-ready Markdown transcript copy from the transcript and recap views
 - Browser-only session persistence via `localStorage`
@@ -76,6 +80,18 @@ transcripts.
 
 ## Codex collaboration
 
-The project is being built with Codex and GPT-5.6 for OpenAI Build Week. Key
-product, engineering, and design decisions are recorded in `NOTES.md`; the final
-submission narrative will be completed as the engine and product loop ship.
+Codex was used as an implementation partner and an instrumented test loop, not
+only as a code generator. It helped turn qualitative session feedback into
+deterministic engine rules: introductions before book talk, independent first
+impressions, two-reader conflict before inviting the user, a guaranteed
+challenge when the user joins, and an explicit choice to keep listening or end
+the topic. Those decisions are covered by fast mock tests instead of depending
+on exact generated prose.
+
+GPT-5.6 supplies the language, book verification, private reading notes, and
+recap, while TypeScript owns stage order, speaker selection, rebuttal targets,
+turn caps, and pause state. This separation let Codex simulate complete sessions
+without spending API credits, diagnose live latency with privacy-safe request
+metadata, and reserve paid runs for model-quality validation. Product and
+engineering decisions made during that collaboration are recorded in
+`NOTES.md`, with the current redesign specified in `REDESIGN_PLAN.md`.

@@ -1,7 +1,12 @@
 import { MockGenerationClient } from "../src/api/mockGenerationClient";
 import { countSentences } from "../src/engine/sentenceValidation";
 import { SessionEngine } from "../src/engine/sessionEngine";
-import type { AppLanguage, BookScope, CompletedSession } from "../src/types";
+import type {
+  AppLanguage,
+  BookScope,
+  CompletedSession,
+  TableMood,
+} from "../src/types";
 
 interface Check {
   name: string;
@@ -32,6 +37,9 @@ function evaluate(result: CompletedSession): Check[] {
   const topicOpening = discussion.find(({ speaker }) => speaker === "moderator");
   const discussionUserTurns = discussion.filter(({ speaker }) => speaker === "user");
   const roles = state.discussionRoles;
+  const leadOpeningIndex = discussion.findIndex(
+    ({ speaker, refersTo }) => speaker === roles?.leadA && refersTo === roles?.leadB,
+  );
   const challengeIndex = discussion.findIndex(
     ({ speaker, refersTo }) => speaker === roles?.challenger && refersTo === "user",
   );
@@ -69,15 +77,25 @@ function evaluate(result: CompletedSession): Check[] {
       detail: `${discussionUserTurns.length}/2 user turns in the main discussion`,
     },
     {
-      name: "spotlight roles",
+      name: "persona-to-persona clash",
       passed:
         Boolean(roles) &&
-        discussion[challengeIndex + 2]?.speaker === roles?.challenger &&
-        discussion[challengeIndex + 3]?.speaker === roles?.supporter &&
-        !discussion.some(({ speaker }) => speaker === roles?.observer),
+        roles?.leadA !== roles?.leadB &&
+        discussion[leadOpeningIndex + 1]?.speaker === roles?.leadB &&
+        discussion[leadOpeningIndex + 1]?.refersTo === roles?.leadA &&
+        discussion[leadOpeningIndex + 2]?.speaker === roles?.leadA &&
+        discussion[leadOpeningIndex + 2]?.refersTo === roles?.leadB,
       detail: roles
-        ? `challenger ${roles.challenger}, supporter ${roles.supporter}, observer ${roles.observer ?? "none"}`
+        ? `${roles.leadA} and ${roles.leadB} exchange a position, challenge, and response`
         : "roles missing",
+    },
+    {
+      name: "concentrated discussion floor",
+      passed:
+        new Set(
+          discussion.filter(({ speaker }) => personaIds.has(speaker)).map(({ speaker }) => speaker),
+        ).size <= 3,
+      detail: "two leads carry the clash while at most one reader supports it",
     },
     {
       name: "distinct closing movement",
@@ -102,13 +120,21 @@ interface EvaluationCase {
   title: string;
   author: string;
   scope?: BookScope;
+  tableMood?: TableMood;
 }
 
-async function runCase({ language, title, author, scope = "single_book" }: EvaluationCase): Promise<void> {
+async function runCase({
+  language,
+  title,
+  author,
+  scope = "single_book",
+  tableMood = "warm",
+}: EvaluationCase): Promise<void> {
   const result = await new SessionEngine(new MockGenerationClient()).run({
     title,
     author,
     scope,
+    tableMood,
     seed: `evaluation:${language}:${title}`,
     language,
     userInputs:
@@ -142,6 +168,11 @@ async function runCase({ language, title, author, scope = "single_book" }: Evalu
       passed: result.state.book.workScope === scope,
       detail: result.state.book.workScope,
     },
+    {
+      name: "requested table mood retained",
+      passed: result.state.tableMood === tableMood,
+      detail: result.state.tableMood,
+    },
   ];
   const passed = checks.filter((check) => check.passed).length;
 
@@ -153,11 +184,27 @@ async function runCase({ language, title, author, scope = "single_book" }: Evalu
 }
 
 const cases: EvaluationCase[] = [
-  { language: "en", title: "The Cartographer's Lantern", author: "R. Vale" },
-  { language: "en", title: "Notes on Attention", author: "M. Rowan" },
-  { language: "ko", title: "달의 정원", author: "한여름" },
-  { language: "ko", title: "천천히 읽는 기술", author: "김독자" },
-  { language: "ko", title: "독자가 선택한 삼부작", author: "김작가", scope: "series" },
+  {
+    language: "en",
+    title: "The Cartographer's Lantern",
+    author: "R. Vale",
+    tableMood: "warm",
+  },
+  {
+    language: "en",
+    title: "Notes on Attention",
+    author: "M. Rowan",
+    tableMood: "playful",
+  },
+  { language: "ko", title: "달의 정원", author: "한여름", tableMood: "intense" },
+  { language: "ko", title: "천천히 읽는 기술", author: "김독자", tableMood: "warm" },
+  {
+    language: "ko",
+    title: "독자가 선택한 삼부작",
+    author: "김작가",
+    scope: "series",
+    tableMood: "playful",
+  },
 ];
 
 for (const evaluationCase of cases) await runCase(evaluationCase);

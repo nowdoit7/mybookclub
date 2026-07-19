@@ -23,8 +23,10 @@ import type {
   PersonaCard,
   ReadingNotes,
   DiscussionFocus,
+  DiscussionAction,
   SessionState,
   StageId,
+  TableMood,
   UserTurnKind,
   Utterance,
 } from "../types";
@@ -46,6 +48,7 @@ export interface ScriptedUserInputs {
 
 export interface RunSessionOptions {
   language?: AppLanguage;
+  tableMood?: TableMood;
   title?: string;
   author?: string;
   scope?: "single_book" | "series";
@@ -64,6 +67,10 @@ export interface RunSessionOptions {
     target?: string;
     kind: UserTurnKind;
   }) => Promise<string>;
+  requestDiscussionAction?: (turn: {
+    round: number;
+    canListen: boolean;
+  }) => Promise<DiscussionAction>;
   waitForSessionComplete?: (summary: Utterance) => Promise<void>;
 }
 
@@ -166,6 +173,31 @@ export function selectDiscussionTopic(
   return { topic: candidates[0].topic, evidence: candidates[0].evidence };
 }
 
+export function selectLeadDebaters(
+  topic: string,
+  personas: PersonaCard[],
+  notes: Record<string, ReadingNotes>,
+): [PersonaCard, PersonaCard] {
+  if (personas.length < 2) throw new Error("At least two personas are required for a debate.");
+  let selected: [PersonaCard, PersonaCard] = [personas[0], personas[1]];
+  let largestDistance = -1;
+  for (let left = 0; left < personas.length - 1; left += 1) {
+    for (let right = left + 1; right < personas.length; right += 1) {
+      const distance = Math.abs(
+        getTopicStance(notes[personas[left].id], topic) -
+          getTopicStance(notes[personas[right].id], topic),
+      );
+      if (distance > largestDistance) {
+        largestDistance = distance;
+        selected = [personas[left], personas[right]];
+      }
+    }
+  }
+  return selected.sort(
+    (left, right) => getTopicStance(notes[left.id], topic) - getTopicStance(notes[right.id], topic),
+  ) as [PersonaCard, PersonaCard];
+}
+
 interface PreparedUtterance {
   speaker: PersonaCard | "moderator";
   output: UtteranceOutput;
@@ -193,6 +225,7 @@ export class SessionEngine {
   private waitForAdvance?: RunSessionOptions["waitForAdvance"];
   private requestUserInput?: RunSessionOptions["requestUserInput"];
   private waitForSessionComplete?: RunSessionOptions["waitForSessionComplete"];
+  private requestDiscussionAction?: RunSessionOptions["requestDiscussionAction"];
   private discussionFocusPromise?: Promise<DiscussionFocus | undefined>;
 
   constructor(
@@ -208,6 +241,7 @@ export class SessionEngine {
     this.waitForAdvance = options.waitForAdvance;
     this.requestUserInput = options.requestUserInput;
     this.waitForSessionComplete = options.waitForSessionComplete;
+    this.requestDiscussionAction = options.requestDiscussionAction;
     this.shelfCitations.clear();
     this.lastChallengerId = undefined;
     this.discussionFocusPromise = undefined;
@@ -230,6 +264,7 @@ export class SessionEngine {
 
     this.state = {
       language: this.language,
+      tableMood: options.tableMood ?? "warm",
       book,
       personas,
       notes: {},
@@ -237,6 +272,7 @@ export class SessionEngine {
       stage: "INTRO",
       stageTurnCount: 0,
       userStances: {},
+      discussionListenCount: 0,
       seed,
     };
 
@@ -312,6 +348,7 @@ export class SessionEngine {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const output = await this.client.generateUtterance({
         language: this.language,
+        tableMood: this.state.tableMood,
         book: this.state.book,
         speaker,
         notes:
@@ -320,7 +357,13 @@ export class SessionEngine {
             : this.state.notes[speaker.id],
         stage: this.state.stage,
         task,
-        recentTranscript: prepareTranscriptContext(this.state.transcript),
+        recentTranscript: prepareTranscriptContext(
+          task === "FIRST_IMPRESSION" || task === "MEMORABLE_SCENE"
+            ? this.state.transcript.filter(
+                ({ stage, speaker }) => stage === this.state.stage && speaker === "moderator",
+              )
+            : this.state.transcript,
+        ),
         activeTopic: options.activeTopic,
         targetSpeaker: options.targetSpeaker,
         userArgument: options.userArgument,
@@ -345,6 +388,9 @@ export class SessionEngine {
         (output.utterance.match(/[?？]/gu)?.length ?? 0) !== 1
       ) {
         issues.push("a user challenge must ask exactly one pointed question");
+      }
+      if (options.targetSpeaker && output.refers_to !== options.targetSpeaker) {
+        issues.push("a directed turn must preserve the code-selected target speaker");
       }
       if (issues.length === 0) return { speaker, output, shelfKey };
       validationError = issues.join("; ");
@@ -588,8 +634,12 @@ export class SessionEngine {
         this.state.notes[left.id].overallStance - this.state.notes[right.id].overallStance,
     );
     const sceneReaders = [ranked[0], ranked[ranked.length - 1]];
-    for (const persona of sceneReaders) {
-      await this.appendGenerated(persona, "MEMORABLE_SCENE", { allowShelfReference: true });
+    const scenePromises = sceneReaders.map((persona) =>
+      this.prepareGenerated(persona, "MEMORABLE_SCENE", { allowShelfReference: true }),
+    );
+    scenePromises.forEach((promise) => void promise.catch(() => undefined));
+    for (const scenePromise of scenePromises) {
+      await this.appendPrepared(await scenePromise, "MEMORABLE_SCENE");
     }
     await this.requestAndAppendUser(userInput, "memorable_scene");
     this.discussionFocusPromise = this.client
@@ -632,53 +682,95 @@ export class SessionEngine {
     );
     const topic = selected.topic;
     this.state.activeTopic = topic;
+    const [leadA, leadB] = selectLeadDebaters(
+      topic,
+      this.state.personas,
+      this.state.notes,
+    );
+    const observer = this.state.personas.find(
+      (persona) => persona.id !== leadA.id && persona.id !== leadB.id,
+    );
+    this.state.discussionRoles = {
+      leadA: leadA.id,
+      leadB: leadB.id,
+      observer: observer?.id,
+    };
     await this.appendGenerated("moderator", "TOPIC_OPEN", {
       activeTopic: topic,
       discussionFocus: selected.evidence,
     });
-    await this.appendGenerated("moderator", "ASK_USER_POSITION", { activeTopic: topic });
-    await this.requestAndAppendUser(userInput, "discussion_position", topic);
-    const challenger = await this.challengeUser(topic);
-    await this.requestAndAppendUser(userReply, "discussion_reply", topic);
-
-    const updatedUserArgument = this.state.userStances[topic] ?? {
-      stance: 0,
-      paraphrase:
-        this.language === "ko"
-          ? "사용자가 이 질문에 대한 입장을 건너뛰었습니다."
-          : "The user passed the position turn for this question.",
-    };
-    await this.appendGenerated(challenger, "RESPOND_TO_USER_REPLY", {
+    await this.appendGenerated(leadA, "OPEN_PERSONA_POSITION", {
       activeTopic: topic,
-      targetSpeaker: "user",
-      userArgument:
-        challenger === "moderator"
-          ? updatedUserArgument
-          : {
-              ...updatedUserArgument,
-              personaReason: this.personaReasonFor(challenger, topic),
-            },
+      targetSpeaker: leadB.id,
+    });
+    await this.appendGenerated(leadB, "CHALLENGE_PERSONA", {
+      activeTopic: topic,
+      targetSpeaker: leadA.id,
+    });
+    await this.appendGenerated(leadA, "RESPOND_TO_PERSONA", {
+      activeTopic: topic,
+      targetSpeaker: leadB.id,
     });
 
-    const supporter = this.selectSupporter(topic, updatedUserArgument.stance, challenger);
-    const observer = this.state.personas.find(
-      (persona) =>
-        persona.id !== supporter.id &&
-        (challenger === "moderator" || persona.id !== challenger.id),
-    );
-    this.state.discussionRoles = {
-      challenger: challenger === "moderator" ? "moderator" : challenger.id,
-      supporter: supporter.id,
-      observer: observer?.id,
-    };
-    await this.appendGenerated(supporter, "SUPPORT_USER", {
-      activeTopic: topic,
-      targetSpeaker: challenger === "moderator" ? "moderator" : challenger.id,
-      userArgument: {
-        ...updatedUserArgument,
-        personaReason: this.personaReasonFor(supporter, topic),
-      },
-    });
+    let action = this.requestDiscussionAction
+      ? await this.requestDiscussionAction({ round: 0, canListen: true })
+      : "join";
+    if (action === "listen") {
+      this.state.discussionListenCount = 1;
+      await this.appendGenerated(leadB, "RESPOND_TO_PERSONA", {
+        activeTopic: topic,
+        targetSpeaker: leadA.id,
+      });
+      await this.appendGenerated(leadA, "RESPOND_TO_PERSONA", {
+        activeTopic: topic,
+        targetSpeaker: leadB.id,
+      });
+      action = this.requestDiscussionAction
+        ? await this.requestDiscussionAction({ round: 1, canListen: false })
+        : "join";
+      if (action === "listen") action = "join";
+    }
+
+    if (action === "join") {
+      await this.appendGenerated("moderator", "ASK_USER_POSITION", { activeTopic: topic });
+      await this.requestAndAppendUser(userInput, "discussion_position", topic);
+      const challenger = await this.challengeUser(topic);
+      await this.requestAndAppendUser(userReply, "discussion_reply", topic);
+
+      const updatedUserArgument = this.state.userStances[topic] ?? {
+        stance: 0,
+        paraphrase:
+          this.language === "ko"
+            ? "사용자가 이 질문에 대한 입장을 건너뛰었습니다."
+            : "The user passed the position turn for this question.",
+      };
+      await this.appendGenerated(challenger, "RESPOND_TO_USER_REPLY", {
+        activeTopic: topic,
+        targetSpeaker: "user",
+        userArgument:
+          challenger === "moderator"
+            ? updatedUserArgument
+            : {
+                ...updatedUserArgument,
+                personaReason: this.personaReasonFor(challenger, topic),
+              },
+      });
+
+      const supporter = this.selectSupporter(topic, updatedUserArgument.stance, challenger);
+      this.state.discussionRoles = {
+        ...this.state.discussionRoles,
+        challenger: challenger === "moderator" ? "moderator" : challenger.id,
+        supporter: supporter.id,
+      };
+      await this.appendGenerated(supporter, "SUPPORT_USER", {
+        activeTopic: topic,
+        targetSpeaker: challenger === "moderator" ? "moderator" : challenger.id,
+        userArgument: {
+          ...updatedUserArgument,
+          personaReason: this.personaReasonFor(supporter, topic),
+        },
+      });
+    }
     await this.appendGenerated("moderator", "TOPIC_CLOSE", { activeTopic: topic });
   }
 
@@ -689,10 +781,13 @@ export class SessionEngine {
     const closingIds = [
       this.state.discussionRoles?.challenger,
       this.state.discussionRoles?.supporter,
+      this.state.discussionRoles?.leadA,
+      this.state.discussionRoles?.leadB,
     ].filter((id): id is string => Boolean(id) && id !== "moderator");
     const closingPersonas = [...new Set(closingIds)]
       .map((id) => this.state.personas.find((persona) => persona.id === id))
-      .filter((persona): persona is PersonaCard => Boolean(persona));
+      .filter((persona): persona is PersonaCard => Boolean(persona))
+      .slice(0, 2);
     for (const persona of closingPersonas) {
       await this.appendGenerated(persona, "CLOSING_REFLECTION", {
         activeTopic: this.state.activeTopic,

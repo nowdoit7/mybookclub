@@ -10,6 +10,7 @@ export const bookVerificationStatusSchema = z.enum([
   "mock",
 ]);
 export const bookScopeSchema = z.enum(["single_book", "series"]);
+export const tableMoodSchema = z.enum(["warm", "playful", "intense"]);
 
 const bookSourceSchema = z
   .object({ url: boundedString(8, 2_000) })
@@ -29,6 +30,9 @@ export const utteranceTaskSchema = z.enum([
   "INVITE_USER",
   "FIRST_IMPRESSIONS_OPEN",
   "FIRST_IMPRESSION",
+  "OPEN_PERSONA_POSITION",
+  "CHALLENGE_PERSONA",
+  "RESPOND_TO_PERSONA",
   "CHALLENGE_USER",
   "DEVILS_ADVOCATE",
   "SCENES_OPEN",
@@ -162,6 +166,7 @@ export const readingNotesRequestSchema = z
 export const utteranceRequestSchema = z
   .object({
     language: z.enum(["en", "ko"]),
+    tableMood: tableMoodSchema,
     book: confirmedBookSchema,
     speaker: z.union([personaCardSchema, z.literal("moderator")]),
     notes: internalReadingNotesSchema.optional(),

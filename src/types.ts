@@ -1,6 +1,8 @@
 export type Category = "emotional" | "analytical" | "contextual";
 export type AppLanguage = "en" | "ko";
 export type BookScope = "single_book" | "series";
+export type TableMood = "warm" | "playful" | "intense";
+export type DiscussionAction = "join" | "listen" | "wrap";
 export type BookVerificationStatus = "verified" | "ambiguous" | "not_found" | "mock";
 
 export interface BookSource {
@@ -85,6 +87,7 @@ export interface Utterance {
 
 export interface SessionState {
   language: AppLanguage;
+  tableMood: TableMood;
   book: ConfirmedBook;
   personas: PersonaCard[];
   notes: Record<string, ReadingNotes>;
@@ -95,10 +98,13 @@ export interface SessionState {
   userStance?: number;
   userStances: Record<string, { stance: number; paraphrase: string }>;
   discussionRoles?: {
-    challenger: string;
-    supporter: string;
+    leadA: string;
+    leadB: string;
+    challenger?: string;
+    supporter?: string;
     observer?: string;
   };
+  discussionListenCount: number;
   seed?: string;
 }
 

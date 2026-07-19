@@ -57,9 +57,11 @@ These are project-defining. Do not "improve" past them without asking.
    as typed objects. Adding a persona must require zero engine changes.
 4. **Every model call uses strict JSON schema output.** No free-text parsing,
    no regex extraction. Schema in SPEC §6.
-5. **Rebuttal enforcement is not optional.** After the user states a position,
-   at least one persona challenges it (SPEC §9). This is the reason the product
-   exists — if it becomes hard to implement, tell me, don't quietly soften it.
+5. **Rebuttal enforcement is not optional.** After the user joins a discussion
+   and states a position, at least one persona challenges it (SPEC §9). A user
+   who chooses to keep listening may instead observe the mandatory directed
+   persona-to-persona clash. If either path becomes hard to implement, tell me;
+   don't quietly soften it.
 6. **Persona utterances: 2–4 sentences.** Enforced in prompt AND by schema
    maxLength. Personas that monologue are a bug.
 7. **Copyright:** discuss themes and scenes; quote at most a short phrase;
@@ -89,8 +91,8 @@ engine logic — they're fast and the invariants are known up front:
 
 **2. Mock-LLM session tests** (fake client returns canned JSON, full session
 runs in-memory). These assert flow invariants, not text:
-- the user is challenged at least once per discussion topic — **this is the
-  product's core promise; it must be a test, not a hope**
+- a user who joins is challenged at least once, and every discussion contains a
+  directed persona-to-persona disagreement — **these are tests, not hopes**
 - no persona speaks twice in a row
 - utterances per topic stay under the cap
 - every stage is reached and a recap is produced

@@ -34,3 +34,6 @@
 - 2026-07-19: Mock confirmation stays explicitly unverified and credit-free, while defensive UI defaults keep pre-change hot-reload state from crashing after the verification contract upgrade.
 - 2026-07-19: Added an explicit one-book/full-series scope before verification; verified series now require and display their component titles in publication order, and that scope follows every later generation call.
 - 2026-07-19: Web-grounded summaries now fail quality validation when URLs or inline citation markup leak into prose, keeping clickable retrieved sources in the dedicated source area.
+- 2026-07-19: Reframed the table as an establishing scene and made illustrated faces, directed speech, the challenged line, and scrollable recent dialogue the persistent conversation surface.
+- 2026-07-19: Replaced the fixed user-centered panel with two lead readers who must clash before a code-owned join/listen/wrap checkpoint; independent testimony no longer bends around the user's previous answer.
+- 2026-07-19: Added warm/playful/intense delivery as session data, preserved one bounded listening extension, and kept user rebuttal enforcement mandatory whenever the user joins.

@@ -180,10 +180,24 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
     120,
   ).replace(/[.!?。？！]+$/gu, "");
   const shelfRef = input.allowShelfReference ? persona.bookshelf[0]?.title ?? null : null;
+  const moodLead = isKorean
+    ? input.tableMood === "playful"
+      ? "이쯤이면 테이블이 조금 뜨거워져도 재미있겠네요."
+      : input.tableMood === "intense"
+        ? "핵심부터 직접 말하겠습니다."
+        : "서두르지 않고 제 쪽에서 보이는 것을 말해 볼게요."
+    : input.tableMood === "playful"
+      ? "This is where the table can get a little lively."
+      : input.tableMood === "intense"
+        ? "I will put the disagreement plainly."
+        : "I will start with what I can see from my side of the table.";
   const responses: Partial<Record<UtteranceRequest["task"], string>> = isKorean
     ? {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
         FIRST_IMPRESSION: input.notes?.overallTake,
+        OPEN_PERSONA_POSITION: `${moodLead} ${targetName}님, 저는 “${topic}”에서 ${reason}을 중심 근거로 삼고 싶습니다.`,
+        CHALLENGE_PERSONA: `${targetName}님, 그 주장은 중요한 예외를 너무 빨리 정리합니다. 같은 근거가 반대 결론을 낳는 경우까지 어떻게 설명하시겠어요?`,
+        RESPOND_TO_PERSONA: `${targetName}님이 짚은 예외는 인정하지만 제 결론까지 무너지지는 않습니다. 오히려 ${reason}이라는 차이가 아직 남아 있습니다.`,
         CHALLENGE_USER: `저는 “${topic}”라는 질문에서 그 결론을 조금 더 밀어보고 싶습니다. 사용자가 말한 근거가 가장 강한 반대 사례까지 설명할 수 있다고 보시나요?`,
         MEMORABLE_SCENE: shelfRef
           ? `저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 제 책장에서는 『${shelfRef}』도 비슷한 질문을 던지지만, 지금은 사용자가 고른 장면이 무엇인지 먼저 듣겠습니다.`
@@ -196,6 +210,9 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
     : {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
         FIRST_IMPRESSION: input.notes?.overallTake,
+        OPEN_PERSONA_POSITION: `${moodLead} ${targetName}, my central reason on ${topic} is ${reason}.`,
+        CHALLENGE_PERSONA: `${targetName}, that claim closes an important exception too quickly. How does it explain the same evidence leading to the opposite conclusion?`,
+        RESPOND_TO_PERSONA: `${targetName}'s exception matters, but it does not undo my conclusion. The unresolved difference is still ${reason}.`,
         CHALLENGE_USER: `I want to press that conclusion about ${topic}. Does the evidence you named really account for the strongest counterexample?`,
         MEMORABLE_SCENE: shelfRef
           ? `I want to return to the passage where the book's central tension becomes clearest. ${shelfRef} asks a related question on my shelf, but I would rather hear the user's chosen moment before making a comparison.`

@@ -39,6 +39,17 @@ const languageRule = (language: "en" | "ko" | undefined) =>
     ? "Write all reader-facing content in natural Korean. Keep book and author names in the form most familiar to Korean readers."
     : "Write all reader-facing content in natural English.";
 
+function tableMoodRule(mood: UtteranceRequest["tableMood"]): string {
+  switch (mood) {
+    case "playful":
+      return "Table mood: playful. Allow light wit or friendly teasing when the actual conversation invites it, but never force a joke or mechanically copy laughter.";
+    case "intense":
+      return "Table mood: intense. Make disagreements direct, specific, and energetic without hostility, contempt, or theatrical aggression.";
+    default:
+      return "Table mood: warm. Leave room for uncertainty and human reaction; gentle humor is welcome only when a participant naturally opens that door.";
+  }
+}
+
 interface GenerationProfile {
   reasoningEffort: "none" | "low" | "medium";
   maxOutputTokens: number;
@@ -55,11 +66,19 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "FIRST_IMPRESSIONS_OPEN":
       return "Briefly thank the user for the introduction, make a natural transition into the book, and invite everyone's first impressions.";
     case "FIRST_IMPRESSION":
-      return "Give a personal first reaction anchored in private notes. This is testimony, not debate: do not rebut, correct, or cross-examine another reader.";
+      return "Give a personal first reaction anchored in private notes. This is independent testimony, not debate: do not agree with, quote, praise, rebut, correct, or cross-examine another participant.";
+    case "OPEN_PERSONA_POSITION":
+      return "State one committed answer to the active topic from your private notes. Address the supplied reader directly and give scene-level evidence; do not turn toward the user or summarize the room.";
+    case "CHALLENGE_PERSONA":
+      return "Challenge the supplied reader's most recent claim directly. Name the exact point you reject, offer conflicting scene-level evidence, and ask that reader one genuine pointed question; do not turn toward the user.";
+    case "RESPOND_TO_PERSONA":
+      return "Answer the supplied reader's latest argument directly. Defend, refine, or explicitly concede one point while keeping a real disagreement alive; do not turn toward the user or summarize the room.";
     case "MEMORABLE_SCENE":
-      return "Name one specific scene and explain the personal reason it stayed with you. Sound like a reader remembering a book, not a lecturer presenting a theme.";
+      return "Independently name one specific scene and explain the personal reason it stayed with you. Do not begin by agreeing with, quoting, praising, or answering another participant. Sound like a reader remembering a book, not a lecturer presenting a theme.";
     case "TOPIC_OPEN":
       return `Briefly name the supplied thread from the earlier conversation, then state this exact code-selected question verbatim without substituting another topic: ${input.activeTopic}`;
+    case "ASK_USER_POSITION":
+      return "After the two readers' disagreement, invite the user to enter with their own position on the active topic. Do not presume which side they support.";
     case "CHALLENGE_USER":
       return "Address the user's paraphrased claim directly, state the private-note reason that conflicts with it, and ask one pointed question. Respectfully but firmly challenge; do not concede.";
     case "DEVILS_ADVOCATE":
@@ -70,6 +89,8 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
       return "Answer the user's reply to your pointed question directly. Say whether it resolves your objection and name one precise disagreement that remains. Do not ask another question, reset the topic, or pretend to agree.";
     case "SUPPORT_USER":
       return "Support the user's updated claim with different scene-level evidence, address the challenger directly, and name one real limit or risk in the user's position. Do not merely praise or repeat the user.";
+    case "TOPIC_CLOSE":
+      return "Name the precise disagreement that remains open and close this topic without declaring a winner or inventing consensus. Bridge naturally toward the closing round.";
     case "CLOSING_REFLECTION":
       return "Respond directly to the user's latest closing thought in exactly two short sentences. Name either one idea you are carrying away or one disagreement that remains. Do not recite a before-and-after formula or summarize the whole meeting.";
     case "DISCUSSION_SUMMARY":
@@ -278,6 +299,10 @@ export class OpenAIGenerationClient implements GenerationClient {
         ? "Use exactly 2 short sentences."
         : "Use 2-4 sentences.";
     const taskDirective = utteranceTaskDirective(input);
+    const testimonyRule =
+      input.task === "FIRST_IMPRESSION" || input.task === "MEMORABLE_SCENE"
+        ? "This is independent testimony. Do not react to recent participants or use their remarks as your opening."
+        : "React to one precise idea from the recent conversation when it is relevant.";
     return this.parse(
       utteranceSchema,
       "table_utterance",
@@ -287,7 +312,7 @@ export class OpenAIGenerationClient implements GenerationClient {
           : `You are ${
               input.speaker === "moderator" ? "Alex" : input.speaker.name
             }. Stay in character and anchored to your private notes.`
-      } ${lengthRule} ${taskDirective} ${languageRule(input.language)} On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. React to one precise idea from the recent conversation when it is relevant. Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
+      } ${lengthRule} ${taskDirective} ${languageRule(input.language)} ${tableMoodRule(input.tableMood)} On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
         input.allowShelfReference ? "allowed once if illuminating" : "not allowed; shelf_ref must be null"
       }. ${COPYRIGHT_RULE}`,
       JSON.stringify({
