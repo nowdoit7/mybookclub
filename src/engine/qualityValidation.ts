@@ -99,7 +99,7 @@ export function validateUtteranceQuality(
   const issues: string[] = [];
   const count = countSentences(output.utterance);
   const minimum = speaker === "persona" ? 2 : 1;
-  const maximum = 3;
+  const maximum = speaker === "persona" ? 4 : 3;
 
   if (count < minimum || count > maximum) {
     issues.push(`${speaker} utterance must contain ${minimum}-${maximum} sentences; received ${count}`);

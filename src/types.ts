@@ -34,6 +34,7 @@ export interface PersonaCard {
   category: Category;
   identity: string;
   roleLabel: Record<AppLanguage, string>;
+  socialIntroSeed: Record<AppLanguage, string>;
   lens: string;
   voice: string;
   bookshelf: ShelfBook[];
@@ -120,6 +121,12 @@ export interface SessionState {
   };
   discussionListenCount: number;
   seed?: string;
+}
+
+export interface DiscussionDecisionTurn {
+  round: number;
+  canListen: boolean;
+  phase: "before_join" | "after_join";
 }
 
 export interface CompletedSession {

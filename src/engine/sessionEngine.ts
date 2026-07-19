@@ -16,6 +16,7 @@ import {
   InvalidStructuredOutputError,
 } from "../api/errors";
 import { selectPersonas } from "../personas";
+import { localizedSpeakerName } from "../localization";
 import type {
   CompletedSession,
   AppLanguage,
@@ -24,6 +25,7 @@ import type {
   ReadingNotes,
   DiscussionFocus,
   DiscussionAction,
+  DiscussionDecisionTurn,
   RoomAtmosphere,
   SessionState,
   StageId,
@@ -72,10 +74,7 @@ export interface RunSessionOptions {
     target?: string;
     kind: UserTurnKind;
   }) => Promise<string>;
-  requestDiscussionAction?: (turn: {
-    round: number;
-    canListen: boolean;
-  }) => Promise<DiscussionAction>;
+  requestDiscussionAction?: (turn: DiscussionDecisionTurn) => Promise<DiscussionAction>;
   waitForSessionComplete?: (summary: Utterance) => Promise<void>;
 }
 
@@ -408,36 +407,101 @@ export class SessionEngine {
     }
 
     this.onStatus?.(
-      `Used validated fallback for ${isModerator ? "moderator" : speaker.name}: ${validationError}`,
+      `Quality fallback: task=${task}; speaker=${isModerator ? "moderator" : speaker.id}`,
     );
-    const output: UtteranceOutput = isModerator
-      ? {
-          utterance:
-            task === "DEVILS_ADVOCATE"
-              ? this.language === "ko"
-                ? "잠시 반대편에서 묻겠습니다. 지금의 해석이 놓치고 있는 가장 강한 반례는 무엇일까요?"
-                : "Let me push from the other side. What is the strongest counterexample this reading might miss?"
-              : this.language === "ko"
-                ? "그 긴장을 잠시 붙잡고 다시 책으로 돌아가 보겠습니다."
-                : "Let's hold onto that tension and return to the book.",
-          stance: null,
-          refers_to: options.targetSpeaker ?? null,
-          shelf_ref: null,
-        }
-      : {
-          utterance:
-            task === "CHALLENGE_USER"
-              ? this.language === "ko"
-                ? "저는 아직 그 결론에 동의하기 어렵습니다. 가장 강한 반대 사례도 같은 해석으로 설명할 수 있나요?"
-                : "I am not ready to accept that conclusion. Can the same reading explain the strongest counterexample?"
-              : this.language === "ko"
-                ? "제 입장을 아직 버리지는 않겠지만, 그 장면에 비춰 다시 살펴보겠습니다. 이 차이는 계속 이야기할 가치가 있습니다."
-                : "I am not ready to abandon my position, but I want to test it against that scene. The disagreement is still worth keeping open.",
-          stance: this.state.notes[speaker.id]?.overallStance ?? 0,
-          refers_to: options.targetSpeaker ?? null,
-          shelf_ref: null,
-        };
+    const output = this.buildFallbackUtterance(speaker, task, options);
     return { speaker, output, shelfKey };
+  }
+
+  private buildFallbackUtterance(
+    speaker: PersonaCard | "moderator",
+    task: UtteranceTask,
+    options: GenerationOptions,
+  ): UtteranceOutput {
+    const ko = this.language === "ko";
+    const targetsUser = (options.targetSpeaker ?? "user") === "user";
+    const target = localizedSpeakerName(options.targetSpeaker ?? "user", this.language);
+    const targetLabel = ko && targetsUser ? "사용자" : target;
+    const topic = options.activeTopic ?? this.state.activeTopic ?? this.state.book.candidateTopics[0];
+    if (speaker === "moderator") {
+      const moderatorLines: Partial<Record<UtteranceTask, string>> = ko
+        ? {
+            WELCOME: "리딩 테이블에 오신 것을 환영합니다. 책 이야기에 앞서 오늘 함께할 분들과 먼저 인사를 나누겠습니다.",
+            INVITE_USER: "이번에는 여러분 차례입니다. 하시는 일이나 요즘의 독서 생활처럼 편한 이야기로 자신을 소개해 주세요.",
+            FIRST_IMPRESSIONS_OPEN: "이제 책 이야기로 들어가 보겠습니다. 구체적인 장면은 잠시 뒤에 두고, 책을 덮었을 때 남은 전체적인 첫인상부터 들려주세요.",
+            SCENES_OPEN: "서로 다른 첫인상이 어디서 시작됐는지 조금 보이네요. 이번에는 그 느낌을 만든 구체적인 장면 하나를 골라볼까요?",
+            TOPIC_OPEN: `앞선 이야기에서 한 질문이 선명해졌습니다. ${topic}`,
+            ASK_USER_POSITION: "두 사람의 견해가 갈렸습니다. 여러분은 이 질문에서 어느 쪽에 더 가까운가요?",
+            DEVILS_ADVOCATE: "잠시 반대편에서 묻겠습니다. 지금의 해석이 놓치고 있는 가장 강한 반례는 무엇일까요?",
+            TOPIC_CLOSE: "이견은 완전히 풀리지 않았지만 어디에서 갈리는지는 분명해졌습니다. 이 긴장을 남겨 둔 채 마무리로 가겠습니다.",
+            WRAP_OPEN: "이제 각자 오늘 테이블에서 가져갈 생각을 하나씩 남겨보겠습니다. 처음 생각과 달라진 점이 없어도 괜찮습니다.",
+            DISCUSSION_SUMMARY: "오늘은 같은 책의 근거가 서로 다른 판단으로 이어지는 지점을 살폈습니다. 합의보다 남은 이견과 생각의 움직임을 모임 기록에 담겠습니다.",
+          }
+        : {
+            WELCOME: "Welcome to The Reading Table. Before discussing the book, let us first meet the people sharing the table tonight.",
+            INVITE_USER: "Now it is your turn. Introduce yourself through your work, your current reading life, or any small detail you would like to share.",
+            FIRST_IMPRESSIONS_OPEN: "Now we can open the book. Save the specific scenes for a moment and begin with the overall impression that remained when you finished.",
+            SCENES_OPEN: "Those first impressions already point in different directions. Now choose one concrete scene that produced yours.",
+            TOPIC_OPEN: `One question has become clear from the earlier conversation. ${topic}`,
+            ASK_USER_POSITION: "The two readers have reached a real disagreement. Where do you stand on this question?",
+            DEVILS_ADVOCATE: "Let me push from the other side. What is the strongest counterexample this reading might miss?",
+            TOPIC_CLOSE: "The disagreement is not resolved, but its fault line is clearer. Let us carry that tension into the closing round.",
+            WRAP_OPEN: "Let us each leave one thought from tonight's table. It is fine if your original view has not changed.",
+            DISCUSSION_SUMMARY: "Tonight we examined how the same evidence can lead readers toward different judgments. The recap will preserve both the movement and the disagreement that remains.",
+          };
+      return {
+        utterance: moderatorLines[task] ?? (ko
+          ? "그 차이를 서둘러 정리하지 않고 다음 이야기로 이어가겠습니다."
+          : "We will keep that difference open and move to the next part of the conversation."),
+        stance: null,
+        refers_to: options.targetSpeaker ?? null,
+        shelf_ref: null,
+      };
+    }
+
+    const reason = this.personaReasonFor(speaker, topic) ?? this.state.notes[speaker.id]?.overallTake;
+    const shortReason = reason
+      ?.replace(/[.!?。？！]+/gu, ", ")
+      .replace(/\s+/gu, " ")
+      .replace(/,+\s*$/u, "")
+      .slice(0, 150);
+    const lens = ko ? speaker.roleLabel.ko : speaker.roleLabel.en;
+    let utterance: string;
+    if (task === "PERSONA_INTRODUCTION") {
+      utterance = ko
+        ? `안녕하세요, ${localizedSpeakerName(speaker.id, this.language)}이고 ${speaker.roleLabel.ko}로 지내고 있어요. ${speaker.socialIntroSeed.ko}`
+        : `Hi, I'm ${speaker.name}. My day job is ${speaker.roleLabel.en.toLowerCase()}. ${speaker.socialIntroSeed.en}`;
+    } else if (task === "CHALLENGE_USER") {
+      utterance = ko
+        ? `저는 ${lens}의 눈으로 보면 그 결론을 그대로 받아들이기 어렵습니다. ${targetLabel}님이 든 근거는 가장 강한 반대 사례까지 설명할 수 있나요?`
+        : `From my perspective as a ${lens.toLowerCase()}, I cannot accept that conclusion as it stands. Can ${targetsUser ? "your evidence" : `${target}'s evidence`} also explain the strongest counterexample?`;
+    } else if (task === "CLOSING_REFLECTION") {
+      utterance = ko
+        ? `저는 오늘 ${shortReason ?? "같은 근거도 다르게 읽힐 수 있다는 점"}을 끝까지 붙잡았습니다. 답을 하나로 모으기보다 이 차이를 다음 독서에도 가져가고 싶어요.`
+        : `I kept returning to ${shortReason ?? "the way the same evidence can support different readings"}. I would rather carry that difference into my next reading than force one answer tonight.`;
+    } else if (task === "FIRST_IMPRESSION") {
+      utterance = ko
+        ? `제 첫인상은 ${shortReason ?? "쉽게 한쪽으로 정리되지 않는 책이라는 것"}이었습니다. 아직 특정 장면보다 책 전체가 남긴 감각을 더 생각해 보고 싶어요.`
+        : `My first impression was ${shortReason ?? "that the book resisted an easy verdict"}. Before choosing a scene, I want to sit with the feeling the whole work left behind.`;
+    } else if (task === "MEMORABLE_SCENE") {
+      utterance = ko
+        ? `저는 제 관점이 가장 불편하게 흔들린 장면을 다시 보고 싶습니다. 그 순간이 ${lens}인 제게도 간단한 결론을 허락하지 않았어요.`
+        : `I want to return to the scene that most unsettled my usual lens. It refused to give even a ${lens.toLowerCase()} an easy conclusion.`;
+    } else if (task === "SUPPORT_USER") {
+      utterance = ko
+        ? `${targetLabel}님, 사용자의 구분은 다른 근거도 설명할 여지가 있다고 봅니다. 다만 ${shortReason ?? "중요한 예외"}까지 지워 버리면 그 해석도 너무 넓어집니다.`
+        : `${target}, I think the user's distinction can account for other evidence as well. Its limit is that it becomes too broad if it erases ${shortReason ?? "an important exception"}.`;
+    } else {
+      utterance = ko
+        ? `${targetLabel}님이 짚은 부분은 이해하지만, ${shortReason ?? "제가 중요하게 본 근거"} 때문에 제 판단은 아직 다릅니다. 같은 대목에서 생긴 이 차이를 조금 더 구체적으로 따져보고 싶어요.`
+        : `I understand ${targetsUser ? "your point" : `${target}'s point`}, but my judgment still differs because of ${shortReason ?? "the evidence I find most important"}. I want to test that difference more precisely against the same part of the book.`;
+    }
+    return {
+      utterance,
+      stance: this.state.notes[speaker.id]?.overallStance ?? 0,
+      refers_to: options.targetSpeaker ?? null,
+      shelf_ref: null,
+    };
   }
 
   private async appendGenerated(
@@ -551,6 +615,7 @@ export class SessionEngine {
 
   private personaReasonFor(persona: PersonaCard, target: string): string | undefined {
     const notes = this.state.notes[persona.id];
+    if (!notes) return undefined;
     return target === "overall_impression"
       ? notes.overallTake
       : notes.stanceByTopic.find((item) => item.topic === target)?.reason;
@@ -732,7 +797,7 @@ export class SessionEngine {
     });
 
     let action = this.requestDiscussionAction
-      ? await this.requestDiscussionAction({ round: 0, canListen: true })
+      ? await this.requestDiscussionAction({ round: 0, canListen: true, phase: "before_join" })
       : "join";
     if (action === "listen") {
       this.state.discussionListenCount = 1;
@@ -745,7 +810,7 @@ export class SessionEngine {
         targetSpeaker: leadB.id,
       });
       action = this.requestDiscussionAction
-        ? await this.requestDiscussionAction({ round: 1, canListen: false })
+        ? await this.requestDiscussionAction({ round: 1, canListen: false, phase: "before_join" })
         : "join";
       if (action === "listen") action = "join";
     }
@@ -789,6 +854,28 @@ export class SessionEngine {
           personaReason: this.personaReasonFor(supporter, topic),
         },
       });
+
+      if (this.state.discussionListenCount === 0 && this.requestDiscussionAction) {
+        const postJoinAction = await this.requestDiscussionAction({
+          round: 1,
+          canListen: true,
+          phase: "after_join",
+        });
+        if (postJoinAction === "listen") {
+          this.state.discussionListenCount = 1;
+          const lastSpeaker = this.state.transcript.at(-1)?.speaker;
+          const first = lastSpeaker === leadA.id ? leadB : leadA;
+          const second = first.id === leadA.id ? leadB : leadA;
+          await this.appendGenerated(first, "RESPOND_TO_PERSONA", {
+            activeTopic: topic,
+            targetSpeaker: second.id,
+          });
+          await this.appendGenerated(second, "RESPOND_TO_PERSONA", {
+            activeTopic: topic,
+            targetSpeaker: first.id,
+          });
+        }
+      }
     }
     await this.appendGenerated("moderator", "TOPIC_CLOSE", { activeTopic: topic });
   }
@@ -810,7 +897,6 @@ export class SessionEngine {
     for (const persona of closingPersonas) {
       await this.appendGenerated(persona, "CLOSING_REFLECTION", {
         activeTopic: this.state.activeTopic,
-        targetSpeaker: "user",
       });
     }
     const summary = await this.appendGenerated("moderator", "DISCUSSION_SUMMARY", {

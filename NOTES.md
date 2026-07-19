@@ -44,3 +44,6 @@
 - 2026-07-19: Expanded the reading room into a full-viewport visual-novel stage with persistent participant spotlights and four selectable presentation-only user portraits; the engine still owns every speaker and transition.
 - 2026-07-19: Replaced the decorative oval transition table with five medium cast cards that expose faces and roles, and added a named next-speaker preparation state without timers.
 - 2026-07-19: Fixed the live dialogue cursor so a newly appended one-page utterance always replaces the prior speaker on the main stage; older lines remain available through Previous and the transcript.
+- 2026-07-19: Separated social introductions, overall first impressions, and concrete scenes; localized persona small-talk seeds now keep introductions human without making the current book the user's first prompt.
+- 2026-07-19: Corrected the persona validator to honor the 2–4 sentence contract, replaced shared generic fallbacks with task/persona-specific speech, and surfaced safe fallback metadata in development diagnostics.
+- 2026-07-19: Added one bounded post-join continue-or-wrap checkpoint, fixed user-turn portrait focus and avatar centering, and carried the reading-room visual shell through setup and recap.

@@ -186,8 +186,9 @@ a hard project usage limit in the OpenAI Platform before publishing the demo.
 - Output: ≤220 tokens
 - Generate the three private reading-note objects in parallel.
 - Run one discussion topic. Its base reader-to-reader clash is mandatory; one
-  additional listening exchange is optional and code-capped. Do not add a
-  second topic in MVP.
+  additional two-reader exchange is optional and code-capped. The user may
+  spend that single extension either before joining or after answering a
+  challenge. Do not add a second topic in MVP.
 - Expect roughly 30–40 model calls for a full live session; this is a latency
   risk even when token cost is modest. Track call count and elapsed time in the
   console harness.
@@ -223,6 +224,7 @@ interface PersonaCard {
   category: Category;
   identity: string;        // 1-2 sentences
   roleLabel: { en: string; ko: string }; // short persistent UI label
+  socialIntroSeed: { en: string; ko: string }; // casual human detail, not book analysis
   lens: string;            // interpretive lens description
   voice: string;           // speech style rules
   bookshelf: ShelfBook[];  // exactly 5
@@ -546,16 +548,20 @@ interpretations; quote at most a short phrase; never reproduce passages.
 - Moderator welcomes the user, briefly names the book, and lowers the social
   temperature: before discussing it, everyone will first say who they are.
 - Each persona gives a social introduction in character: name, occupation/life
-  context, and reading habit only. They do **not** offer an interpretation of the
-  current book yet. Keep this to 2 short sentences.
+  context, and one casual human detail from `socialIntroSeed`. They do **not**
+  explain their interpretive lens, use the same "when I read..." formula, or
+  offer an interpretation of the current book yet. Keep this to 2–4 short
+  sentences.
 - The UI keeps each person's short occupation/role visible beside their name so
   the user does not have to memorize three biographies.
-- Moderator invites the user to share their name/background and what brought
-  them to the table. The answer need not be about the book.
+- Moderator invites the user to share their name/background, everyday life, or
+  current relationship with reading. The prompt must not ask why they selected
+  this particular book; book reactions belong only in the next stage.
 - **User turn** (free text, may skip).
 
 ### Stage 2 — FIRST_IMPRESSIONS
-- Moderator: "Let's go around — first impressions?"
+- Moderator asks for the overall feeling, judgment, or question left by the
+  book and explicitly saves concrete scenes for the next stage.
 - Each persona: 1 independently prepared utterance expressing a clear overall
   take from its notes. Persona impressions are generated before any of them are
   revealed, so they do not mechanically echo the previous reader.
@@ -567,7 +573,9 @@ interpretations; quote at most a short phrase; never reproduce passages.
   user in this stage; the extracted stance is retained for later topic selection.
 
 ### Stage 3 — MEMORABLE_SCENES
-- Moderator: "A scene or line that stuck with you?"
+- Moderator briefly acknowledges the range or tension in the user's just-stated
+  first impression, then asks for one concrete scene, passage, image, or example
+  that produced it. This is one generated transition, not an extra API call.
 - Code selects two personas with meaningfully different overall positions to
   share one specific scene each. **At least one must surface an easily-missed
   scene** from its `keyScenes` ("Did anyone else catch…").
@@ -591,12 +599,18 @@ interpretations; quote at most a short phrase; never reproduce passages.
   5. The UI exposes a **discussion checkpoint**, not a generated utterance:
      `join`, `listen`, or `wrap`.
 - `listen` schedules one additional two-reader exchange and is available at
-  most once. The next checkpoint offers `join` or `wrap`.
+  most once across the whole topic. Before the user joins, the next checkpoint
+  offers `join` or `wrap`.
 - `join` asks the user for a position, extracts stance, and selects the persona
   furthest from that position as challenger. The challenger asks one pointed
   question, the next turn belongs to the user, and the challenger responds once.
   Code may add the remaining closest reader once as supporter when their
   evidence is genuinely distinct; no one speaks for symmetry.
+- If the user joined without spending the extension, code now exposes one final
+  checkpoint after the challenger response and supporter turn: `listen` means
+  "continue the discussion" for one two-reader exchange, while `wrap` closes
+  the topic. The user therefore decides whether an interesting new conflict
+  receives one more bounded pass.
 - `wrap` or the extension cap makes Alex close with a concise tension summary,
   never a false resolution. Unresolved disagreement is carried into WRAP_UP.
 - Expected discussion size is roughly 7–13 generated/user utterances depending
@@ -605,8 +619,11 @@ interpretations; quote at most a short phrase; never reproduce passages.
 ### Stage 5 — WRAP_UP
 - Moderator asks the user first for a closing thought ("Did this discussion move you?").
 - **User turn** comes before AI closings so a new final idea is not ignored.
-- The discussion's challenger and supporter each give one short response to the
-  user's closing thought. The observer is not forced to speak.
+- Up to two readers involved in the discussion each give one short, independent
+  closing reflection. They may mention the user only when a particular claim
+  genuinely changed their position; they must not copy the user's analogy,
+  occupation, wording, or personal plan into their own conclusion. The observer
+  is not forced to speak.
 - Moderator gives a substantive 2–3 sentence spoken summary: central
   disagreement, what shifted, and what remains unresolved. After the summary's
   normal reading delay, trigger **recap generation** (§10) → recap screen.
@@ -701,7 +718,9 @@ demo's closing shot: real club recap (left) vs. app recap (right).
 Recap excerpts may quote only the session transcript, not passages from the
 book. Apply the same short-phrase copyright rule during recap generation and
 validation. Do not include private reading notes verbatim in the downloaded
-artifact.
+artifact. The reader-facing recap must never expose internal field names such
+as `shelfRef`, `refersTo`, schema, transcript, or private-note implementation
+language; when no other book was cited, say so naturally.
 
 ---
 
@@ -733,6 +752,10 @@ Layout (desktop, single screen):
   current turn. When known, the upcoming speaker is highlighted and the fixed
   dialogue box says that person's line is being prepared; otherwise it says the
   next part of the conversation is being prepared.
+- On every user input turn, the user's selected portrait and participant card
+  become the primary active speaker immediately. The previous speaker may
+  remain visible as a secondary addressed portrait only when the user is
+  answering that speaker's direct challenge.
 - During dialogue, the primary surface becomes a visual-novel-style focused
   stage: the active illustrated bust is large, the addressed participant is
   visible when `refersTo` is present, and a fixed-height nameplate dialogue box
@@ -773,6 +796,10 @@ Layout (desktop, single screen):
   dots = participants, animated when stances update.
 - Recap screen: tabs for rendered meeting recap and the complete conversation,
   plus recap copy, "Download .md", transcript copy, and "Start a new session".
+- Book entry and recap retain the same dark reading-room backdrop as the live
+  stage. Entry content appears as an invitation card and the recap as a cream
+  paper artifact inside the room, rather than switching to unrelated white
+  website pages.
 - A "Copy full transcript" action is available inside the session transcript
   view and on the recap screen. It copies evaluation-ready Markdown with stage
   headings, speaker names, and utterance text, excluding decorative avatar initials.
@@ -837,7 +864,8 @@ game's characters, assets, or distinctive visual style. Polish > features.
 ### 12.3 House rules (shared by all personas)
 ```
 - Speak as your character. 2-4 sentences. No monologues.
-- On social introductions, say what you do and how you tend to read; save all
+- On social introductions, say what you do and reveal one casual human detail
+  from `socialIntroSeed`; avoid a repeated reading-habit template and save all
   opinions about the current book for FIRST_IMPRESSIONS.
 - FIRST_IMPRESSIONS and MEMORABLE_SCENE are independent testimony. Do not begin
   by agreeing with, praising, quoting, or answering another participant unless

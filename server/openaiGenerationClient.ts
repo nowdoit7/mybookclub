@@ -67,13 +67,13 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "WELCOME":
       return "Welcome everyone, say that book discussion will begin after introductions, and invite the readers to meet one another. Do not preview interpretations.";
     case "PERSONA_INTRODUCTION":
-      return "Give a social introduction only: name, occupation or life context, and one natural reading habit. Do not dump the persona card or recite demographic details mechanically. Do not analyze or give an opinion on the current book.";
+      return "Give a social introduction only. Say the name and broad life context, then weave in the persona card's socialIntroSeed as casual small talk rather than a résumé. Do not force a reading-habit formula, explain the persona lens, analyze the current book, or say why this particular book was chosen.";
     case "INVITE_USER":
-      return "Invite the user to share who they are and what brought them to this table. Do not require a book opinion yet.";
+      return "Invite the user to share who they are through work, everyday life, or their current relationship with reading. Keep this purely social: do not ask why they chose the current book, what they thought of it, or which scene stayed with them.";
     case "FIRST_IMPRESSIONS_OPEN":
-      return "Briefly thank the user for the introduction, make a natural transition into the book, and invite everyone's first impressions.";
+      return "Briefly thank the user for the introduction, make a natural transition into the book, and invite an overall first feeling, judgment, or question. Explicitly save concrete scenes and passages for the next stage.";
     case "FIRST_IMPRESSION":
-      return "Give a personal first reaction anchored in private notes. This is independent testimony, not debate: do not agree with, quote, praise, rebut, correct, or cross-examine another participant.";
+      return "Give a personal overall reaction anchored in private notes. This is independent testimony, not debate: do not agree with, quote, praise, rebut, correct, or cross-examine another participant. Do not lead with a specific memorable scene because the next stage is reserved for scenes.";
     case "OPEN_PERSONA_POSITION":
       return "State one committed answer to the active topic from your private notes. Address the supplied reader directly and give scene-level evidence; do not turn toward the user or summarize the room.";
     case "CHALLENGE_PERSONA":
@@ -82,6 +82,8 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
       return "Answer the supplied reader's latest argument directly. Defend, refine, or explicitly concede one point while keeping a real disagreement alive; do not turn toward the user or summarize the room.";
     case "MEMORABLE_SCENE":
       return "Independently name one specific scene and explain the personal reason it stayed with you. Do not begin by agreeing with, quoting, praising, or answering another participant. Sound like a reader remembering a book, not a lecturer presenting a theme.";
+    case "SCENES_OPEN":
+      return "In the first sentence, briefly acknowledge the range or tension in the user's just-stated first impression without evaluating it. In the second sentence, transition to the memorable-scenes round and ask for one concrete scene, passage, image, or example that produced that impression.";
     case "TOPIC_OPEN":
       return `Briefly name the supplied thread from the earlier conversation, then state this exact code-selected question verbatim without substituting another topic: ${input.activeTopic}`;
     case "ASK_USER_POSITION":
@@ -99,7 +101,7 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "TOPIC_CLOSE":
       return "Name the precise disagreement that remains open and close this topic without declaring a winner or inventing consensus. Bridge naturally toward the closing round.";
     case "CLOSING_REFLECTION":
-      return "Respond directly to the user's latest closing thought in exactly two short sentences. Name either one idea you are carrying away or one disagreement that remains. Do not recite a before-and-after formula or summarize the whole meeting.";
+      return "Give this reader's own closing reflection in exactly two short sentences, grounded in their private position and what genuinely happened in the discussion. Do not address the user by default, copy the user's analogy, occupation, or phrasing, turn their personal plan into group advice, recite a before-and-after formula, or summarize the whole meeting.";
     case "DISCUSSION_SUMMARY":
       return "In 2-3 concise sentences, name the central disagreement, the strongest unresolved counterclaim, and any genuine movement, then bridge naturally to the written recap. Base it only on the supplied conversation and do not introduce a new opinion.";
     default:
@@ -370,7 +372,7 @@ export class OpenAIGenerationClient implements GenerationClient {
     return this.parse(
       recapSchema,
       "meeting_recap",
-      `${recapStructure} Keep the discussion summary to 3-5 sentences, the sparks section to at most 2 bullets, and the scenes section to at most 3 bullets. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section. In the shelf section, include only books explicitly present in transcript shelfRef fields; if none, say no shelf comparison was used. Do not imply that an exchange happened unless it appears in the transcript. ${languageRule(input.language)} Quote only this session's generated transcript, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
+      `${recapStructure} Keep the discussion summary to 3-5 sentences, the sparks section to at most 2 bullets, and the scenes section to at most 3 bullets. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, or private notes. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
       JSON.stringify(safeInput),
       { reasoningEffort: "low", maxOutputTokens: 1_400 },
     );

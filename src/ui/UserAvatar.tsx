@@ -3,7 +3,6 @@ import { USER_AVATAR_POSITION, type UserAvatarId } from "./userAvatars";
 export function UserAvatarArtwork({
   avatarId,
   className = "",
-  portrait = false,
   label,
 }: {
   avatarId: UserAvatarId;
@@ -12,8 +11,6 @@ export function UserAvatarArtwork({
   label?: string;
 }) {
   const { column, row } = USER_AVATAR_POSITION[avatarId];
-  const left = portrait ? (column === 0 ? "-25%" : "-175%") : column === 0 ? "0" : "-100%";
-
   return (
     <span
       className={`relative block overflow-hidden ${className}`}
@@ -27,8 +24,11 @@ export function UserAvatarArtwork({
         className="absolute max-w-none"
         style={{
           height: "200%",
-          left,
-          top: row === 0 ? "0" : "-100%",
+          left: "50%",
+          top: "50%",
+          transform: `translate(${column === 0 ? "-25%" : "-75%"}, ${
+            row === 0 ? "-25%" : "-75%"
+          })`,
         }}
       />
     </span>

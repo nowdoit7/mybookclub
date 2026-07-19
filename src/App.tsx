@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 
 import { GenerationApiError, HttpGenerationClient } from "./api/httpGenerationClient";
 import { MockGenerationClient } from "./api/mockGenerationClient";
+import { recordGenerationDiagnostic } from "./api/diagnostics";
 import type { GenerationClient } from "./api/generationClient";
 import { SessionEngine, toConfirmedBook } from "./engine/sessionEngine";
 import { localizedSpeakerName, localizedSpeakerRole, STAGE_LABELS } from "./localization";
@@ -15,6 +16,7 @@ import type {
   BookScope,
   ConfirmedBook,
   DiscussionAction,
+  DiscussionDecisionTurn,
   PersonaCard,
   RoomAtmosphere,
   StageId,
@@ -36,7 +38,7 @@ const STAGES: StageId[] = [
 
 const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
   en: {
-    intro: "Tell us a little about yourself and what brought you to the table.",
+    intro: "Tell us a little about your work, everyday life, or what reading has looked like lately.",
     first_impression: "What was your first impression?",
     memorable_scene: "Which scene stayed with you?",
     discussion_position: "Where do you land on this question?",
@@ -44,7 +46,7 @@ const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
     wrap_up: "What are you leaving the table with?",
   },
   ko: {
-    intro: "어떤 분인지, 오늘 이 테이블에 오게 된 이유와 함께 소개해 주세요.",
+    intro: "하시는 일이나 요즘의 일상, 최근의 독서 생활처럼 편한 이야기로 자신을 소개해 주세요.",
     first_impression: "이 책의 첫인상은 어땠나요?",
     memorable_scene: "어떤 장면이 가장 오래 남았나요?",
     discussion_position: "이 질문에 대해 어디에 서 있나요?",
@@ -154,6 +156,7 @@ const COPY = {
     discussionChoice: "How would you like to continue?",
     joinDiscussion: "Join the discussion",
     keepListening: "Keep listening",
+    continueDiscussion: "Continue the discussion",
     wrapDiscussion: "Wrap up",
     viewTranscript: (count: number) => `View transcript ${count}`,
     transcriptTitle: "Conversation transcript",
@@ -286,6 +289,7 @@ const COPY = {
     discussionChoice: "이 토론을 어떻게 이어갈까요?",
     joinDiscussion: "내 의견 보태기",
     keepListening: "한 번 더 듣기",
+    continueDiscussion: "토론 조금 더 이어보기",
     wrapDiscussion: "이쯤에서 마무리",
     viewTranscript: (count: number) => `대화 기록 보기 ${count}`,
     transcriptTitle: "대화 기록",
@@ -326,7 +330,7 @@ type CopyStatus = "idle" | "copied" | "failed";
 type RecapView = "recap" | "transcript";
 type GenerationMode = "mock" | "live";
 type LiveAvailability = "checking" | "available" | "unavailable";
-type DiscussionDecisionRequest = { round: number; canListen: boolean };
+type DiscussionDecisionRequest = DiscussionDecisionTurn;
 
 async function writeToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
@@ -481,6 +485,8 @@ function ParticipantCard({
   return (
     <div
       role="listitem"
+      aria-label={`${name} · ${role}`}
+      aria-current={active ? "true" : undefined}
       className={`relative flex min-w-0 items-center gap-2 rounded-xl border px-2 py-2 backdrop-blur-md transition-all duration-300 sm:px-3 ${
         active
           ? "-translate-y-1 border-amber-300 bg-amber-100/95 text-stone-950 shadow-[0_0_32px_rgba(251,191,36,0.48)]"
@@ -676,14 +682,23 @@ function ConversationStage({
   const isOpeningScene = !currentUtterance;
   const isPreparingNextTurn = busy && !isBrowsingHistory;
   const isTransitionScene = isOpeningScene || isStageTransition || isPreparingNextTurn;
-  const displayPage = isTransitionScene ? undefined : currentPage;
-  const primarySpeaker = isTransitionScene
+  const isUserTurn = Boolean(inputRequest);
+  const displayPage = isTransitionScene || isUserTurn ? undefined : currentPage;
+  const primarySpeaker = isUserTurn
+    ? "user"
+    : isTransitionScene
     ? upcomingSpeaker ?? activeSpeaker ?? "moderator"
     : currentUtterance?.speaker ?? activeSpeaker ?? upcomingSpeaker ?? "moderator";
-  const referencedSpeaker = isTransitionScene ? undefined : currentUtterance?.refersTo;
+  const referencedSpeaker = isUserTurn
+    ? inputRequest?.kind === "discussion_reply"
+      ? transcript.at(-1)?.speaker
+      : undefined
+    : isTransitionScene
+      ? undefined
+      : currentUtterance?.refersTo;
   const showClosingCast =
     stage === "WRAP_UP" && currentUtterance?.stage === stage && currentUtterance.speaker === "moderator";
-  const showCastLineup = isTransitionScene || showClosingCast;
+  const showCastLineup = !isUserTurn && (isTransitionScene || showClosingCast);
   const showReferencedSpeaker = Boolean(
     referencedSpeaker && referencedSpeaker !== primarySpeaker && speakers.includes(referencedSpeaker),
   );
@@ -775,10 +790,10 @@ function ConversationStage({
           <div className="grid flex-1 grid-cols-5 gap-1.5 sm:gap-2" role="list">
             {speakers.map((speaker) => {
               const isActive =
-                !isTransitionScene && primarySpeaker === speaker && Boolean(displayPage);
+                !isTransitionScene && primarySpeaker === speaker && (Boolean(displayPage) || isUserTurn);
               const isAddressed =
                 !isTransitionScene && referencedSpeaker === speaker && speaker !== primarySpeaker;
-              const isNext = !isActive && (upcomingSpeaker === speaker || (Boolean(inputRequest) && speaker === "user"));
+              const isNext = !isActive && upcomingSpeaker === speaker;
               return (
                 <ParticipantCard
                   key={speaker}
@@ -1259,6 +1274,17 @@ export function App() {
         if (message.startsWith("Stage: ")) {
           const nextStage = message.slice("Stage: ".length) as StageId;
           setStage(nextStage);
+        } else if (import.meta.env.DEV && message.startsWith("Quality fallback: ")) {
+          recordGenerationDiagnostic({
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            endpoint: "engine-quality",
+            outcome: "failure",
+            status: 0,
+            durationMs: 0,
+            code: "quality_fallback",
+            detail: message.slice("Quality fallback: ".length),
+          });
         }
       },
       onUtterance(utterance) {
@@ -1386,8 +1412,10 @@ export function App() {
 
   if (screen === "setup") {
     return (
-      <main className="min-h-screen bg-stone-100 px-5 py-12 text-stone-900">
-        <section className="mx-auto max-w-2xl rounded-[2rem] border border-stone-200 bg-[#fffaf0] p-8 shadow-sm sm:p-12">
+      <main className="relative min-h-screen overflow-hidden bg-[#0d0907] px-5 py-10 text-stone-900 sm:py-14">
+        <div className="fixed inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/reading-room-bg.png')" }} />
+        <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,rgba(64,38,19,0.18),rgba(6,4,3,0.86)_72%)]" />
+        <section className="relative z-10 mx-auto max-w-5xl rounded-[2rem] border border-amber-100/20 bg-[#fffaf0]/95 p-8 shadow-[0_32px_100px_rgba(0,0,0,0.62)] backdrop-blur-sm sm:p-12">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">
               <span>{copy.prototype}</span>
@@ -1721,14 +1749,16 @@ export function App() {
 
   if (screen === "recap") {
     return (
-      <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900 sm:px-6">
-        <section className="mx-auto max-w-4xl">
+      <main className="relative min-h-screen overflow-hidden bg-[#0d0907] px-4 py-8 text-stone-900 sm:px-6">
+        <div className="fixed inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/reading-room-bg.png')" }} />
+        <div className="fixed inset-0 bg-[linear-gradient(180deg,rgba(8,5,3,0.82),rgba(9,6,4,0.72))]" />
+        <section className="relative z-10 mx-auto max-w-5xl">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">
                 {copy.sessionComplete}
               </p>
-              <h1 className="mt-2 font-serif text-4xl">{copy.completionTitle}</h1>
+              <h1 className="mt-2 font-serif text-4xl text-amber-50">{copy.completionTitle}</h1>
             </div>
             <div className="flex flex-wrap gap-2">
               {recapView === "recap" ? (
@@ -1744,7 +1774,7 @@ export function App() {
                   <button
                     type="button"
                     onClick={downloadRecap}
-                    className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-stone-50"
+                    className="rounded-xl border border-amber-100/25 bg-white/10 px-4 py-2 text-sm font-semibold text-amber-50 hover:bg-white/15"
                   >
                     {copy.downloadMarkdown}
                   </button>
@@ -1762,7 +1792,7 @@ export function App() {
               <button
                 type="button"
                 onClick={startNewSession}
-                className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-stone-50"
+                className="rounded-xl border border-amber-100/25 bg-white/10 px-4 py-2 text-sm font-semibold text-amber-50 hover:bg-white/15"
               >
                 {copy.newSession}
               </button>
@@ -1770,7 +1800,7 @@ export function App() {
           </div>
 
           <div
-            className="mt-7 inline-flex rounded-xl border border-stone-300 bg-white p-1"
+            className="mt-7 inline-flex rounded-xl border border-amber-100/20 bg-stone-950/75 p-1 text-amber-50 backdrop-blur-md"
             role="tablist"
             aria-label={language === "ko" ? "완료된 세션 보기" : "Completed session views"}
           >
@@ -1780,7 +1810,7 @@ export function App() {
               aria-selected={recapView === "recap"}
               onClick={() => setRecapView("recap")}
               className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-                recapView === "recap" ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-100"
+                recapView === "recap" ? "bg-amber-300 text-amber-950" : "text-stone-300 hover:bg-white/10"
               }`}
             >
               {copy.recapTitle}
@@ -1792,8 +1822,8 @@ export function App() {
               onClick={() => setRecapView("transcript")}
               className={`rounded-lg px-4 py-2 text-sm font-semibold ${
                 recapView === "transcript"
-                  ? "bg-stone-900 text-white"
-                  : "text-stone-600 hover:bg-stone-100"
+                  ? "bg-amber-300 text-amber-950"
+                  : "text-stone-300 hover:bg-white/10"
               }`}
             >
               {copy.transcriptTab(transcript.length)}
@@ -1891,16 +1921,22 @@ export function App() {
                 <p className="font-serif text-xl text-amber-100">{copy.discussionChoice}</p>
                 <p className="mt-1 text-sm leading-6 text-stone-400">
                   {language === "ko"
-                    ? "직접 의견을 보태거나, 두 독자의 논쟁을 조금 더 듣거나, 남은 쟁점을 그대로 두고 마무리할 수 있습니다."
-                    : "Join with your own view, hear one more exchange, or leave the remaining tension open and wrap up."}
+                    ? discussionDecision.phase === "after_join"
+                      ? "방금 생긴 쟁점을 두 독자가 한 번 더 밀어붙이게 하거나, 지금의 긴장을 남긴 채 마무리할 수 있습니다."
+                      : "직접 의견을 보태거나, 두 독자의 논쟁을 조금 더 듣거나, 남은 쟁점을 그대로 두고 마무리할 수 있습니다."
+                    : discussionDecision.phase === "after_join"
+                      ? "Let the two readers push the new disagreement once more, or leave the tension open and wrap up."
+                      : "Join with your own view, hear one more exchange, or leave the remaining tension open and wrap up."}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => submitDiscussionDecision("join")} className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-bold text-amber-950">
-                    {copy.joinDiscussion}
-                  </button>
+                  {discussionDecision.phase === "before_join" && (
+                    <button type="button" onClick={() => submitDiscussionDecision("join")} className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-bold text-amber-950">
+                      {copy.joinDiscussion}
+                    </button>
+                  )}
                   {discussionDecision.canListen && (
                     <button type="button" onClick={() => submitDiscussionDecision("listen")} className="rounded-lg border border-amber-200/30 bg-white/10 px-4 py-2 text-sm font-semibold text-amber-50">
-                      {copy.keepListening}
+                      {discussionDecision.phase === "after_join" ? copy.continueDiscussion : copy.keepListening}
                     </button>
                   )}
                   <button type="button" onClick={() => submitDiscussionDecision("wrap")} className="rounded-lg px-4 py-2 text-sm font-semibold text-stone-400 hover:bg-white/10">

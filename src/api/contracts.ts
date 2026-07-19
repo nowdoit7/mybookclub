@@ -72,6 +72,9 @@ const personaCardSchema = z
     roleLabel: z
       .object({ en: boundedString(1, 100), ko: boundedString(1, 100) })
       .strict(),
+    socialIntroSeed: z
+      .object({ en: boundedString(1, 240), ko: boundedString(1, 240) })
+      .strict(),
     lens: boundedString(1, 600),
     voice: boundedString(1, 400),
     bookshelf: z.array(shelfBookSchema).max(8),

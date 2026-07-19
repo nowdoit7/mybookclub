@@ -64,7 +64,7 @@ describe("SessionEngine", () => {
         expect(sentenceCount).toBeLessThanOrEqual(3);
       } else {
         expect(sentenceCount).toBeGreaterThanOrEqual(2);
-        expect(sentenceCount).toBeLessThanOrEqual(3);
+        expect(sentenceCount).toBeLessThanOrEqual(4);
       }
     }
   });
@@ -149,6 +149,31 @@ describe("SessionEngine", () => {
     expect(discussion.filter(({ speaker }) => speaker === "user")).toHaveLength(0);
     expect(discussion).toHaveLength(7);
     expect(state.userStances[state.activeTopic!]).toBeUndefined();
+  });
+
+  it("lets the user extend the clash once after joining the discussion", async () => {
+    const checkpoints: Array<{ phase: string; canListen: boolean }> = [];
+    const { state } = await new SessionEngine(new MockGenerationClient()).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+      async requestDiscussionAction(turn) {
+        checkpoints.push({ phase: turn.phase, canListen: turn.canListen });
+        return turn.phase === "before_join" ? "join" : "listen";
+      },
+    });
+
+    expect(checkpoints).toEqual([
+      { phase: "before_join", canListen: true },
+      { phase: "after_join", canListen: true },
+    ]);
+    expect(state.discussionListenCount).toBe(1);
+    const discussion = state.transcript.filter(({ stage }) => stage === "DISCUSSION");
+    const extension = discussion.slice(-3, -1);
+    expect(discussion.at(-1)?.speaker).toBe("moderator");
+    expect(extension).toHaveLength(2);
+    expect(extension[0].speaker).not.toBe(extension[1].speaker);
+    expect(extension[0].refersTo).toBe(extension[1].speaker);
+    expect(extension[1].refersTo).toBe(extension[0].speaker);
   });
 
   it("continues safely when the user passes both discussion turns", async () => {
@@ -411,6 +436,31 @@ describe("SessionEngine", () => {
     );
     expect(closings).toHaveLength(2);
     expect(new Set(closings.map(({ text }) => text)).size).toBe(2);
+  });
+
+  it("uses persona-specific fallbacks and reports them as operational diagnostics", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateUtterance = client.generateUtterance.bind(client);
+    client.generateUtterance = async (input) =>
+      input.speaker === "moderator"
+        ? originalGenerateUtterance(input)
+        : {
+            utterance: "Too short.",
+            stance: 0,
+            refers_to: input.targetSpeaker ?? null,
+            shelf_ref: null,
+          };
+    const statuses: string[] = [];
+    const { state } = await new SessionEngine(client, {
+      onStatus: (message) => statuses.push(message),
+    }).run({ title: "Fallback Test Book", seed: "demo", language: "ko" });
+    const introductions = state.transcript.filter(
+      ({ stage, speaker }) => stage === "INTRO" && !["moderator", "user"].includes(speaker),
+    );
+
+    expect(new Set(introductions.map(({ text }) => text)).size).toBe(3);
+    expect(introductions.map(({ text }) => text).join(" ")).toMatch(/북톡|형사 변호사|소프트웨어 엔지니어/u);
+    expect(statuses.some((message) => message.startsWith("Quality fallback: task="))).toBe(true);
   });
 
   it("keeps every generated artifact independent from unrelated books", async () => {

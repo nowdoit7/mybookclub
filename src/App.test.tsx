@@ -323,6 +323,7 @@ describe("text prototype", () => {
           screen.queryByRole("heading", { name: "모임이 끝났습니다" }) ??
           screen.queryByRole("textbox") ??
           screen.queryByRole("button", { name: "내 의견 보태기" }) ??
+          screen.queryByRole("button", { name: "토론 조금 더 이어보기" }) ??
           screen.queryByRole("button", { name: /(?:테이블 입장|다음 페이지|다음 사람)/u });
         expect(readyControl).not.toBeNull();
       });
@@ -330,6 +331,10 @@ describe("text prototype", () => {
 
       const textbox = screen.queryByRole("textbox");
       if (textbox) {
+        expect(screen.getByRole("listitem", { name: "나 · 모임 참여자" })).toHaveAttribute(
+          "aria-current",
+          "true",
+        );
         if (inputIndex === 4) {
           expect(screen.getByRole("region", { name: "현재 대화" })).toHaveTextContent(
             "지금 답변할 발언",
@@ -340,6 +345,8 @@ describe("text prototype", () => {
         fireEvent.click(screen.getByRole("button", { name: "공유" }));
       } else if (screen.queryByRole("button", { name: "내 의견 보태기" })) {
         fireEvent.click(screen.getByRole("button", { name: "내 의견 보태기" }));
+      } else if (screen.queryByRole("button", { name: "토론 조금 더 이어보기" })) {
+        fireEvent.click(screen.getByRole("button", { name: "이쯤에서 마무리" }));
       } else {
         const next = screen.getByRole("button", {
           name: /(?:테이블 입장|다음 페이지|다음 사람)/u,

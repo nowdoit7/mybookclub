@@ -115,6 +115,21 @@ describe("book identification quality validation", () => {
 });
 
 describe("utterance quality validation", () => {
+  it("accepts the fourth sentence allowed for persona dialogue", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: "First point. Second point. Third point. Fourth point.",
+          stance: 1,
+          refers_to: null,
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+      ),
+    ).toEqual([]);
+  });
+
   it("rejects shelf metadata that is not spoken aloud", () => {
     expect(
       validateUtteranceQuality(
