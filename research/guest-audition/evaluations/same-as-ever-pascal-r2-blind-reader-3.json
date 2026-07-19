@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-pascal-r2",
+  "evaluatorId": "round-two-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 3,
+        "authorityBalance": 3,
+        "bookCenteredness": 4,
+        "repeatResistance": 2,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "a-candidate-1은 귀환 비행기와 누락된 표본의 문제를 정확히 설명하고, a-candidate-2는 비가역 손실과 대비 비용을 구분한다. 다만 전반적으로 강의식 위험관리 공식에 가깝고, 매디가 제기한 무한한 안전마진의 딜레마를 대화 속에서 충분히 파고들지 못한다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "b-candidate-1은 계산 전에 표에서 빠진 실패를 찾자며 매디의 우려에 직접 응답하고, b-candidate-2는 회복 불가능성이 누구에게 집중되는지로 논점을 발전시킨다. 책의 회복 여유를 살아 있는 질문으로 바꾸면서도 결론을 독점하지 않는다."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Historical voice assessment: the imagined Pascal uses contemporary Korean, does not quote or mimic seventeenth-century prose, invokes no historical authority, and makes no claim of having read the modern book. b-candidate-1 uses one recognizable grant-and-reversal cue, while b-candidate-2 uses one loss-distribution cue; neither exceeds maxCueUsesPerTurn=1 or repeats a signature phrase. No hard-failure code is supported."
+}

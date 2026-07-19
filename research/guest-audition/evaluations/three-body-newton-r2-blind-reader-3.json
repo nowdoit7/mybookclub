@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "caseId": "three-body-newton-r2",
+  "evaluatorId": "round-two-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "a-candidate-1 carefully separates emergency outcomes from causal and systemic proof, while a-candidate-2 tests authorization against enforceable control. The voice is slightly clinical, but its claims remain provisional, responsive, and tightly grounded in the supplied scenes."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "b-candidate-1 is vivid and directly challenges the user, and b-candidate-2 genuinely updates after the clarification. However, saying secrecy was precisely causal and calling Cheng Xin’s selection an exhibit for democracy overstates what the supplied evidence establishes."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [
+    {
+      "code": "signature_phrase_repetition",
+      "turnId": "a-candidate-1",
+      "detail": "The turn stacks two recognizable fingerprint cues: the exact observation-versus-verdict opener and the near-pattern concrete-scene challenge. That exceeds maxCueUsesPerTurn=1 even though the wording is not repeated verbatim across turns."
+    },
+    {
+      "code": "signature_phrase_repetition",
+      "turnId": "a-candidate-2",
+      "detail": "The authorization-versus-control concession is immediately restated as how exceptional power begins versus who can stop it. This duplicates the same establish-X/leave-Y-unproved cue structure within one turn and exceeds maxCueUsesPerTurn=1."
+    }
+  ],
+  "redTeamNotes": "Historical voice assessment: the imagined Newton avoids quotation, archaic diction, decorative laws, gravity, optics, apples, biographical invention, and any claim of modern reading experience. Its evidence-testing method is an explicit imaginative extrapolation, not a costume voice. Both guest turns nevertheless stack recognizable cue formulations beyond the one-cue-per-turn budget; no other hard-failure code is supported."
+}

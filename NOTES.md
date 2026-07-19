@@ -54,3 +54,6 @@
 - 2026-07-19: Replaced title allowlists in the guest plan with controlled genre affinities and a low-confidence regular-reader fallback so every verified book keeps the same entry path.
 - 2026-07-19: Added a credit-free blind A/B guest audition lab with strict schemas, evidence citations, three independent evaluator passes, and post-reveal historical-safety review.
 - 2026-07-19: Round 1 rejected all three portrayals at the pre-registered gate; Pascal was closest, while Newton proved that a recognizable guest can still lose to a stronger ordinary reader, so runtime and SPEC remain unchanged.
+- 2026-07-20: Added sourced speech fingerprints as restrained rhetorical moves with newly composed cues, a one-cue-per-turn budget, and explicit caricature and signature-repetition failures.
+- 2026-07-20: Round 2 made Pascal both more natural and unanimously preferred, but preserved the strict failure after one evaluator found two cue-like moves in one turn; Newton over-signaled method and Smith became too generic.
+- 2026-07-20: Discarded one contaminated Smith blind slot after an encoding error exposed identity fields and replaced it with a fresh Smith-only evaluator; no contaminated score entered the aggregate.

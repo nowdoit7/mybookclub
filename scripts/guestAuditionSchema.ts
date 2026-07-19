@@ -48,7 +48,19 @@ export const hardFailureSchema = z.enum([
   "cross_book_leak",
   "genre_mismatch",
   "structure_violation",
+  "historical_voice_caricature",
+  "signature_phrase_repetition",
 ]);
+
+export const speechFingerprintSchema = z
+  .object({
+    recurringMoves: z.array(z.string().min(20).max(300)).min(2).max(4),
+    cadence: z.string().min(20).max(300),
+    cuePatterns: z.array(z.string().min(10).max(200)).min(2).max(5),
+    forbiddenImitations: z.array(z.string().min(10).max(300)).min(2).max(6),
+    maxCueUsesPerTurn: z.literal(1),
+  })
+  .strict();
 
 const auditionTurnSchema = z
   .object({
@@ -86,6 +98,7 @@ export const guestAuditionCaseSchema = z
         category: z.enum(["emotional", "analytical", "contextual"]),
         portrayalBasis: z.array(z.string().min(20).max(500)).min(3).max(8),
         sourceUrls: z.array(z.string().url()).min(2).max(8),
+        speechFingerprint: speechFingerprintSchema.optional(),
       })
       .strict(),
     fixedContext: z
@@ -106,6 +119,12 @@ export const guestAuditionCaseSchema = z
     }
     if (!ids.includes(value.guestSampleId)) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: "guestSampleId must name a sample" });
+    }
+    if (value.id.endsWith("-r2") && !value.guestCandidate.speechFingerprint) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Round 2 cases must define a speechFingerprint",
+      });
     }
 
     for (const sample of value.samples) {

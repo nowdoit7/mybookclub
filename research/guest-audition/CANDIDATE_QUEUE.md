@@ -12,13 +12,14 @@ Only candidates with an existing frozen A/B case are ranked in Round 1. The
 ranking reflects test readiness, not historical importance or production
 approval.
 
-| Round 1 rank | Candidate | Current case | What the case establishes |
+| Round 1 rank | Candidate | Latest case | Round 2 outcome |
 | --- | --- | --- | --- |
-| 1 | Isaac Newton | `three-body-newton` | One science-fiction comparison exists. It does not establish cross-book generality. |
-| 2 | Blaise Pascal | `same-as-ever-pascal` | One adjacent business/economics comparison exists. It does not yet test two philosophy/religion books. |
-| 3 | Adam Smith | `same-as-ever-adam-smith` | One business/economics comparison exists. It does not establish cross-book generality. |
+| 1 | Isaac Newton | `three-body-newton-r2` | Stronger challenge, but cue overuse and naturalness still fail. |
+| 2 | Blaise Pascal | `same-as-ever-pascal-r2` | Clear quality leader; needs one minimal cue-budget clarification and rerun. |
+| 3 | Adam Smith | `same-as-ever-adam-smith-r2` | More natural, but too generic and insufficiently book-specific. |
 
-Every candidate not listed in that table is **untested**. A candidate may move
+No listed candidate is approved for runtime. Every candidate not listed in that
+table is **untested**. A candidate may move
 toward runtime consideration only after blind auditions on **at least two
 dissimilar books in an affinity genre plus one deliberate genre mismatch**. The
 same portrayal must add book-specific interpretation in both affinity cases,

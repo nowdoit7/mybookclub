@@ -99,6 +99,13 @@ interface GuestPortrayal {
   disclosure: Record<AppLanguage, string>;
   portrayalBasis: string[];
   sourceUrls: string[];
+  speechFingerprint: {
+    recurringMoves: string[];
+    cadence: string;
+    cuePatterns: string[];
+    forbiddenImitations: string[];
+    maxCueUsesPerTurn: 1;
+  };
   genreAffinities: Array<{ genre: GenreFamily; weight: number }>;
   rarity: number;
 }
@@ -130,6 +137,13 @@ readers, plus immutable portrayal rules:
 - do not invent memories, quotations, meetings, or reactions as historical fact;
 - remain a fallible reader who can concede when challenged;
 - discuss the book itself instead of delivering a history lecture.
+
+The `speechFingerprint` carries documented rhetorical habits, not quotations or
+an accent costume. Cue patterns are newly composed prompts for a conversational
+move, never attributed historical wording. A guest may use at most one cue in a
+turn and may not repeat the same cue in a session. Exact famous phrases,
+archaic parody, and constant self-reference by name are forbidden. The intended
+effect is faint recognition after several turns, not instant impersonation.
 
 The recap identifies the speaker as an imagined guest and never converts their
 generated lines into historical quotations.

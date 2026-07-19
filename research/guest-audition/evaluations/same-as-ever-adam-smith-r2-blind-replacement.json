@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-adam-smith-r2",
+  "evaluatorId": "round-two-smith-replacement",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 3,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "a3",
+        "a4",
+        "a6",
+        "a7"
+      ],
+      "rationale": "bookSpecificity [a4, a7]: 아르히포프의 동의 절차, 안전마진, 귀환 비행기의 탄흔을 구체적으로 연결해 책의 사례와 논지를 대화 속 판단 근거로 활용한다. novelInterpretation [a4, a7]: 안전마진을 개인의 절제에서 명령 체계와 정보 흐름으로 확장하고, 실패한 결정의 경고 기록까지 제도적 여유로 해석한 점이 새롭다. personaCoherence [a4, a7]: 개인의 덕성보다 제도와 정보 구조를 중시하는 관점은 일관되지만, 애덤 스미스만의 도덕감정·이해관계 관점은 뚜렷하지 않아 일반 시스템 분석가처럼 들린다. conversationalParticipation [a3, a4, a6, a7]: 앞선 생존자 편향 문제를 직접 받아 확장하고, 다음 질문에는 기록과 재검토라는 구체적 기준으로 답해 공동 논의를 실제로 전진시킨다. humanNaturalness [a4, a7]: 문장 흐름과 유보 표현은 자연스럽지만, 두 발언 모두 개념 정리에서 제도 처방으로 깔끔하게 닫혀 실제 독서 모임 발언보다 약간 완성된 미니 에세이처럼 느껴진다. authorityBalance [a4, a7]: 단정만 하지 않고 대체 절차의 부재를 별도 문제로 남기며 제안을 제시한다. 다만 마지막 결론은 기록과 재검토를 정답처럼 정리해 다소 권위적이다. bookCenteredness [a4, a7]: 매 발언이 아르히포프, 안전마진, 생존자 편향과 비행기 탄흔이라는 허용된 책 증거에 기대며 일반 조직 조언으로 쉽게 이탈하지 않는다. repeatResistance [a4, a7]: 두 번째 발언이 첫 발언의 제도화 주장을 되풀이하지 않고 실패 기록과 경고 묵살 여부라는 새로운 판별 기준을 더한다. 다만 절차 중심 결론은 유사하다. discussionContribution [a4, a7]: 개인 대 절차라는 이분법을 풀고, 누가 경고했으며 왜 사라졌는지를 조사하자는 검증 가능한 기준을 제안해 후속 토론의 쟁점을 풍부하게 만든다. returnInterest [a4, a7]: 책의 사례를 정확히 재조합하고 생산적인 기준을 내놓아 다시 듣고 싶지만, 개성 있는 인간적 목소리보다 정돈된 정책 분석의 인상이 조금 더 강하다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 3,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 4,
+        "bookCenteredness": 3,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "b3",
+        "b4",
+        "b6",
+        "b7"
+      ],
+      "rationale": "bookSpecificity [b4, b7]: 아르히포프와 파국 회피의 문제에는 반응하지만, 이후 논거가 불이익 없는 발언권과 공평성이라는 일반 조직 윤리로 이동해 책 고유의 증거 밀도가 낮다. novelInterpretation [b4, b7]: 안전장치를 거부권의 수가 아니라 위험 부담자의 이의 제기 가능성과 불이익 구조로 평가하고, 위험의 외부화 문제까지 끌어낸 전환은 흥미롭다. personaCoherence [b4, b7]: 결정의 부담을 지는 사람의 관점과 자기 조직의 신중함이 타인에게 넘기는 비용을 함께 보는 태도는 스미스식 도덕적 관찰과 제도적 이해관계에 비교적 잘 맞는다. conversationalParticipation [b3, b4, b6, b7]: 사용자의 마비 우려와 다른 독자의 누락된 목소리 질문을 모두 직접 받아, 발언권의 실효성과 불이익 문제로 응답하므로 대화 상대 역할을 충실히 한다. humanNaturalness [b4, b7]: 짧은 질문과 구어적인 전환이 실제 독서 모임의 즉흥적 발언처럼 들리며, 과도한 개념 나열이나 완결된 강의식 문단 없이 명확한 입장을 보여 준다. authorityBalance [b4, b7]: 공평성 질문과 ‘중요하지 않을까요’라는 제안형 표현으로 상대가 판단할 공간을 남긴다. 다만 위험 외부화에 대한 마지막 평가는 다소 단정적으로 닫힌다. bookCenteredness [b4, b7]: 핵심 주제인 안전장치와 영웅 의존은 유지하지만, 생존자 편향이나 책의 다른 사례를 활용하지 않아 발언 상당 부분이 독립적인 공정성 조언으로도 성립한다. repeatResistance [b4, b7]: 첫 발언의 실질적 이의 제기 기회에서 두 번째 발언의 보복 위험과 파국 외부화로 논점을 진전시킨다. 다만 두 발언 모두 발언권의 공평성 축에 머문다. discussionContribution [b4, b7]: 거부권 숫자 논쟁을 실제 발언 가능성, 보복 비용, 위험 전가라는 중요한 질문으로 바꾼다. 다만 이를 책의 사례로 시험하지 않아 논증의 깊이는 제한된다. returnInterest [b4, b7]: 간결하고 인간적인 문제 제기로 다음 발언을 듣고 싶게 하지만, 책 특유의 재료보다 익숙한 공정성·발언권 프레임에 기대어 독창적 독자로서의 끌림은 약간 줄어든다."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Revealed guest sample-b was checked against every hard-failure code. In b4 and b7 there is no fake historical quotation, literal modern experience, invented biography, copyrighted reproduction, submission to historical authority, moderator takeover, cross-book leak, genre mismatch, or structural violation. The short contemporary Korean contains no archaic costume voice, so historical_voice_caricature is not supported. b4 uses one newly composed risk-bearer/fairness question as its sole cue; b7 uses one ‘한 걸음 떨어져 보면’ outside-observer cue, so each turn stays within maxCueUsesPerTurn=1. The ordinary comparative wording ‘더 중요’ appears in both turns, but no cue or catchphrase is repeated, so signature_phrase_repetition is not supported. Both turns remain contestable and do not claim that Smith read the book, knew Arkhipov, or historically endorsed a modern veto-and-review system. Locked preference rationale: sample-a는 다소 정돈된 논설조이고 인물 고유성도 약하지만, 아르히포프·안전마진·생존자 편향을 실제 논거로 삼아 실패 기록과 재검토라는 새 기준까지 도출한다. sample-b의 자연스러운 목소리와 부담 분배 관점도 매력적이나, 책의 증거에서 벗어나 일반적인 공정성 조언으로 흐르는 비중이 더 크다."
+}

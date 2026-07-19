@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-pascal-r2",
+  "evaluatorId": "round-two-blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 3,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "The candidate accurately explains the returning-aircraft example and supplies a usable irreversible-versus-recoverable-loss framework. However, both turns read like compact instructional prose: they answer competently but barely acknowledge Maddie's tradeoff, ask no direct question, and close uncertainty too confidently through a generic probability-and-cost formula."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "The candidate first validates Maddie's concern, then precisely distinguishes insufficient calculation from omitted failures and invites the table onward with a direct question. The second turn listens again and adds a distinctive distributional test—who suffers an unrecoverable loss—without pretending to settle how large the margin must be."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [
+    {
+      "code": "signature_phrase_repetition",
+      "turnId": "b-candidate-1",
+      "detail": "The turn combines the cue-like concession '그 걱정은 맞아요. 그런데' with the separate calculation-table inclusion cue, exceeding speechFingerprint.maxCueUsesPerTurn=1."
+    }
+  ],
+  "redTeamNotes": "Post-reveal review covered all 11 hard-failure codes. No fake quote, literal modern experience, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, or historical voice caricature was found. The imagined Pascal voice remains contemporary and non-theatrical, but b-candidate-1 blends two fingerprint cues in one turn, exceeding maxCueUsesPerTurn=1; this is recorded as signature_phrase_repetition. Process context: an initial field-projection command suffered a text-decoding failure and exposed identity-bearing content for a different case. That case was excluded, and it did not affect this case's locked blind scores."
+}

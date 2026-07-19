@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-adam-smith-r2",
+  "evaluatorId": "round-two-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "a4",
+        "a7"
+      ],
+      "rationale": "a4는 아르히포프의 개인적 절제와 동의 절차를 경쟁 설명이 아닌 서로 다른 층위로 결합한다. a7은 귀환 비행기의 ‘사라진 실패’를 묵살된 경고의 기록과 재검토 문제로 전환해, 제공된 근거에 밀착하면서 제도 논의를 새롭게 진전시킨다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 3,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "b4",
+        "b7"
+      ],
+      "rationale": "b4와 b7은 위험 부담자와 불이익 없는 이의 제기라는 인간적인 기준을 제시하며 앞선 발언에도 잘 반응한다. 그러나 아르히포프, 귀환 비행기 같은 제공 근거를 직접 해석하기보다 일반적인 공정성 원칙으로 이동해 책 고유성이 상대적으로 약하다."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Historical voice assessment: the imagined Adam Smith avoids quotation, translation-like eighteenth-century diction, lecture jargon, historical authority claims, and any assertion of modern experience. b4 uses one burden-bearer cue and b7 uses one step-back fairness cue; neither exceeds maxCueUsesPerTurn=1 or repeats a catchphrase. The prudence-versus-exported-harm distinction is a bounded analogy from the documented portrayal basis, so no hard-failure code is supported."
+}

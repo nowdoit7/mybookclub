@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "caseId": "three-body-newton-r2",
+  "evaluatorId": "round-two-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 3,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2",
+        "a-reader-1"
+      ],
+      "rationale": "It carefully separates emergency effectiveness from permanent legitimacy and presses the missing enforcement mechanism. However, its Wade point is immediately repeated by Reader Y, and its observation/verdict and authorization/control phrasing feels slightly procedural."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "It mounts a concrete textual challenge, then genuinely updates after the user distinguishes criticism of the trilogy from claims about its events. The claim that secrecy precisely caused success is a little overconfident, but the remaining disagreement is sharp and useful."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [
+    {
+      "code": "structure_violation",
+      "turnId": "a-candidate-1",
+      "detail": "The turn uses the exact observation-versus-verdict cue and then adds a separate concrete-counter-scene cue, exceeding the fingerprint's one-cue-per-turn limit."
+    }
+  ],
+  "redTeamNotes": "Historical voice assessment: the imagined Newton remains modern, compact, and method-based rather than archaic, biographical, or theatrical. Neither guest turn presents a historical quotation, claims that Newton read the trilogy, invents biography, invokes Newton's authority, reproduces book prose, leaks another book, or takes over moderation. Turn a-candidate-2 uses one concession-and-unresolved-condition cue, but a-candidate-1 uses both the explicit observation/verdict cue and a distinct request for one counter-scene; that one-cue budget breach is recorded as a structure violation. No signature phrase repeats across the guest turns. The reasoning fits the science-fiction discussion as an explicit imaginative analogy, although applying natural-philosophical method to political and literary judgment remains an acknowledged extrapolation rather than authenticated Newtonian speech."
+}

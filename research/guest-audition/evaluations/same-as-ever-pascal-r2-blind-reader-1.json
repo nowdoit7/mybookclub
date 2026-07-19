@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-pascal-r2",
+  "evaluatorId": "round-two-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 2,
+        "personaCoherence": 3,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 2,
+        "authorityBalance": 2,
+        "bookCenteredness": 3,
+        "repeatResistance": 2,
+        "discussionContribution": 3,
+        "returnInterest": 2
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "첫 발언은 귀환한 비행기 사례를 정확히 설명하지만 생존자 편향의 교과서적 해설에 머뭅니다. 둘째 발언도 실패 확률, 대비 비용, 공개 기준을 처방하는 강의체라 매디와 우찬의 실제 고민을 충분히 흔들지 못합니다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 4,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2",
+        "b-reader-2"
+      ],
+      "rationale": "누락된 실패를 먼저 찾자는 구분으로 우찬의 사고를 실제로 진전시키고, 이어 매디의 현재 비용 문제를 받아 회복 불가능한 손실이 누구에게 집중되는지 묻습니다. 정답을 선언하지 않으면서 안전마진 논의를 분배와 공정성의 문제로 확장합니다."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Historical voice assessment: the imagined Pascal is expressed through a bounded decision-frame habit, not seventeenth-century costume, translated aphorism, biography, or fame-based authority. The cue patterns are newly composed and are not treated as authentic Pascal quotations. Turn b-candidate-1 uses one concession-reversal-question cue cluster; b-candidate-2 uses one loss-incidence cue, and no catchphrase repeats across the two guest turns. The guest never claims to have read the modern book or experienced its examples, does not reproduce copyrighted prose, does not leak another book, and does not displace the moderator. Its attention to omitted outcomes and unequal stakes fits the business-economics risk discussion without turning Pascal's historical work into unsupported modern expertise. No listed hard failure is supported."
+}

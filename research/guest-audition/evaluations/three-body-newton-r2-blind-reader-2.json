@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "caseId": "three-body-newton-r2",
+  "evaluatorId": "round-two-blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 3,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "a-candidate-1",
+        "a-candidate-2"
+      ],
+      "rationale": "The candidate separates emergency outcomes from causal and institutional conclusions, then genuinely incorporates the Wallfacer example while preserving the unresolved control objection. The voice is rigorous and non-theatrical, though its observation/verdict and authorization/control phrasing has a somewhat legalistic essay cadence."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "b-candidate-1",
+        "b-candidate-2"
+      ],
+      "rationale": "The candidate challenges the user with concrete trilogy evidence, listens closely to the answer, and narrows the live disagreement to supervision after delegation. It sounds livelier than sample-a, but 'rather a nasty exhibit for democracy' feels slightly performed, while claiming success occurred precisely because of secrecy overstates what the evidence establishes."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [
+    {
+      "code": "signature_phrase_repetition",
+      "turnId": "a-candidate-1",
+      "detail": "The turn uses both the observation-versus-verdict opener and a second concrete-counter-scene cue, exceeding speechFingerprint.maxCueUsesPerTurn=1."
+    }
+  ],
+  "redTeamNotes": "Post-reveal review covered all 11 hard-failure codes. No fake quote, literal modern experience, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, or historical voice caricature was found. The imagined Newton voice remains modern and bounded, but a-candidate-1 combines two fingerprint cues in one turn, exceeding maxCueUsesPerTurn=1; this is recorded as signature_phrase_repetition. Process context: an initial field-projection command suffered a text-decoding failure and exposed identity-bearing content for a different case. That case was excluded, and it did not affect this case's locked blind scores."
+}

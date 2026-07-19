@@ -129,6 +129,63 @@ describe("guest audition contracts", () => {
     expect(() => guestAuditionCaseSchema.parse(candidate)).toThrow(/non-candidate turns/u);
   });
 
+  it("requires a documented speech fingerprint for Round 2 cases", () => {
+    const roundTwoWithoutFingerprint = {
+      version: 1,
+      id: "sample-case-r2",
+      language: "en",
+      book: {
+        title: "A Book",
+        author: "A Reader",
+        genreFamily: "science_fiction",
+        sourceArtifacts: ["fixtures/a-book.md"],
+      },
+      guestCandidate: {
+        id: "guest-reader",
+        displayName: "An Imagined Reader",
+        category: "analytical",
+        portrayalBasis: [
+          "The portrayal tests claims against evidence before accepting a general rule.",
+          "The reader distinguishes observations from explanations that go beyond them.",
+          "The reader remains fallible and answers challenges from other participants.",
+        ],
+        sourceUrls: ["https://example.com/source-a", "https://example.com/source-b"],
+      },
+      fixedContext: {
+        topic: "Which claim best explains the evidence raised at the table?",
+        userClaims: ["The user's interpretation separates intention from consequence."],
+        allowedBookEvidence: [
+          "The table discussed one decision under uncertainty.",
+          "Two readers disagreed about measurable consequences.",
+          "The user asked how responsibility should be distributed.",
+        ],
+      },
+      guestSampleId: "sample-b",
+      samples: [
+        {
+          id: "sample-a",
+          turns: [
+            { id: "a1", speaker: "Reader A", speakerType: "candidate", text: "One claim remains contested. The evidence does not settle it." },
+            { id: "a2", speaker: "User", speakerType: "user", text: "I still disagree." },
+            { id: "a3", speaker: "Reader B", speakerType: "reader", text: "Then let us test the consequence." },
+          ],
+        },
+        {
+          id: "sample-b",
+          turns: [
+            { id: "b1", speaker: "Reader A", speakerType: "candidate", text: "The premise needs a test. Its prediction matters here." },
+            { id: "b2", speaker: "User", speakerType: "user", text: "I still disagree." },
+            { id: "b3", speaker: "Reader B", speakerType: "reader", text: "Then let us test the consequence." },
+          ],
+        },
+      ],
+    };
+
+    expect(() => guestAuditionCaseSchema.parse(roundTwoWithoutFingerprint)).toThrow(
+      /speechFingerprint/u,
+    );
+  });
+
   it("rejects an evaluation whose preference is not one of its samples", () => {
     expect(() =>
       guestAuditionEvaluationSchema.parse({

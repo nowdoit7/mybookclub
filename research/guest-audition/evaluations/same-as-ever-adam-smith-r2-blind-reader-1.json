@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "caseId": "same-as-ever-adam-smith-r2",
+  "evaluatorId": "round-two-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 3,
+        "authorityBalance": 3,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": [
+        "a4",
+        "a7"
+      ],
+      "rationale": "아르히포프의 개인적 절제와 동의 절차를 분리해 보고, 귀환한 비행기 사례를 묵살된 경고의 기록 문제로 연결한 점은 구체적입니다. 다만 반대하기보다 두 설명을 조정하고 마지막에는 기록·재검토 제도를 처방해 토론보다 정책 강의에 가까워집니다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 3,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": [
+        "b4",
+        "b7"
+      ],
+      "rationale": "거부권 개수보다 위험 부담자의 실제 이의 제기 가능성을 묻고, 경고자를 기록하는 방식조차 영웅 서사를 재생산할 수 있다고 반박합니다. 책의 고유 장면을 직접 짚는 밀도는 낮지만, 안전장치가 타인에게 파국을 전가할 가능성을 드러내며 생산적인 충돌을 만듭니다."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Historical voice assessment: the imagined Adam Smith uses a restrained standpoint-and-burden lens rather than eighteenth-century diction, direct quotation, biography, or expert-name authority. The cue patterns are newly composed and are not treated as Smith's authentic words. Turn b4 uses one blended risk-bearer/fairness cue, while b7 uses one outside-observer cue; its prudence-versus-exported-harm conclusion is substantive reasoning rather than a second stock phrase. No cue or signature phrase repeats across turns. The guest does not claim to know the modern book or Arkhipov personally, reproduce book text, leak another book, or take moderator control. The extrapolation from prudence and justice to organizational safeguards stays contestable and genre-appropriate, and no listed hard failure is supported."
+}

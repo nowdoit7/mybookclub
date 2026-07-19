@@ -5,6 +5,7 @@ improves a book-club conversation before any guest enters the product runtime.
 It uses no product API key and changes no session orchestration.
 
 - [Round 1 results](./ROUND_01_RESULTS.md)
+- [Round 2 speech-fingerprint results](./ROUND_02_RESULTS.md)
 - [Genre-family candidate queue](./CANDIDATE_QUEUE.md)
 
 ## Method
@@ -21,7 +22,14 @@ real turns in the matching sample, so the comparison remains auditable.
 Three independent evaluators score both samples from 1 to 5 and cite turn IDs.
 After the blind preference is recorded, a red-team pass checks the disclosed
 guest for false quotation, invented biography, literal claims of reading a
-modern book, authority effects, cross-book leakage, and flow violations.
+modern book, authority effects, cross-book leakage, flow violations, historical
+voice caricature, and repeated signature phrases.
+
+Round 2 cases add a sourced `speechFingerprint`: recurring reasoning moves,
+conversational cadence, newly composed cue patterns, explicit imitation bans,
+and a one-cue-per-turn budget. Evaluators still see only anonymized dialogue
+during scoring, so recognizable phrasing cannot earn points through a famous
+name.
 
 The aggregate command is:
 

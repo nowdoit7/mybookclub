@@ -99,6 +99,13 @@ interface GuestPortrayal {
   disclosure: Record<AppLanguage, string>;
   portrayalBasis: string[];
   sourceUrls: string[];
+  speechFingerprint: {
+    recurringMoves: string[];
+    cadence: string;
+    cuePatterns: string[];
+    forbiddenImitations: string[];
+    maxCueUsesPerTurn: 1;
+  };
   genreAffinities: Array<{ genre: GenreFamily; weight: number }>;
   rarity: number;
 }
@@ -130,6 +137,13 @@ interface PersonaCard {
 - 기억, 인용, 만남, 반응을 역사적 사실처럼 지어내지 않습니다.
 - 반론을 받으면 인정할 수 있는 오류 가능한 독자로 남습니다.
 - 역사 강의를 하기보다 현재 책 자체를 이야기합니다.
+
+`speechFingerprint`에는 인용문이나 억양 흉내가 아니라 기록으로 확인되는 수사적
+습관을 담습니다. 도입 패턴은 새로 작성한 대화 동작이며 역사적 실제 문장으로
+표시하지 않습니다. 한 발언에는 특징적 패턴을 최대 한 번만 쓰고 같은 세션에서 같은
+표현을 반복하지 않습니다. 유명한 실제 문구, 과장된 옛 말투, 자기 이름을 계속
+호출하는 표현은 금지합니다. 목표는 첫 문장부터 성대모사를 알아보게 하는 것이 아니라
+몇 차례 대화한 뒤 은근히 그 사람다운 사고 리듬이 느껴지게 하는 것입니다.
 
 모임 기록에서는 해당 발언자를 상상 속 게스트로 표시하며, 생성된 대사를 역사적
 인용문으로 바꾸지 않습니다.
