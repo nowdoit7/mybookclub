@@ -185,10 +185,11 @@ a hard project usage limit in the OpenAI Platform before publishing the demo.
 - Directive: ~0.1K
 - Output: ≤220 tokens
 - Generate the three private reading-note objects in parallel.
-- Run one discussion topic. Its base reader-to-reader clash is mandatory; one
-  additional two-reader exchange is optional and code-capped. The user may
-  spend that single extension either before joining or after answering a
-  challenge. Do not add a second topic in MVP.
+- Run one discussion topic. Its base reader-to-reader clash is mandatory; up to
+  two additional two-reader exchanges are optional and code-capped. At each
+  post-join checkpoint the user chooses whether to continue or wrap, so a live
+  disagreement is not closed immediately after its first useful exchange. Do
+  not add a second topic in MVP.
 - Expect roughly 30–40 model calls for a full live session; this is a latency
   risk even when token cost is modest. Track call count and elapsed time in the
   console harness.
@@ -287,7 +288,7 @@ interface SessionState {
     supporter?: string;           // optional third reader
     observer?: string;            // seated but intentionally silent in discussion
   };
-  discussionListenCount: number;  // 0..1 in MVP
+  discussionListenCount: number;  // 0..2 in MVP
   seed?: string;
 }
 ```
@@ -579,6 +580,9 @@ interpretations; quote at most a short phrase; never reproduce passages.
 - Code selects two personas with meaningfully different overall positions to
   share one specific scene each. **At least one must surface an easily-missed
   scene** from its `keyScenes` ("Did anyone else catch…").
+- Code assigns distinct prepared scene anchors when the readers' notes contain
+  alternatives, preventing two independent testimonies from defaulting to the
+  same famous scene merely because it is salient.
 - Both scene testimonies are generated before either is revealed and follow the
   same independent-testimony rule as first impressions.
 - **User turn**: user shares theirs. One of those readers reacts once. The third
@@ -598,35 +602,41 @@ interpretations; quote at most a short phrase; never reproduce passages.
   4. `leadA` answers once without turning toward the user.
   5. The UI exposes a **discussion checkpoint**, not a generated utterance:
      `join`, `listen`, or `wrap`.
-- `listen` schedules one additional two-reader exchange and is available at
-  most once across the whole topic. Before the user joins, the next checkpoint
-  offers `join` or `wrap`.
+- `listen` schedules one additional two-reader exchange. It is available once
+  before the user joins and at post-join checkpoints until the whole topic has
+  used its code-owned maximum of two extensions. Before the user joins, the
+  next checkpoint offers `join` or `wrap`.
 - `join` asks the user for a position, extracts stance, and selects the persona
   furthest from that position as challenger. The challenger asks one pointed
   question, the next turn belongs to the user, and the challenger responds once.
   Code may add the remaining closest reader once as supporter when their
   evidence is genuinely distinct; no one speaks for symmetry.
-- If the user joined without spending the extension, code now exposes one final
-  checkpoint after the challenger response and supporter turn: `listen` means
-  "continue the discussion" for one two-reader exchange, while `wrap` closes
-  the topic. The user therefore decides whether an interesting new conflict
-  receives one more bounded pass.
+- After the challenger response and supporter turn, code exposes a checkpoint:
+  `listen` means "continue the discussion" for one two-reader exchange, while
+  `wrap` closes the topic. When one extension remains, the same checkpoint is
+  shown again after that exchange. The user therefore decides whether an
+  interesting conflict receives a second bounded pass instead of being moved
+  automatically into WRAP_UP.
 - `wrap` or the extension cap makes Alex close with a concise tension summary,
   never a false resolution. Unresolved disagreement is carried into WRAP_UP.
-- Expected discussion size is roughly 7–13 generated/user utterances depending
-  on the chosen route. One topic and one listening extension are hard caps.
+- Expected discussion size is roughly 7–15 generated/user utterances depending
+  on the chosen route. One topic and two listening extensions are hard caps.
 
 ### Stage 5 — WRAP_UP
 - Moderator asks the user first for a closing thought ("Did this discussion move you?").
 - **User turn** comes before AI closings so a new final idea is not ignored.
-- Up to two readers involved in the discussion each give one short, independent
-  closing reflection. They may mention the user only when a particular claim
+- All three seated readers each give one short, independent two-sentence closing:
+  one genuine takeaway plus a natural, persona-specific farewell. Social
+  symmetry is appropriate at goodbye even though discussion turns are never
+  scheduled for symmetry. Generate all three closings in parallel after the
+  user's closing thought. They may mention the user only when a particular claim
   genuinely changed their position; they must not copy the user's analogy,
-  occupation, wording, or personal plan into their own conclusion. The observer
-  is not forced to speak.
+  occupation, wording, or personal plan into their own conclusion, open a new
+  argument, or use an identical generic sign-off.
 - Moderator gives a substantive 2–3 sentence spoken summary: central
-  disagreement, what shifted, and what remains unresolved. After the summary's
-  normal reading delay, trigger **recap generation** (§10) → recap screen.
+  disagreement, what shifted, and what remains unresolved, then thanks the
+  readers and says that the written recap is next. After the summary's normal
+  reading delay, trigger **recap generation** (§10) → recap screen.
 
 ---
 
@@ -1092,7 +1102,9 @@ Context: {last few utterances}. 1-3 sentences, warm and crisp. JSON only.
   current utterance idempotently.
 - **Schema or sentence-count failure:** one structured repair retry with the
   exact validation error; then a role-appropriate fallback utterance and log.
-  Never append invalid output to the transcript.
+  Fallbacks use public role/task language only and never splice, excerpt, or
+  truncate private reading notes into dialogue. Never append invalid output to
+  the transcript.
 - **Model refusal:** detect the Responses API refusal item explicitly, show a
   safe stage-appropriate message, and preserve the pending engine turn for retry.
 - **User writes something off-topic/blank:** moderator gently redirects once;

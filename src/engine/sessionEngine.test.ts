@@ -14,7 +14,7 @@ describe("SessionEngine", () => {
     });
 
     expect(result.state.stage).toBe("WRAP_UP");
-    expect(result.state.transcript).toHaveLength(32);
+    expect(result.state.transcript).toHaveLength(33);
     expect(Object.values(result.state.roomAtmosphere).every((value) => value >= 0 && value <= 1)).toBe(
       true,
     );
@@ -37,7 +37,7 @@ describe("SessionEngine", () => {
       speaker: "moderator",
       stage: "WRAP_UP",
     });
-    expect(result.state.transcript.at(-1)?.text).toContain("The recap");
+    expect(result.state.transcript.at(-1)?.text).toContain("written recap");
 
     const topicOpening = result.state.transcript.find(
       ({ stage, speaker }) => stage === "DISCUSSION" && speaker === "moderator",
@@ -151,14 +151,14 @@ describe("SessionEngine", () => {
     expect(state.userStances[state.activeTopic!]).toBeUndefined();
   });
 
-  it("lets the user extend the clash once after joining the discussion", async () => {
+  it("lets the user extend the clash twice after joining and choose when to wrap", async () => {
     const checkpoints: Array<{ phase: string; canListen: boolean }> = [];
     const { state } = await new SessionEngine(new MockGenerationClient()).run({
       title: "A Reader-Selected Book",
       seed: "demo",
       async requestDiscussionAction(turn) {
         checkpoints.push({ phase: turn.phase, canListen: turn.canListen });
-        return turn.phase === "before_join" ? "join" : "listen";
+        return turn.phase === "before_join" ? "join" : "wrap";
       },
     });
 
@@ -166,14 +166,35 @@ describe("SessionEngine", () => {
       { phase: "before_join", canListen: true },
       { phase: "after_join", canListen: true },
     ]);
-    expect(state.discussionListenCount).toBe(1);
+    expect(state.discussionListenCount).toBe(0);
+  });
+
+  it("caps post-join extensions at two reader exchanges", async () => {
+    const checkpoints: Array<{ phase: string; canListen: boolean; round: number }> = [];
+    const { state } = await new SessionEngine(new MockGenerationClient()).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+      async requestDiscussionAction(turn) {
+        checkpoints.push({ phase: turn.phase, canListen: turn.canListen, round: turn.round });
+        return turn.phase === "before_join" ? "join" : "listen";
+      },
+    });
+
+    expect(checkpoints).toEqual([
+      { phase: "before_join", canListen: true, round: 0 },
+      { phase: "after_join", canListen: true, round: 1 },
+      { phase: "after_join", canListen: true, round: 2 },
+    ]);
+    expect(state.discussionListenCount).toBe(2);
     const discussion = state.transcript.filter(({ stage }) => stage === "DISCUSSION");
-    const extension = discussion.slice(-3, -1);
+    const extension = discussion.slice(-5, -1);
     expect(discussion.at(-1)?.speaker).toBe("moderator");
-    expect(extension).toHaveLength(2);
-    expect(extension[0].speaker).not.toBe(extension[1].speaker);
-    expect(extension[0].refersTo).toBe(extension[1].speaker);
-    expect(extension[1].refersTo).toBe(extension[0].speaker);
+    expect(extension).toHaveLength(4);
+    for (let index = 0; index < extension.length; index += 2) {
+      expect(extension[index].speaker).not.toBe(extension[index + 1].speaker);
+      expect(extension[index].refersTo).toBe(extension[index + 1].speaker);
+      expect(extension[index + 1].refersTo).toBe(extension[index].speaker);
+    }
   });
 
   it("continues safely when the user passes both discussion turns", async () => {
@@ -216,11 +237,24 @@ describe("SessionEngine", () => {
 
   it("prepares both memorable scenes as independent testimony", async () => {
     const client = new MockGenerationClient();
+    const originalGenerateNotes = client.generateReadingNotes.bind(client);
     const originalGenerateUtterance = client.generateUtterance.bind(client);
     const sceneContexts: string[][] = [];
+    const sceneAnchors: string[] = [];
+    client.generateReadingNotes = async (input) => {
+      const output = await originalGenerateNotes(input);
+      return {
+        ...output,
+        key_scenes: [
+          "Yun Tianming tells the encoded fairy tales under surveillance.",
+          `${input.persona.name} notices a different quiet turning point.`,
+        ],
+      };
+    };
     client.generateUtterance = async (input) => {
       if (input.task === "MEMORABLE_SCENE") {
         sceneContexts.push(input.recentTranscript.map(({ speaker }) => speaker));
+        sceneAnchors.push(input.discussionFocus ?? "");
       }
       return originalGenerateUtterance(input);
     };
@@ -230,6 +264,9 @@ describe("SessionEngine", () => {
     expect(sceneContexts).toHaveLength(2);
     expect(sceneContexts.every((speakers) => speakers.length === 1)).toBe(true);
     expect(sceneContexts.every(([speaker]) => speaker === "moderator")).toBe(true);
+    expect(sceneAnchors).toHaveLength(2);
+    expect(sceneAnchors[0]).toContain("Yun Tianming");
+    expect(sceneAnchors[1]).not.toContain("Yun Tianming");
   });
 
   it("derives and updates room atmosphere without another model operation", async () => {
@@ -282,7 +319,7 @@ describe("SessionEngine", () => {
       },
     });
 
-    expect(advanceCount).toBe(26);
+    expect(advanceCount).toBe(27);
     expect(inputCount).toBe(6);
     expect(completionWaitCount).toBe(1);
     expect(state.transcript.filter(({ speaker }) => speaker === "user").map(({ text }) => text)).toEqual(
@@ -383,7 +420,7 @@ describe("SessionEngine", () => {
     });
 
     expect(result.state.book.title).toBe("최근에 읽은 책");
-    expect(result.state.transcript).toHaveLength(32);
+    expect(result.state.transcript).toHaveLength(33);
     expect(result.state.transcript[0].text).toMatch(/[가-힣]/u);
     expect(result.recapMarkdown).toContain("## 토론 요약");
     expect(result.recapMarkdown).toContain("## 잠들기 전 생각할 질문");
@@ -434,13 +471,25 @@ describe("SessionEngine", () => {
     const closings = state.transcript.filter(
       ({ stage, speaker }) => stage === "WRAP_UP" && !["moderator", "user"].includes(speaker),
     );
-    expect(closings).toHaveLength(2);
-    expect(new Set(closings.map(({ text }) => text)).size).toBe(2);
+    expect(closings).toHaveLength(3);
+    expect(new Set(closings.map(({ text }) => text)).size).toBe(3);
   });
 
   it("uses persona-specific fallbacks and reports them as operational diagnostics", async () => {
     const client = new MockGenerationClient();
+    const originalGenerateNotes = client.generateReadingNotes.bind(client);
     const originalGenerateUtterance = client.generateUtterance.bind(client);
+    client.generateReadingNotes = async (input) => {
+      const output = await originalGenerateNotes(input);
+      return {
+        ...output,
+        overall_take: "PRIVATE_SENTINEL must never appear in fallback dialogue. This remains private.",
+        stance_by_topic: output.stance_by_topic.map((item) => ({
+          ...item,
+          reason: "PRIVATE_SENTINEL reason must stay private.",
+        })),
+      };
+    };
     client.generateUtterance = async (input) =>
       input.speaker === "moderator"
         ? originalGenerateUtterance(input)
@@ -460,6 +509,11 @@ describe("SessionEngine", () => {
 
     expect(new Set(introductions.map(({ text }) => text)).size).toBe(3);
     expect(introductions.map(({ text }) => text).join(" ")).toMatch(/북톡|형사 변호사|소프트웨어 엔지니어/u);
+    expect(state.transcript.map(({ text }) => text).join(" ")).not.toContain("PRIVATE_SENTINEL");
+    const closings = state.transcript.filter(
+      ({ stage, speaker }) => stage === "WRAP_UP" && !["moderator", "user"].includes(speaker),
+    );
+    expect(new Set(closings.map(({ text }) => text)).size).toBe(3);
     expect(statuses.some((message) => message.startsWith("Quality fallback: task="))).toBe(true);
   });
 

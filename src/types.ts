@@ -119,7 +119,7 @@ export interface SessionState {
     supporter?: string;
     observer?: string;
   };
-  discussionListenCount: number;
+  discussionListenCount: number; // 0..2 bounded reader-to-reader extensions
   seed?: string;
 }
 

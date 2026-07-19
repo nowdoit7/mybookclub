@@ -47,3 +47,5 @@
 - 2026-07-19: Separated social introductions, overall first impressions, and concrete scenes; localized persona small-talk seeds now keep introductions human without making the current book the user's first prompt.
 - 2026-07-19: Corrected the persona validator to honor the 2–4 sentence contract, replaced shared generic fallbacks with task/persona-specific speech, and surfaced safe fallback metadata in development diagnostics.
 - 2026-07-19: Added one bounded post-join continue-or-wrap checkpoint, fixed user-turn portrait focus and avatar centering, and carried the reading-room visual shell through setup and recap.
+- 2026-07-19: Let the reader extend a live disagreement through a second bounded checkpoint, assigned distinct prepared scene anchors when available, and removed all private-note text from quality fallbacks.
+- 2026-07-19: Reframed WRAP_UP as a social closing: all three readers prepare distinct two-sentence takeaways and farewells in parallel, then Alex thanks the table and hands off to the written recap.

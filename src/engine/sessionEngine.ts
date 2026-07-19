@@ -139,6 +139,38 @@ type GenerationOptions = Partial<
   Pick<UtteranceRequest, "activeTopic" | "targetSpeaker" | "userArgument" | "discussionFocus">
 > & { allowShelfReference?: boolean };
 
+const MAX_DISCUSSION_EXTENSIONS = 2;
+
+function sceneTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/u)
+      .filter((token) => token.length > 1),
+  );
+}
+
+function sceneSimilarity(left: string, right: string): number {
+  const leftTokens = sceneTokens(left);
+  const rightTokens = sceneTokens(right);
+  const union = new Set([...leftTokens, ...rightTokens]);
+  if (union.size === 0) return 0;
+  const overlap = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  return overlap / union.size;
+}
+
+export function selectDistinctSceneAnchors(
+  readers: [PersonaCard, PersonaCard],
+  notes: Record<string, ReadingNotes>,
+): [string, string] {
+  const first = notes[readers[0].id].keyScenes[0];
+  const second = [...notes[readers[1].id].keyScenes].sort(
+    (left, right) => sceneSimilarity(first, left) - sceneSimilarity(first, right),
+  )[0];
+  return [first, second];
+}
+
 export function selectDiscussionTopic(
   book: ConfirmedBook,
   personas: PersonaCard[],
@@ -435,7 +467,7 @@ export class SessionEngine {
             DEVILS_ADVOCATE: "잠시 반대편에서 묻겠습니다. 지금의 해석이 놓치고 있는 가장 강한 반례는 무엇일까요?",
             TOPIC_CLOSE: "이견은 완전히 풀리지 않았지만 어디에서 갈리는지는 분명해졌습니다. 이 긴장을 남겨 둔 채 마무리로 가겠습니다.",
             WRAP_OPEN: "이제 각자 오늘 테이블에서 가져갈 생각을 하나씩 남겨보겠습니다. 처음 생각과 달라진 점이 없어도 괜찮습니다.",
-            DISCUSSION_SUMMARY: "오늘은 같은 책의 근거가 서로 다른 판단으로 이어지는 지점을 살폈습니다. 합의보다 남은 이견과 생각의 움직임을 모임 기록에 담겠습니다.",
+            DISCUSSION_SUMMARY: "오늘은 같은 책의 근거가 서로 다른 판단으로 이어지는 지점을 살폈습니다. 함께 이야기해 주셔서 고맙습니다. 남은 이견과 생각의 움직임을 이제 모임 기록에 담겠습니다.",
           }
         : {
             WELCOME: "Welcome to The Reading Table. Before discussing the book, let us first meet the people sharing the table tonight.",
@@ -447,7 +479,7 @@ export class SessionEngine {
             DEVILS_ADVOCATE: "Let me push from the other side. What is the strongest counterexample this reading might miss?",
             TOPIC_CLOSE: "The disagreement is not resolved, but its fault line is clearer. Let us carry that tension into the closing round.",
             WRAP_OPEN: "Let us each leave one thought from tonight's table. It is fine if your original view has not changed.",
-            DISCUSSION_SUMMARY: "Tonight we examined how the same evidence can lead readers toward different judgments. The recap will preserve both the movement and the disagreement that remains.",
+            DISCUSSION_SUMMARY: "Tonight we examined how the same evidence can lead readers toward different judgments. Thank you all for sharing the table. The written recap will preserve both the movement and the disagreement that remains.",
           };
       return {
         utterance: moderatorLines[task] ?? (ko
@@ -459,12 +491,6 @@ export class SessionEngine {
       };
     }
 
-    const reason = this.personaReasonFor(speaker, topic) ?? this.state.notes[speaker.id]?.overallTake;
-    const shortReason = reason
-      ?.replace(/[.!?。？！]+/gu, ", ")
-      .replace(/\s+/gu, " ")
-      .replace(/,+\s*$/u, "")
-      .slice(0, 150);
     const lens = ko ? speaker.roleLabel.ko : speaker.roleLabel.en;
     let utterance: string;
     if (task === "PERSONA_INTRODUCTION") {
@@ -477,24 +503,44 @@ export class SessionEngine {
         : `From my perspective as a ${lens.toLowerCase()}, I cannot accept that conclusion as it stands. Can ${targetsUser ? "your evidence" : `${target}'s evidence`} also explain the strongest counterexample?`;
     } else if (task === "CLOSING_REFLECTION") {
       utterance = ko
-        ? `저는 오늘 ${shortReason ?? "같은 근거도 다르게 읽힐 수 있다는 점"}을 끝까지 붙잡았습니다. 답을 하나로 모으기보다 이 차이를 다음 독서에도 가져가고 싶어요.`
-        : `I kept returning to ${shortReason ?? "the way the same evidence can support different readings"}. I would rather carry that difference into my next reading than force one answer tonight.`;
+        ? `${lens}인 저는 오늘 대화에서 처음보다 더 어려운 질문 하나를 가져가게 됐습니다. 서로 다른 독자들과 이 책을 이야기해서 즐거웠어요.`
+        : `As a ${lens.toLowerCase()}, I am leaving with a harder question than the one I brought to the table. I enjoyed hearing this book argued by such different readers.`;
     } else if (task === "FIRST_IMPRESSION") {
       utterance = ko
-        ? `제 첫인상은 ${shortReason ?? "쉽게 한쪽으로 정리되지 않는 책이라는 것"}이었습니다. 아직 특정 장면보다 책 전체가 남긴 감각을 더 생각해 보고 싶어요.`
-        : `My first impression was ${shortReason ?? "that the book resisted an easy verdict"}. Before choosing a scene, I want to sit with the feeling the whole work left behind.`;
+        ? `저는 이 책을 한쪽 판단으로 쉽게 정리하기 어려웠습니다. 아직 특정 장면보다 책 전체가 남긴 감각을 조금 더 붙잡고 싶어요.`
+        : `I could not settle this book into one easy verdict. Before choosing a scene, I want to sit with the feeling the whole work left behind.`;
     } else if (task === "MEMORABLE_SCENE") {
       utterance = ko
         ? `저는 제 관점이 가장 불편하게 흔들린 장면을 다시 보고 싶습니다. 그 순간이 ${lens}인 제게도 간단한 결론을 허락하지 않았어요.`
         : `I want to return to the scene that most unsettled my usual lens. It refused to give even a ${lens.toLowerCase()} an easy conclusion.`;
     } else if (task === "SUPPORT_USER") {
       utterance = ko
-        ? `${targetLabel}님, 사용자의 구분은 다른 근거도 설명할 여지가 있다고 봅니다. 다만 ${shortReason ?? "중요한 예외"}까지 지워 버리면 그 해석도 너무 넓어집니다.`
-        : `${target}, I think the user's distinction can account for other evidence as well. Its limit is that it becomes too broad if it erases ${shortReason ?? "an important exception"}.`;
+        ? `${targetLabel}님, 사용자의 구분은 다른 근거도 설명할 여지가 있다고 봅니다. 다만 중요한 예외까지 지워 버리면 그 해석도 너무 넓어집니다.`
+        : `${target}, I think the user's distinction can account for other evidence as well. Its limit is that it becomes too broad if it erases an important exception.`;
+    } else if (task === "REACT_TO_USER_SCENE") {
+      utterance = ko
+        ? `그 장면은 사용자가 짚은 의미만큼이나 다른 결과도 남깁니다. 저는 ${lens}의 관점에서 그 선택이 무엇을 지키고 무엇을 끝내 설명하지 못하는지 더 보고 싶어요.`
+        : `That scene leaves another consequence beside the meaning you identified. From my perspective as a ${lens.toLowerCase()}, I want to ask what the choice protects and what it still cannot explain.`;
+    } else if (task === "OPEN_PERSONA_POSITION") {
+      utterance = ko
+        ? `${targetLabel}님, 저는 ${lens}의 관점에서 이 질문을 판단할 때 결과를 먼저 봐야 한다고 생각합니다. 같은 장면을 두고도 우리가 어디에서 갈리는지 분명히 해보고 싶어요.`
+        : `${target}, from my perspective as a ${lens.toLowerCase()}, the consequences should carry the most weight here. I want to make clear where the same evidence leads us apart.`;
+    } else if (task === "CHALLENGE_PERSONA") {
+      utterance = ko
+        ? `${targetLabel}님, 그 결론은 장면이 남긴 반대 증거를 충분히 설명하지 못합니다. 같은 근거가 다른 결과를 낳는 부분은 어떻게 보시나요?`
+        : `${target}, that conclusion does not yet explain the scene's strongest contrary evidence. How do you account for the part where the same premise leads to a different result?`;
+    } else if (task === "RESPOND_TO_PERSONA") {
+      utterance = ko
+        ? `${targetLabel}님이 짚은 한계는 인정하지만, 그것만으로 제 판단이 뒤집히지는 않습니다. 같은 장면에서 우리가 무엇을 더 중요한 결과로 보는지가 아직 다릅니다.`
+        : `${target}, I grant the limit you identified, but it does not overturn my judgment. We still disagree about which consequence of the same scene should carry more weight.`;
+    } else if (task === "RESPOND_TO_USER_REPLY") {
+      utterance = ko
+        ? `사용자의 답변으로 구분하려는 지점은 더 분명해졌습니다. 그래도 그 구분이 설명하지 못하는 결과가 남아 있어 제 반론은 완전히 풀리지 않았어요.`
+        : `Your answer makes the distinction clearer. My objection is not fully resolved because one consequence still falls outside that distinction.`;
     } else {
       utterance = ko
-        ? `${targetLabel}님이 짚은 부분은 이해하지만, ${shortReason ?? "제가 중요하게 본 근거"} 때문에 제 판단은 아직 다릅니다. 같은 대목에서 생긴 이 차이를 조금 더 구체적으로 따져보고 싶어요.`
-        : `I understand ${targetsUser ? "your point" : `${target}'s point`}, but my judgment still differs because of ${shortReason ?? "the evidence I find most important"}. I want to test that difference more precisely against the same part of the book.`;
+        ? `${targetLabel}님이 짚은 부분은 이해하지만 제 판단은 아직 다릅니다. 같은 대목에서 생긴 이 차이를 조금 더 구체적으로 따져보고 싶어요.`
+        : `I understand ${targetsUser ? "your point" : `${target}'s point`}, but my judgment still differs. I want to test that difference more precisely against the same part of the book.`;
     }
     return {
       utterance,
@@ -717,9 +763,13 @@ export class SessionEngine {
       (left, right) =>
         this.state.notes[left.id].overallStance - this.state.notes[right.id].overallStance,
     );
-    const sceneReaders = [ranked[0], ranked[ranked.length - 1]];
-    const scenePromises = sceneReaders.map((persona) =>
-      this.prepareGenerated(persona, "MEMORABLE_SCENE", { allowShelfReference: true }),
+    const sceneReaders: [PersonaCard, PersonaCard] = [ranked[0], ranked[ranked.length - 1]];
+    const sceneAnchors = selectDistinctSceneAnchors(sceneReaders, this.state.notes);
+    const scenePromises = sceneReaders.map((persona, index) =>
+      this.prepareGenerated(persona, "MEMORABLE_SCENE", {
+        allowShelfReference: true,
+        discussionFocus: sceneAnchors[index],
+      }),
     );
     scenePromises.forEach((promise) => void promise.catch(() => undefined));
     for (const scenePromise of scenePromises) {
@@ -855,26 +905,28 @@ export class SessionEngine {
         },
       });
 
-      if (this.state.discussionListenCount === 0 && this.requestDiscussionAction) {
+      while (
+        this.state.discussionListenCount < MAX_DISCUSSION_EXTENSIONS &&
+        this.requestDiscussionAction
+      ) {
         const postJoinAction = await this.requestDiscussionAction({
-          round: 1,
+          round: this.state.discussionListenCount + 1,
           canListen: true,
           phase: "after_join",
         });
-        if (postJoinAction === "listen") {
-          this.state.discussionListenCount = 1;
-          const lastSpeaker = this.state.transcript.at(-1)?.speaker;
-          const first = lastSpeaker === leadA.id ? leadB : leadA;
-          const second = first.id === leadA.id ? leadB : leadA;
-          await this.appendGenerated(first, "RESPOND_TO_PERSONA", {
-            activeTopic: topic,
-            targetSpeaker: second.id,
-          });
-          await this.appendGenerated(second, "RESPOND_TO_PERSONA", {
-            activeTopic: topic,
-            targetSpeaker: first.id,
-          });
-        }
+        if (postJoinAction !== "listen") break;
+        this.state.discussionListenCount += 1;
+        const lastSpeaker = this.state.transcript.at(-1)?.speaker;
+        const first = lastSpeaker === leadA.id ? leadB : leadA;
+        const second = first.id === leadA.id ? leadB : leadA;
+        await this.appendGenerated(first, "RESPOND_TO_PERSONA", {
+          activeTopic: topic,
+          targetSpeaker: second.id,
+        });
+        await this.appendGenerated(second, "RESPOND_TO_PERSONA", {
+          activeTopic: topic,
+          targetSpeaker: first.id,
+        });
       }
     }
     await this.appendGenerated("moderator", "TOPIC_CLOSE", { activeTopic: topic });
@@ -889,15 +941,19 @@ export class SessionEngine {
       this.state.discussionRoles?.supporter,
       this.state.discussionRoles?.leadA,
       this.state.discussionRoles?.leadB,
+      ...this.state.personas.map(({ id }) => id),
     ].filter((id): id is string => Boolean(id) && id !== "moderator");
     const closingPersonas = [...new Set(closingIds)]
       .map((id) => this.state.personas.find((persona) => persona.id === id))
-      .filter((persona): persona is PersonaCard => Boolean(persona))
-      .slice(0, 2);
-    for (const persona of closingPersonas) {
-      await this.appendGenerated(persona, "CLOSING_REFLECTION", {
+      .filter((persona): persona is PersonaCard => Boolean(persona));
+    const closingPromises = closingPersonas.map((persona) =>
+      this.prepareGenerated(persona, "CLOSING_REFLECTION", {
         activeTopic: this.state.activeTopic,
-      });
+      }),
+    );
+    closingPromises.forEach((promise) => void promise.catch(() => undefined));
+    for (const closingPromise of closingPromises) {
+      await this.appendPrepared(await closingPromise, "CLOSING_REFLECTION");
     }
     const summary = await this.appendGenerated("moderator", "DISCUSSION_SUMMARY", {
       activeTopic: this.state.activeTopic,

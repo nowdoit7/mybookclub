@@ -155,6 +155,35 @@ function personaIntroduction(persona: PersonaCard, language: AppLanguage): strin
     : `Hi, I'm ${name}. My day job is ${persona.roleLabel.en.toLowerCase()}. ${persona.socialIntroSeed.en}`;
 }
 
+function closingReflection(persona: PersonaCard, language: AppLanguage): string {
+  const takeaway =
+    language === "ko"
+      ? {
+          emotional: "오늘은 감정이 무엇을 보여 주고 또 무엇을 놓칠 수 있는지 더 분명해졌어요.",
+          analytical: "오늘은 근거가 이견을 날카롭게 만들면서도 결론까지 대신해 주지는 않는다는 점이 남았습니다.",
+          contextual: "오늘은 맥락이 질문의 시야를 넓혀도 모든 판단을 대신할 수는 없다는 점을 가져갑니다.",
+        }[persona.category]
+      : {
+          emotional: "I am leaving with a clearer sense of what feeling can reveal and what it can miss.",
+          analytical: "I am leaving with a clearer sense of how evidence can sharpen a disagreement without settling it.",
+          contextual: "I am leaving with a wider view of the question and a clearer sense of what context cannot settle.",
+        }[persona.category];
+  const farewell =
+    language === "ko"
+      ? {
+          emotional: "서로 다른 마음을 들을 수 있어 즐거웠고, 다음 책에서도 다시 만나고 싶어요.",
+          analytical: "좋은 반론을 주고받을 수 있어 즐거웠습니다—다음 테이블에서 뵙죠.",
+          contextual: "함께 시야를 넓혀 가는 대화가 즐거웠어요; 다음 책에서 또 만나요.",
+        }[persona.category]
+      : {
+          emotional: "I loved hearing how differently this table felt the book, and I hope we meet over another one.",
+          analytical: "I enjoyed the honest objections; I will close my case for tonight and see you at the next table.",
+          contextual: "I enjoyed widening the view together; until the next book.",
+        }[persona.category];
+
+  return `${takeaway} ${farewell}`;
+}
+
 function personaUtterance(input: UtteranceRequest): UtteranceOutput {
   const persona = input.speaker === "moderator" ? undefined : input.speaker;
   if (!persona) throw new Error("A persona is required for a persona mock utterance.");
@@ -176,6 +205,12 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
     120,
   ).replace(/[.!?。？！]+$/gu, "");
   const shelfRef = input.allowShelfReference ? persona.bookshelf[0]?.title ?? null : null;
+  const sceneAnchor = input.discussionFocus?.trim()
+    ? excerpt(input.discussionFocus, isKorean ? "선택된 장면" : "the selected scene", 160).replace(
+        /[.!?。？！]+$/gu,
+        "",
+      )
+    : undefined;
   const moodLead = isKorean
     ? input.roomAtmosphere.playfulness >= 0.58
       ? "이쯤이면 테이블이 조금 뜨거워져도 재미있겠네요."
@@ -199,13 +234,15 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
         CHALLENGE_PERSONA: `${targetName}님, 그 주장은 중요한 예외를 너무 빨리 정리합니다. 같은 근거가 반대 결론을 낳는 경우까지 어떻게 설명하시겠어요?`,
         RESPOND_TO_PERSONA: `${targetName}님이 짚은 예외는 인정하지만 제 결론까지 무너지지는 않습니다. 오히려 ${reason}을 얼마나 중요하게 볼 것인지가 아직 남은 차이입니다.`,
         CHALLENGE_USER: `저는 “${topic}”라는 질문에서 그 결론을 조금 더 밀어보고 싶습니다. 사용자가 말한 근거가 가장 강한 반대 사례까지 설명할 수 있다고 보시나요?`,
-        MEMORABLE_SCENE: shelfRef
-          ? `저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 제 책장에서는 『${shelfRef}』도 비슷한 질문을 던지지만, 지금은 사용자가 고른 장면이 무엇인지 먼저 듣겠습니다.`
-          : "저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 구체적인 장면은 제가 지어내지 않고, 사용자가 기억한 순간을 들은 뒤 제 관점을 보태겠습니다.",
+        MEMORABLE_SCENE: sceneAnchor
+          ? `저는 “${sceneAnchor}” 장면에 머물겠습니다. ${reason}의 관점에서 그 순간이 무엇을 보여 주고 무엇을 끝내 남겨 두는지 생각해 보고 싶어요.`
+          : shelfRef
+            ? `저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 제 책장에서는 『${shelfRef}』도 비슷한 질문을 던지지만, 지금은 사용자가 고른 장면이 무엇인지 먼저 듣겠습니다.`
+            : "저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 구체적인 장면은 제가 지어내지 않고, 사용자가 기억한 순간을 들은 뒤 제 관점을 보태겠습니다.",
         REACT_TO_USER_SCENE: `사용자가 말한 “${userMoment}”을 기준으로 보니 ${name}에게는 앞선 질문이 훨씬 구체적으로 들립니다. 저는 ${categoryLens.ko[persona.category]}을 중심으로, 그 대목이 무엇을 보여 주고 무엇을 끝내 설명하지 않는지 함께 보겠습니다.`,
         RESPOND_TO_USER_REPLY: `사용자의 답은 제가 문제 삼은 구분을 더 분명하게 해 줍니다. 그래도 ${reason}을 기준으로 보면 놓친 결과가 남아 있어, 이견이 완전히 풀리지는 않았어요.`,
         SUPPORT_USER: `${targetName}님, 저는 ${categoryLens.ko[persona.category]}이라는 관점에서는 사용자의 구분이 작품의 다른 근거도 설명할 수 있다고 봅니다. 다만 그 해석이 모든 결과를 대신 설명한다고 넓혀 버리면 중요한 예외를 놓칠 수 있습니다.`,
-        CLOSING_REFLECTION: `저는 오늘 ${reason}만으로는 어디까지 설명할 수 있는지 다시 생각하게 됐습니다. 이 관점을 놓치지는 않되, 다른 근거를 만나면 제 판단도 다시 살펴볼게요.`,
+        CLOSING_REFLECTION: closingReflection(persona, input.language),
       }
     : {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
@@ -214,13 +251,15 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
         CHALLENGE_PERSONA: `${targetName}, that claim closes an important exception too quickly. How does it explain the same evidence leading to the opposite conclusion?`,
         RESPOND_TO_PERSONA: `${targetName}'s exception matters, but it does not undo my conclusion. Our unresolved difference is how much weight to give ${reason}.`,
         CHALLENGE_USER: `I want to press that conclusion about ${topic}. Does the evidence you named really account for the strongest counterexample?`,
-        MEMORABLE_SCENE: shelfRef
-          ? `I want to return to the passage where the book's central tension becomes clearest. ${shelfRef} asks a related question on my shelf, but I would rather hear the user's chosen moment before making a comparison.`
-          : "I want to return to the passage where the book's central tension becomes clearest. I will not invent a scene here; I would rather hear the moment the user actually remembers and respond to that evidence.",
+        MEMORABLE_SCENE: sceneAnchor
+          ? `I want to stay with the scene “${sceneAnchor}.” Through ${reason}, I want to consider what that moment reveals and what it leaves unsettled.`
+          : shelfRef
+            ? `I want to return to the passage where the book's central tension becomes clearest. ${shelfRef} asks a related question on my shelf, but I would rather hear the user's chosen moment before making a comparison.`
+            : "I want to return to the passage where the book's central tension becomes clearest. I will not invent a scene here; I would rather hear the moment the user actually remembers and respond to that evidence.",
         REACT_TO_USER_SCENE: `The user's choice—${userMoment}—makes the earlier question more concrete for ${name}. Through ${categoryLens.en[persona.category]}, I want to examine both what that moment shows and what it leaves unexplained.`,
         RESPOND_TO_USER_REPLY: `The user's answer clarifies the distinction I was testing. Some consequences remain unexplained when I focus on ${reason}, so the objection is not fully resolved.`,
         SUPPORT_USER: `${targetName}, I think the user's distinction can explain different evidence through ${categoryLens.en[persona.category]}. Its limit is that it may erase an important exception if we let it stand in for every consequence.`,
-        CLOSING_REFLECTION: `I am leaving with a harder question about where my usual focus on ${reason} stops being enough. I will keep that lens without asking it to explain every piece of evidence.`,
+        CLOSING_REFLECTION: closingReflection(persona, input.language),
       };
   const utterance =
     responses[input.task] ??
@@ -248,10 +287,6 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
     isKorean ? "방금 들려준 첫인상" : "the first impression you just shared",
     70,
   ).replace(/[.!?。？！]+$/gu, "");
-  const personaNames = input.recentTranscript
-    .filter(({ speaker }) => !["moderator", "user"].includes(speaker))
-    .map(({ speaker }) => localizedSpeakerName(speaker, input.language));
-  const uniqueNames = [...new Set(personaNames)].slice(0, 3).join(isKorean ? ", " : ", ");
   const responses: Partial<Record<UtteranceRequest["task"], string>> = isKorean
     ? {
         WELCOME: `리딩 테이블에 오신 것을 환영합니다. 오늘 함께 이야기할 책은 ${input.book.author}의 『${input.book.title}』입니다. 먼저 같은 테이블에 앉은 분들과 인사부터 나누겠습니다.`,
@@ -263,7 +298,7 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         ASK_USER_POSITION: "서로 다른 입장의 끝을 들어봤습니다. 여러분은 이 질문에 대해 어디에 서 있나요?",
         TOPIC_CLOSE: `오늘 우리는 “${stripTerminal(topic, "이 질문")}”라는 질문을 놓고 이야기했습니다. 같은 근거가 낳은 해석의 차이를 합의로 덮지 않고 기억해 두겠습니다.`,
         WRAP_OPEN: "테이블을 떠나기 전에 묻겠습니다. 오늘 대화가 여러분의 생각을 움직였나요?",
-        DISCUSSION_SUMMARY: `오늘 ${uniqueNames || "세 독자"}와 사용자는 질문 “${stripTerminal(topic, "중심 질문")}”를 중심에 두고 서로 다른 판단의 근거를 비교했습니다. 무엇이 입장을 바꾸고 무엇이 끝내 남았는지 모임 기록에 담겠습니다.`,
+        DISCUSSION_SUMMARY: `오늘 테이블에서는 질문 “${stripTerminal(topic, "중심 질문")}”를 중심에 두고 서로 다른 판단의 근거를 비교했습니다. 각자의 생각을 솔직하게 들려주신 모든 분께 고맙습니다. 이제 무엇이 움직였고 무엇이 끝내 남았는지 모임 기록으로 확인하겠습니다.`,
       }
     : {
         WELCOME: `Welcome to The Reading Table. We will discuss ${input.book.title} by ${input.book.author}, but first let us meet the people sitting with us tonight.`,
@@ -275,7 +310,7 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         ASK_USER_POSITION: "You have heard the edges of the disagreement. Where do you land on this question?",
         TOPIC_CLOSE: `We tested how the same evidence can support different answers to ${stripTerminal(topic, "this question")}. The remaining difference matters more than a forced consensus.`,
         WRAP_OPEN: "Before we leave the table, did this discussion move your view?",
-        DISCUSSION_SUMMARY: `Tonight ${uniqueNames || "three readers"} and the user compared the reasons behind different answers to ${stripTerminal(topic, "the central question")}. The recap will preserve what moved, what was challenged, and what remained unresolved rather than force a single verdict.`,
+        DISCUSSION_SUMMARY: `Tonight the table compared the reasons behind different answers to ${stripTerminal(topic, "the central question")}. Thank you all for bringing your own judgment and listening through the disagreement. I will put what shifted and what remained unresolved into the written recap now.`,
       };
 
   return utteranceSchema.parse({

@@ -81,7 +81,9 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "RESPOND_TO_PERSONA":
       return "Answer the supplied reader's latest argument directly. Defend, refine, or explicitly concede one point while keeping a real disagreement alive; do not turn toward the user or summarize the room.";
     case "MEMORABLE_SCENE":
-      return "Independently name one specific scene and explain the personal reason it stayed with you. Do not begin by agreeing with, quoting, praising, or answering another participant. Sound like a reader remembering a book, not a lecturer presenting a theme.";
+      return input.discussionFocus?.trim()
+        ? `The code-selected scene anchor is ${JSON.stringify(input.discussionFocus.trim())}. Discuss that exact scene and explain the personal reason it stayed with you; do not choose or substitute another scene. Do not begin by agreeing with, quoting, praising, or answering another participant. Sound like a reader remembering a book, not a lecturer presenting a theme.`
+        : "Independently name one specific scene and explain the personal reason it stayed with you. Do not begin by agreeing with, quoting, praising, or answering another participant. Sound like a reader remembering a book, not a lecturer presenting a theme.";
     case "SCENES_OPEN":
       return "In the first sentence, briefly acknowledge the range or tension in the user's just-stated first impression without evaluating it. In the second sentence, transition to the memorable-scenes round and ask for one concrete scene, passage, image, or example that produced that impression.";
     case "TOPIC_OPEN":
@@ -101,9 +103,9 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "TOPIC_CLOSE":
       return "Name the precise disagreement that remains open and close this topic without declaring a winner or inventing consensus. Bridge naturally toward the closing round.";
     case "CLOSING_REFLECTION":
-      return "Give this reader's own closing reflection in exactly two short sentences, grounded in their private position and what genuinely happened in the discussion. Do not address the user by default, copy the user's analogy, occupation, or phrasing, turn their personal plan into group advice, recite a before-and-after formula, or summarize the whole meeting.";
+      return "Use exactly 2 short sentences total. Give this reader's independent takeaway from what genuinely happened, then naturally include either a persona-specific farewell or their pleasure at sharing the table. The ending must sound recognizably like this reader, not an interchangeable group sign-off. Do not introduce a new argument, evidence, question, or advice; do not address the user by default, copy the user's analogy, occupation, or phrasing, turn their personal plan into group advice, recite a before-and-after formula, or summarize the whole meeting.";
     case "DISCUSSION_SUMMARY":
-      return "In 2-3 concise sentences, name the central disagreement, the strongest unresolved counterclaim, and any genuine movement, then bridge naturally to the written recap. Base it only on the supplied conversation and do not introduce a new opinion.";
+      return "In 2-3 concise sentences, name the central disagreement, the strongest unresolved counterclaim, and any genuine movement. Then, as Alex, socially thank every reader for sharing the table and end by saying that the written recap comes next. Base it only on the supplied conversation and do not introduce a new opinion or reopen the debate.";
     default:
       return "Perform the named task directly.";
   }
@@ -306,6 +308,8 @@ export class OpenAIGenerationClient implements GenerationClient {
       ? "Use 1-3 sentences."
       : input.task === "PERSONA_INTRODUCTION"
         ? "Use exactly 2 short sentences."
+        : input.task === "CLOSING_REFLECTION"
+          ? "Use exactly 2 short sentences."
         : "Use 2-4 sentences.";
     const taskDirective = utteranceTaskDirective(input);
     const testimonyRule =

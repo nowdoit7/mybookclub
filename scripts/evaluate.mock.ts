@@ -98,8 +98,8 @@ function evaluate(result: CompletedSession): Check[] {
     },
     {
       name: "distinct closing movement",
-      passed: closings.length === 2 && new Set(closings.map(({ text }) => text)).size === 2,
-      detail: `${new Set(closings.map(({ text }) => text)).size}/2 unique reflections`,
+      passed: closings.length === 3 && new Set(closings.map(({ text }) => text)).size === 3,
+      detail: `${new Set(closings.map(({ text }) => text)).size}/3 unique reflections and farewells`,
     },
     {
       name: "no exact persona repetition",

@@ -1922,10 +1922,14 @@ export function App() {
                 <p className="mt-1 text-sm leading-6 text-stone-400">
                   {language === "ko"
                     ? discussionDecision.phase === "after_join"
-                      ? "방금 생긴 쟁점을 두 독자가 한 번 더 밀어붙이게 하거나, 지금의 긴장을 남긴 채 마무리할 수 있습니다."
+                      ? discussionDecision.round === 1
+                        ? "방금 생긴 쟁점을 두 독자가 더 밀어붙이게 하거나, 지금의 긴장을 남긴 채 마무리할 수 있습니다."
+                        : "한 차례 더 이어진 쟁점을 마지막으로 한 번 더 듣거나, 지금 직접 마무리를 선택할 수 있습니다."
                       : "직접 의견을 보태거나, 두 독자의 논쟁을 조금 더 듣거나, 남은 쟁점을 그대로 두고 마무리할 수 있습니다."
                     : discussionDecision.phase === "after_join"
-                      ? "Let the two readers push the new disagreement once more, or leave the tension open and wrap up."
+                      ? discussionDecision.round === 1
+                        ? "Let the two readers push the new disagreement further, or leave the tension open and wrap up."
+                        : "Hear one final exchange on the remaining disagreement, or choose to close the table now."
                       : "Join with your own view, hear one more exchange, or leave the remaining tension open and wrap up."}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
