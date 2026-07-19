@@ -12,11 +12,11 @@ Only candidates with an existing frozen A/B case are ranked in Round 1. The
 ranking reflects test readiness, not historical importance or production
 approval.
 
-| Round 1 rank | Candidate | Latest case | Round 2 outcome |
+| Round 1 rank | Candidate | Live cross-book outcome | Current status |
 | --- | --- | --- | --- |
-| 1 | Isaac Newton | `three-body-newton-r2` | Stronger challenge, but cue overuse and naturalness still fail. |
-| 2 | Blaise Pascal | `same-as-ever-pascal-r2` | Clear quality leader; needs one minimal cue-budget clarification and rerun. |
-| 3 | Adam Smith | `same-as-ever-adam-smith-r2` | More natural, but too generic and insufficiently book-specific. |
+| 1 | Isaac Newton | Passed *Same as Ever*, failed *Three-Body* | Topic-sensitive; consider only when predicted to beat the regular-reader slot. |
+| 2 | Blaise Pascal | Passed *Same as Ever*, language failure in English *Three-Body* | Quality leader, blocked on multilingual fingerprint design. |
+| 3 | Adam Smith | Passed *Same as Ever*, failed *Three-Body* | Natural, but added less interpretation than the strong baseline. |
 
 No listed candidate is approved for runtime. Every candidate not listed in that
 table is **untested**. A candidate may move
@@ -43,7 +43,7 @@ that gate still requires human source and authority-bias review.
 
 ### 2. Science fiction
 
-- **Primary candidate:** Isaac Newton — **Round 1, rank 1; one case exists**
+- **Primary candidate:** Isaac Newton — **Live cross-test complete; not runtime-approved**
 - **Category replaced:** Analytical
 - **Documented lens to audition:** Separate observed relations from hypotheses
   about ultimate causes; ask how far a small body of evidence warrants a general
@@ -135,7 +135,7 @@ that gate still requires human source and authority-bias review.
 
 ### 9. Philosophy / religion
 
-- **Primary candidate:** Blaise Pascal — **Round 1, rank 2; one adjacent case exists**
+- **Primary candidate:** Blaise Pascal — **Live cross-test complete; multilingual redesign required**
 - **Category replaced:** Analytical
 - **Documented lens to audition:** Combine disciplined reasoning under
   uncertainty with suspicion of self-flattering frames, and mark where reason
@@ -161,7 +161,7 @@ that gate still requires human source and authority-bias review.
 
 ### 11. Business / economics
 
-- **Primary candidate:** Adam Smith — **Round 1, rank 3; one case exists**
+- **Primary candidate:** Adam Smith — **Live cross-test complete; not runtime-approved**
 - **Category replaced:** Contextual
 - **Documented lens to audition:** Put prudence beside justice and sympathy;
   inspect decisions from an impartial spectator's position; distinguish private

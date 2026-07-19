@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-adam-smith-r3",
+  "evaluatorId": "live-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "The candidate stays closely grounded in Luo Ji, Zhang Beihai, Cheng Xin, the Wallfacer Project, and Wade. The revocability question and the viewpoint of people who bear an irreversible decision are valuable, but the candidate mostly confirms Woochan's distinction and therefore generates less live friction than the competing sample."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate turns the trilogy's apparent reward for secrecy into a direct evidentiary challenge and forces Woochan to distinguish criticism of stacked evidence from an unsupported claim that shared responsibility wins. The follow-up accurately recognizes the Wallfacer concession while retaining a precise disagreement about supervision after delegation, producing a sharper and more reciprocal discussion."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Adam Smith. Turn a3 uses the burden-bearer's standpoint once, while turn a5 uses a different fair-observer-style revocability question. The references to Luo Ji, Zhang Beihai, Cheng Xin, the Wallfacer Project, and Wade remain inside the disclosed book evidence. No cue repeats. There is no quotation, invented biography, literal claim of reading the trilogy, authority submission, caricature, cross-book leak, genre mismatch, copyright reproduction, structure violation, or moderator takeover."
+}

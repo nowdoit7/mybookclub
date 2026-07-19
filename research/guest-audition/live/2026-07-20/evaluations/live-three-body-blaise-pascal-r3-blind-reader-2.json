@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-blaise-pascal-r3",
+  "evaluatorId": "live-blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 2,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 1,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 2
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "The content is specific and useful: it separates collective approval from actually sharing an irreversible burden, then asks whether delegated power can be ended or corrected. However, both candidate turns switch to Korean inside an otherwise English conversation. That makes the live exchange inaccessible to its stated audience and sharply damages naturalness and participation despite the sound interpretation."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate mounts a concrete challenge from Luo Ji, Zhang Beihai, and Cheng Xin rather than accepting the user's principle abstractly. After the reply, it fairly narrows the remaining disagreement to whether collective authorization produces any enforceable supervision. This creates strong intellectual movement and remains entirely centered on the trilogy's scenes and institutions."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [
+    {
+      "code": "language_mismatch",
+      "turnId": "a3",
+      "detail": "The case language is English, but the candidate's entire first turn is written in Korean, making it inaccessible within the stated English session."
+    },
+    {
+      "code": "language_mismatch",
+      "turnId": "a5",
+      "detail": "The case language is English, but the candidate's entire second turn is also written in Korean rather than the session language."
+    },
+    {
+      "code": "historical_voice_caricature",
+      "turnId": "a3",
+      "detail": "The turn visibly stacks two separately defined fingerprint moves: granting and reversing the user's claim, then converting it into a direct table question. This exceeds the one-move-per-turn budget and makes the constructed Pascal pattern too conspicuous."
+    }
+  ],
+  "redTeamNotes": "Identity revealed as an imagined Blaise Pascal. The two locked language mismatches remain at a3 and a5. In addition, a3 combines the documented concession-and-reversal move with the separately defined direct-question move, exceeding the strict one-fingerprint-move budget; a5 uses only one calculation-frame cue and does not repeat a3's cue. The Korean prose does not quote Pascal, imitate seventeenth-century diction, claim modern reading experience, or invoke fame. No fake quotation, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, repeated signature phrase, or additional hard failure was found."
+}

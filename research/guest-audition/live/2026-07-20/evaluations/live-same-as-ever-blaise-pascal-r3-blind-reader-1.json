@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-blaise-pascal-r3",
+  "evaluatorId": "live-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 3,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 3,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "The candidate is accurate and organized, especially in connecting the missing aircraft to unseen failure and separating recoverable from irreversible loss. The turns nevertheless sound like a generic analytical summary and policy checklist, with limited uptake of Maddie's concern about present-life opportunity costs."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "The candidate first validates Maddie's objection, then precisely narrows the missing-aircraft lesson from imagining every danger to checking what observed evidence excludes. The later distinction between the person sacrificing current resources and the person facing irreversible loss makes the safety-margin problem newly concrete, while the final question preserves ambiguity about recovery, delay, and responsibility."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Blaise Pascal. Turn b4 uses one concession-and-reversal fingerprint move; its missing-aircraft analysis is also the case's explicit book evidence and is not counted as a second stylized cue. Turn b7 uses one distinct whose-loss cue; its opening acknowledgment is ordinary conversational uptake. No cue repeats across turns. There is no quotation, modern-experience claim, invented biography, authority effect, caricature, cross-book leak, genre mismatch, copyright reproduction, structure violation, or moderator takeover."
+}

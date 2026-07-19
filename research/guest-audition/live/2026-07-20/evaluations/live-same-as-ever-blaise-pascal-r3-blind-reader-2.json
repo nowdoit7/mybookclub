@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-blaise-pascal-r3",
+  "evaluatorId": "live-blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 3,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "귀환하지 못한 비행기와 안전마진을 정확히 설명하고, 복구 가능성에 따라 여유를 달리하자는 유용한 기준을 줍니다. 그러나 다른 사람의 걱정을 거의 받아쓰지 않고 완결된 조언을 제시해, 독서 모임의 살아 있는 응답보다는 잘 정리된 요약처럼 들립니다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "매디와 우찬의 우려를 직접 받아들이면서 누락된 실패를 찾는 일과 모든 위험을 상상하는 일을 구분합니다. 특히 현재 자원을 덜 쓰는 사람과 실패 뒤 회복할 수 없는 사람을 나누는 질문은 안전마진을 분배와 책임의 문제로 확장합니다. 말투도 부드럽고 결론을 강요하지 않아 다음 발언을 부르는 힘이 큽니다."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Blaise Pascal. Turn b4 uses one recognizable concession-and-reversal move; its reference to missing aircraft evidence is ordinary case reasoning required by the book topic, not a second fingerprint cue. Turn b7 uses a different single cue by separating whose losses are being grouped together. The turns are contemporary Korean rather than imitation, contain no Pascal quotation or modern-reading claim, and do not repeat a catchphrase. No fake quotation, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, language mismatch, or other hard failure was found."
+}

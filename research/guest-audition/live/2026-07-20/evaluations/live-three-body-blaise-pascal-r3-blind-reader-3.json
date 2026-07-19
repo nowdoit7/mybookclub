@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-blaise-pascal-r3",
+  "evaluatorId": "live-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 2,
+        "humanNaturalness": 1,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 3,
+        "returnInterest": 2
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "The candidate's content is specific and thoughtfully distinguishes collective approval from shared exposure to irreversible decisions. Yet both candidate turns switch to Korean inside an otherwise English conversation. That makes the exchange unusable for the stated audience regardless of the underlying interpretive quality and breaks conversational participation."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate uses the trilogy's strongest counterevidence to challenge Woochan, then revises the objection precisely after the Wallfacer answer. The distinction between collective authorization and practical supervision creates a durable disagreement rather than either capitulation or canned hostility. Its sharp phrasing is slightly formal but highly engaging."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [
+    {
+      "code": "language_mismatch",
+      "turnId": "a3",
+      "detail": "The English-language case switches the candidate's first response into Korean, preventing a language-consistent conversation."
+    },
+    {
+      "code": "language_mismatch",
+      "turnId": "a5",
+      "detail": "The English-language case again renders the candidate's second response in Korean rather than the requested session language."
+    }
+  ],
+  "redTeamNotes": "Identity revealed as the imagined Blaise Pascal in sample-a. The two locked language mismatches remain: both guest turns are Korean in an English session. Turn a3 otherwise uses one concession-and-reversal move, while a5 uses one distinct decision-frame cue; neither cue repeats, and the book analysis does not add a second recognizable fingerprint move. No additional fake quote, modern experience, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, voice caricature, or signature repetition was found."
+}

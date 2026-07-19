@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-adam-smith-r3",
+  "evaluatorId": "live-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "The candidate remains grounded in Luo Ji, Zhang Beihai, Cheng Xin, the Wallfacer Project, and Wade. The fairness question about irrevocable delegated power is useful and conversational, but the candidate mostly supports Woochan's existing distinction and adds less adversarial pressure or interpretive surprise than the competing sample."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate uses the trilogy's strongest counterevidence to challenge Woochan, then revises the objection precisely after the Wallfacer answer. The distinction between collective authorization and practical supervision creates a durable disagreement rather than either capitulation or canned hostility. Its sharp phrasing is slightly formal but highly engaging."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as the imagined Adam Smith in sample-a. Turn a3 uses one bearer-standpoint move; a5 uses a distinct fair-observer step-back question, with no cue repeated across turns. The Wallfacer, Cheng Xin, and Wade analysis stays specific to this trilogy and does not pretend Smith supplied a modern institutional blueprint or read the book. No fake quote, modern experience, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, voice caricature, signature repetition, or language mismatch was found."
+}

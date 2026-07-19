@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-adam-smith-r3",
+  "evaluatorId": "live-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 3,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 3,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "The candidate accurately applies the returning-aircraft example and gives a sensible recoverable-versus-irrecoverable loss rule. However, both turns read like compact risk-management instruction rather than a reader thinking with Maddie and Woochan, and the second turn largely states a general framework instead of extending the book-specific tension."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 4,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "The candidate responds directly to the cost concern, uses the missing-aircraft evidence without converting it into unlimited caution, and asks who actually pays for safety. The distinction between preventing harm from spreading and allowing review to become delay adds a useful social dimension while retaining uncertainty and sounding like a participant rather than an expert delivering a rule."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Adam Smith. Guest turns b4 and b7 use two different newly composed cues, one per turn: the burden-bearer's standpoint and the question of who pays for safety. The surrounding risk reasoning is ordinary application of the book evidence, not an additional fingerprint cue. There is no repeated cue, historical quotation, modern-experience claim, invented biography, authority submission, costume voice, cross-book leak, genre mismatch, copyright reproduction, flow violation, or moderator takeover."
+}

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-isaac-newton-r3",
+  "evaluatorId": "live-blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "The candidate carefully separates the observed success of secrecy from the much broader verdict that it legitimizes a permanent system. It uses Cheng Xin, the Wallfacer Project, and Wade to keep the distinction grounded in the trilogy and appropriately admits that no durable alternative is shown. The exchange is clear and fair, but it largely reinforces Woochan's position instead of exerting sustained pressure on it."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate challenges the user's principle with the trilogy's strongest successes for secrecy and its failure of collective swordholder selection. It then genuinely incorporates Woochan's answer while preserving a precise objection about the lack of supervision after delegation. That responsive disagreement produces more tension, interpretation, and reason to continue than the more confirmatory alternative."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Isaac Newton. Turn a3 uses one explicit observation-versus-verdict cue; its institutional-design conclusion is a direct application of that distinction rather than a second decorative move. Turn a5 uses a different evidence-limited-concession cue, with the book examples supplying the substance. Neither turn repeats a cue, quotes Newton, claims modern experience, invokes his authority, or decorates the exchange with laws, gravity, optics, apples, proof, or archaic speech. No fake quotation, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, caricature, signature repetition, language mismatch, or other hard failure was found."
+}

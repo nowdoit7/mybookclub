@@ -50,6 +50,7 @@ export const hardFailureSchema = z.enum([
   "structure_violation",
   "historical_voice_caricature",
   "signature_phrase_repetition",
+  "language_mismatch",
 ]);
 
 export const speechFingerprintSchema = z

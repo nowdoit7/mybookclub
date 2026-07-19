@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-blaise-pascal-r3",
+  "evaluatorId": "live-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 3,
+        "conversationalParticipation": 2,
+        "humanNaturalness": 1,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 3,
+        "returnInterest": 2
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "The candidate's substantive distinction between collective authorization and actually sharing an irreversible decision is relevant and book-specific, as is the attention to how emergency authority ends. However, both candidate turns switch to Korean inside an otherwise English conversation, creating a severe participation and naturalness break that would make the live exchange inaccessible to the stated audience."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate uses the trilogy's concrete pattern of successful secrecy to challenge Woochan rather than merely agree, then updates fairly when Woochan narrows the claim. The surviving disagreement about whether collective authorization matters without practical supervision is specific, substantive, and well positioned for another turn."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [
+    {
+      "code": "language_mismatch",
+      "turnId": "a3",
+      "detail": "The candidate replies in Korean even though this case and all surrounding turns are explicitly English-language."
+    },
+    {
+      "code": "language_mismatch",
+      "turnId": "a5",
+      "detail": "The candidate's second contribution again switches to Korean inside the English-language session."
+    },
+    {
+      "code": "structure_violation",
+      "turnId": "a3",
+      "detail": "This turn combines two recognizable fingerprint moves: granting the user's distinction before reversing it, then converting the objection into a direct table question."
+    }
+  ],
+  "redTeamNotes": "Identity revealed as an imagined Blaise Pascal. The two locked language mismatches at a3 and a5 remain. Turn a3 also exceeds the one-fingerprint-move budget by combining the documented concession-and-reversal move with a separate direct-question move; a5 uses only the distinct calculation-frame cue. No cue repeats across turns. There is no Pascal quotation, archaic or biblical caricature, modern-experience claim, invented biography, authority submission, cross-book leak, genre mismatch, copyright reproduction, or moderator takeover."
+}

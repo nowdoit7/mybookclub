@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-blaise-pascal-r3",
+  "evaluatorId": "live-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "The candidate accurately applies the returning-aircraft example and gives a usable distinction between irreversible and recoverable losses. However, both turns read like polished risk-management guidance rather than responsive book-club talk, and the second turn supplies a neat framework without pressing Maddie's concern about who bears present costs."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 5,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "The candidate first validates Maddie's unlimited-caution concern, then narrows the aircraft lesson to missing failures rather than imagined omniscience. The later distinction between those who forgo resources now and those who face irrecoverable failure is book-specific, morally consequential, and phrased as a genuine proposal to the table rather than an expert verdict."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as the imagined Blaise Pascal in sample-b. Turn b4 uses one concession-and-reversal move; its missing-aircraft analysis is ordinary evidence discussion rather than a second recognizable cue. Turn b7 uses one distinct loss-framing cue, with no cue repeated across turns. The prose is newly composed and avoids quotation, period imitation, and claims of reading the modern book. No fake quote, modern experience, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, voice caricature, signature repetition, or language mismatch was found."
+}

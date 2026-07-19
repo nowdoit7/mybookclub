@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-adam-smith-r3",
+  "evaluatorId": "live-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "The candidate accurately applies the returning-aircraft example and gives a usable distinction between irreversible and recoverable losses. However, both turns read like polished risk-management guidance rather than responsive book-club talk, and the second turn supplies a neat framework without pressing Maddie's concern about who bears present costs."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "The candidate stays with the aircraft and safety-margin evidence while adding a consequential question: who directly bears the price of safety. The turns answer Woochan and Maddie rather than lecture them, and the distinction between preventing cascading harm and merely diffusing responsibility advances the unresolved issue without claiming a final formula."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as the imagined Adam Smith in sample-b. Turn b4 uses one bearer-standpoint cue; b7 uses a different who-pays cue, with no cue repeated across turns. The remaining risk analysis is ordinary book-specific reasoning, not extra fingerprint signaling. Both turns are newly composed, modern, contestable, and do not claim Smith read the book. No fake quote, modern experience, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, voice caricature, signature repetition, or language mismatch was found."
+}

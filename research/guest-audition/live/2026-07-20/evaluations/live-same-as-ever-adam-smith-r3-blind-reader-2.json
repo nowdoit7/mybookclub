@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-adam-smith-r3",
+  "evaluatorId": "live-blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 3,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "관측 표본과 누락된 실패를 정확히 연결하고 회복 불가능한 손실에 더 큰 여유를 두자는 기준도 제시합니다. 다만 설명이 교과서적인 결론으로 닫혀 있어 매디와 우찬의 질문을 받아 함께 생각하는 사람보다는 분석을 정리하는 해설자처럼 들립니다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "안전마진의 양뿐 아니라 그 비용을 실제로 부담하는 사람이 누구인지 묻고, 현재의 기회 손실을 토론 안으로 끌어옵니다. 앞선 발언에 동의하면서도 검토 절차가 지연과 책임 분산을 낳을 수 있다는 반론을 남겨 대화가 자연스럽게 이어집니다. 일부 표현은 약간 다듬을 여지가 있지만 독서 모임 참여자로서는 훨씬 생생합니다."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Adam Smith. Turns b4 and b7 use two different newly composed cues, one per turn: the direct cost-bearer standpoint and the question of who pays for prudent safety. Each cue is supported by the documented prudence, justice, and impartial-spectator basis without quoting Smith, claiming modern experience, invoking fame, or becoming period costume. No fake quotation, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, repeated signature phrase, or other hard failure was found."
+}

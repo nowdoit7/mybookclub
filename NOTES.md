@@ -57,3 +57,6 @@
 - 2026-07-20: Added sourced speech fingerprints as restrained rhetorical moves with newly composed cues, a one-cue-per-turn budget, and explicit caricature and signature-repetition failures.
 - 2026-07-20: Round 2 made Pascal both more natural and unanimously preferred, but preserved the strict failure after one evaluator found two cue-like moves in one turn; Newton over-signaled method and Smith became too generic.
 - 2026-07-20: Discarded one contaminated Smith blind slot after an encoding error exposed identity fields and replaced it with a fresh Smith-only evaluator; no contaminated score entered the aggregate.
+- 2026-07-20: Ran the first paid historical-guest matrix with GPT-5.6: all three guests beat the regular baseline on the risk-focused `Same as Ever` context, while all three lost the stronger scene-specific `Three-Body` comparison.
+- 2026-07-20: A Korean Pascal cue leaked into an English session, proving speech fingerprints need language-neutral rhetorical moves plus localized realization rather than stored example sentences.
+- 2026-07-20: Added per-call checkpoints, one bounded structured-output repair, and explicit paid-artifact overwrite protection after an incomplete calibration response exposed the live runner's recovery gap.

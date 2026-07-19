@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-adam-smith-r3",
+  "evaluatorId": "live-blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "Luo Ji, Zhang Beihai, Cheng Xin, the Wallfacer Project, and Wade are used accurately to distinguish emergency execution from a normal constitution of power. Asking whether an apparently fair rule remains fair when delegation cannot be revoked adds a useful stakeholder test. The sample is thoughtful and balanced, though it validates Woochan quickly enough that the dramatic friction is modest."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate directly tests Woochan's accountable-power thesis against the trilogy's strongest counterevidence, then updates the objection after Woochan answers. The distinction between political authorization and practical supervision is sharp, book-specific, and leaves a precise disagreement alive. The phrase 'nasty exhibit for democracy' is slightly performative, but the challenge makes this the more compelling book-club exchange."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Adam Smith. Turn a3 applies one cost-bearer standpoint to Cheng Xin's selection; turn a5 uses a distinct one-step-back fairness test. The discussion of revocation and bounded delegation remains an analogy from the documented moral framework, not a claim that Smith designed modern institutions or read the trilogy. The guest neither quotes Smith nor asks the table to defer to his fame, and the science-fiction topic remains centered throughout. No fake quotation, literal modern experience, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, caricature, repeated signature phrase, language mismatch, or other hard failure was found."
+}

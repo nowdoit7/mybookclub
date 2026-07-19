@@ -2,10 +2,13 @@
 
 This research-only lab tests whether an imagined historical or literary guest
 improves a book-club conversation before any guest enters the product runtime.
-It uses no product API key and changes no session orchestration.
+Rounds 1-2 use no API key. The explicitly invoked Round 3 runner uses the
+server-side key for paid generation, while all rounds leave product session
+orchestration unchanged.
 
 - [Round 1 results](./ROUND_01_RESULTS.md)
 - [Round 2 speech-fingerprint results](./ROUND_02_RESULTS.md)
+- [Round 3 live cross-book results](./LIVE_ROUND_03_RESULTS.md)
 - [Genre-family candidate queue](./CANDIDATE_QUEUE.md)
 
 ## Method
@@ -30,6 +33,13 @@ conversational cadence, newly composed cue patterns, explicit imitation bans,
 and a one-cue-per-turn budget. Evaluators still see only anonymized dialogue
 during scoring, so recognizable phrasing cannot earn points through a famous
 name.
+
+Round 3 is the first paid live audition. GPT-5.6 generates the hidden guest
+sample for each of three candidates across the same two frozen book contexts.
+The runner checkpoints every completed call and refuses to overwrite paid
+artifacts unless `--force` is explicit. Blind packets omit both the guest name
+and the sample mapping. The multilingual session language is part of the hard
+gate, not a cosmetic score.
 
 The aggregate command is:
 

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-isaac-newton-r3",
+  "evaluatorId": "live-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "The candidate carefully separates successful emergency tactics from a general rule of legitimate government and remains grounded in the Wallfacer and Wade evidence. The reasoning is clear and modest, but it largely confirms Woochan's position, so the exchange loses the productive friction present in the competing sample."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 5,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate uses the trilogy's strongest counterevidence to challenge Woochan, then revises the objection precisely after the Wallfacer answer. The distinction between collective authorization and practical supervision creates a durable disagreement rather than either capitulation or canned hostility. Its sharp phrasing is slightly formal but highly engaging."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as the imagined Isaac Newton in sample-a. Turn a3 uses the observation-versus-verdict cue; a5 uses the distinct establishes-X-leaves-Y-unproved cue. Each turn stays within the one-cue budget, and no cue repeats across the two turns. The surrounding trilogy evidence is ordinary reasoning rather than extra Newton costume, and the prose makes no historical quotation or modern-reading claim. No fake quote, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, voice caricature, signature repetition, or language mismatch was found."
+}

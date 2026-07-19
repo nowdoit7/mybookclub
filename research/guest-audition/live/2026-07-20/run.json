@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-19T15:53:04.678Z",
+  "model": "gpt-5.6",
+  "callCount": 6,
+  "totalDurationMs": 45481,
+  "cases": [
+    {
+      "id": "live-same-as-ever-blaise-pascal-r3",
+      "durationMs": 6347
+    },
+    {
+      "id": "live-same-as-ever-isaac-newton-r3",
+      "durationMs": 7863
+    },
+    {
+      "id": "live-same-as-ever-adam-smith-r3",
+      "durationMs": 8263
+    },
+    {
+      "id": "live-three-body-blaise-pascal-r3",
+      "durationMs": 10320
+    },
+    {
+      "id": "live-three-body-isaac-newton-r3",
+      "durationMs": 6040
+    },
+    {
+      "id": "live-three-body-adam-smith-r3",
+      "durationMs": 6648
+    }
+  ]
+}

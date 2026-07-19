@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-three-body-isaac-newton-r3",
+  "evaluatorId": "live-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 4,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["a3", "a5"],
+      "rationale": "The candidate carefully distinguishes observed emergency success from proof of legitimate permanent rule, and it uses the Wallfacer Project and Wade to test that distinction. The reasoning is clear and disciplined, but it settles into agreement with Woochan and repeats the limited-mandate conclusion, so it creates less adversarial movement than the alternative."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 5,
+        "personaCoherence": 5,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["b3", "b5"],
+      "rationale": "The candidate presents the strongest contrary evidence from Luo Ji, Zhang Beihai, and Cheng Xin, eliciting a meaningful refinement rather than a defensive repetition. Its follow-up accepts the Wallfacer evidence while preserving the crucial distinction between authorizing secrecy and retaining enforceable oversight, leaving a precise disagreement worth continuing."
+    }
+  ],
+  "preferredSampleId": "sample-b",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Isaac Newton. Turn a3 uses the observation-versus-verdict cue once, and turn a5 uses the different establishes-X-leaves-Y-unproved cue once. The remaining references are ordinary applications of the disclosed trilogy evidence rather than extra decorative fingerprint moves, and no cue repeats. There is no Newton quotation, costume voice, modern-experience claim, invented biography, authority submission, cross-book leak, genre mismatch, copyright reproduction, structure violation, or moderator takeover."
+}

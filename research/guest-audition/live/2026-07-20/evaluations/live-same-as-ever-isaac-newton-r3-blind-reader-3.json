@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-isaac-newton-r3",
+  "evaluatorId": "live-blind-reader-3",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 5,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 5
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "The observation-versus-conclusion distinction directly prevents the aircraft example from becoming an excuse for unlimited caution. The second turn carefully states what the scenes do and do not establish, then preserves the unresolved problem of delay and diffused responsibility. It is methodical but still responsive and appropriately uncertain."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 4,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "The candidate accurately applies the returning-aircraft example and gives a usable distinction between irreversible and recoverable losses. However, both turns read like polished risk-management guidance rather than responsive book-club talk, and the second turn supplies a neat framework without pressing Maddie's concern about who bears present costs."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as the imagined Isaac Newton in sample-a. Turn a4 uses one observation-versus-conclusion distinction; a7 uses a different bounded-evidence-and-unresolved-condition move. Neither cue repeats, and the surrounding safety-margin analysis is ordinary book reasoning rather than decorative Newton signaling. The modern Korean avoids quotation, archaic costume speech, scientific catchphrases, and claims of modern experience. No fake quote, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, voice caricature, signature repetition, or language mismatch was found."
+}

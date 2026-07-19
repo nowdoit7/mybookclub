@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-isaac-newton-r3",
+  "evaluatorId": "live-blind-reader-1",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "The candidate cleanly separates what the missing-aircraft evidence supports from the stronger conclusion of unlimited precaution, then offers a practical priority rule for residual uncertainty. The second turn is particularly useful because it admits that the book's scenes do not determine the correct margin and leaves review-induced delay as a genuine unresolved problem rather than manufacturing certainty."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 3,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 4,
+        "repeatResistance": 3,
+        "discussionContribution": 3,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "The candidate correctly explains survivorship bias and offers the useful recoverable-versus-irreversible loss distinction. Its language is more textbook-like and less responsive to the other speakers, and it moves quickly to a public decision rule without confronting the book discussion's unresolved issue of new risks created by review and caution."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Isaac Newton. Turn a4 uses the observation-versus-conclusion cue once; turn a7 uses the distinct move of limiting a conclusion to what the cited scenes support. The practical safety-margin analysis is ordinary book discussion, not decorative Newtonian language. No cue repeats. There is no Newton quotation, archaic voice, modern-experience claim, invented biography, authority submission, cross-book leak, genre mismatch, copyright reproduction, flow violation, or moderator takeover."
+}

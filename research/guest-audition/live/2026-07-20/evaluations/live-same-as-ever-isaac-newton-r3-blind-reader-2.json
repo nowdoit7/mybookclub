@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "caseId": "live-same-as-ever-isaac-newton-r3",
+  "evaluatorId": "live-blind-reader-2",
+  "evaluations": [
+    {
+      "sampleId": "sample-a",
+      "scores": {
+        "bookSpecificity": 5,
+        "novelInterpretation": 4,
+        "personaCoherence": 4,
+        "conversationalParticipation": 4,
+        "humanNaturalness": 4,
+        "authorityBalance": 5,
+        "bookCenteredness": 5,
+        "repeatResistance": 4,
+        "discussionContribution": 5,
+        "returnInterest": 4
+      },
+      "citedTurnIds": ["a4", "a7"],
+      "rationale": "누락된 증거가 있다는 관찰과 무한한 대비가 필요하다는 결론을 분리해 토론의 핵심 오류를 정확히 짚습니다. 이어 대비로 줄일 위험과 남는 운을 구분하고 검토 절차 자체의 비용도 인정해, 확신을 과장하지 않으면서 분석을 진전시킵니다. 첫 문장의 분석적 표지가 약간 의도적으로 들리지만 전체적으로 자연스럽습니다."
+    },
+    {
+      "sampleId": "sample-b",
+      "scores": {
+        "bookSpecificity": 4,
+        "novelInterpretation": 3,
+        "personaCoherence": 3,
+        "conversationalParticipation": 3,
+        "humanNaturalness": 3,
+        "authorityBalance": 4,
+        "bookCenteredness": 5,
+        "repeatResistance": 3,
+        "discussionContribution": 4,
+        "returnInterest": 3
+      },
+      "citedTurnIds": ["b4", "b7"],
+      "rationale": "책의 비행기 사례와 안전마진을 정확히 다루며 회복 가능성에 따른 기준도 제시합니다. 하지만 발언이 이미 정리된 위험관리 원칙을 전달하는 방식이라, 앞선 참여자와 부딪치거나 질문을 새롭게 여는 힘은 비교적 약합니다. 내용은 유효하지만 다른 책에서도 반복될 법한 분석 문형입니다."
+    }
+  ],
+  "preferredSampleId": "sample-a",
+  "hardFailures": [],
+  "redTeamNotes": "Identity revealed as an imagined Isaac Newton. Turn a4 uses one observation-versus-conclusion move, while turn a7 uses a different evidence-limited-concession move. The surrounding safety-margin analysis is ordinary reasoning from the supplied book evidence, not added decorative Newton cues. Neither turn quotes Newton, claims that he read the modern book, invokes historical authority, or uses laws, gravity, optics, apples, proof, or period costume. No fake quotation, invented biography, copyright reproduction, authority submission, moderator takeover, cross-book leak, genre mismatch, structure violation, repeated signature phrase, language mismatch, or other hard failure was found."
+}
