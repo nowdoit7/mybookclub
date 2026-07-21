@@ -85,3 +85,4 @@
 - 2026-07-21: Targeted live samples produced short, directed conversational turns on GPT-5.6 and Terra, but a fictional-book probe exposed invented scene details, so evidence grounding remains the next dialogue-quality fix.
 - 2026-07-22: Rejected model lines that stop mid-sentence, enforced exact two-sentence directed exchanges and the four-sentence moderator close, and kept the single repair retry as the recovery path.
 - 2026-07-22: Kept Alex in the moderator role whenever the user states a position by always assigning a persona challenger, and guaranteed an explicitly invited imagined guest a lead role in the main discussion.
+- 2026-07-22: Rebuilt the submission README around the live demo, reproducible seed, exact deployed architecture, verification evidence, and concrete Codex collaboration decisions; added an MIT license for source code while explicitly excluding project media.
