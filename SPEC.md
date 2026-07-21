@@ -859,10 +859,11 @@ Layout (desktop, single screen):
   under discussion with a generic prompt.
 - Manual paging is the only playback mode. Only explicit previous/next controls
   change the current page or resolve an engine transition; the dialogue surface
-  and Space/Enter never advance it. Forward controls describe the actual action:
-  reveal the line, move to the next page or utterance, enter the user's turn,
-  start a stage, or open the recap. Respect `prefers-reduced-motion` by revealing
-  pages immediately.
+  and Space/Enter never advance it. During dialogue playback, the same compact
+  `Next` label completes the typewriter line, moves to another page or utterance,
+  and enters the user's turn. Distinct scene-level actions such as entering the
+  table, starting a stage, or opening the recap retain descriptive labels. Respect
+  `prefers-reduced-motion` by revealing pages immediately.
 - The full-cast waiting surface distinguishes a real stage transition from ordinary
   dialogue preparation. Private-note preparation shows safe reader-count progress,
   speaker generation names the pending speaker, and recap generation says that the

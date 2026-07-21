@@ -387,7 +387,7 @@ describe("text prototype", () => {
     ).toBeGreaterThan(0);
     expect(screen.queryAllByRole("article")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "대화 기록 보기 1" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /다음 페이지/u })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^다음/u })).toBeEnabled();
   });
 
   it("advances one dialogue page at a time and keeps the transcript closed", async () => {
@@ -417,7 +417,7 @@ describe("text prototype", () => {
     expect(screen.getByRole("button", { name: "View transcript 1" })).toBeEnabled();
     expect(within(dialogue).queryAllByText(/Hi, I'm/u)).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: /Next line/u }));
+    fireEvent.click(screen.getByRole("button", { name: /^Next/u }));
     await waitFor(() =>
       expect(within(dialogue).getAllByText(/Hi, I'm/u).length).toBeGreaterThan(0),
     );
@@ -461,7 +461,7 @@ describe("text prototype", () => {
           screen.queryByRole("button", { name: "내 의견 보태기" }) ??
           screen.queryByRole("button", { name: "토론 조금 더 이어보기" }) ??
           screen.queryByRole("button", {
-            name: /(?:테이블 입장|다음 페이지|다음 발언|내 차례로|시작|모임 기록 보기)/u,
+            name: /(?:테이블 입장|다음|시작|모임 기록 보기)/u,
           });
         expect(readyControl).not.toBeNull();
       });
@@ -487,7 +487,7 @@ describe("text prototype", () => {
         fireEvent.click(screen.getByRole("button", { name: "이쯤에서 마무리" }));
       } else {
         const next = screen.getByRole("button", {
-          name: /(?:테이블 입장|다음 페이지|다음 발언|내 차례로|시작|모임 기록 보기)/u,
+          name: /(?:테이블 입장|다음|시작|모임 기록 보기)/u,
         });
         await waitFor(() => expect(next).toBeEnabled());
         fireEvent.click(next);

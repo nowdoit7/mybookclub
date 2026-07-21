@@ -78,3 +78,4 @@
 - 2026-07-21: Added a separate audited guest-work registry so verified author-book matches can use one bounded author-perspective moment without embedding title-specific answers in persona cards.
 - 2026-07-21: Preserved special attribution boundaries for posthumous compilations, poetic corpora, traditional works, represented subjects, and fictional characters; authorship remains contestable and is never repeated as authority.
 - 2026-07-21: A targeted GPT-5.6 live check made Machiavelli open with “When I wrote this book,” defend the work's diagnostic aim, and leave its moral vulnerability open to challenge.
+- 2026-07-21: Unified dialogue-playback forward controls as `Next`/`다음` while keeping table entry, stage changes, and recap navigation explicitly labeled.
