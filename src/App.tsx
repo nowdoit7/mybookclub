@@ -59,6 +59,7 @@ const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
     memorable_scene: "Which scene stayed with you?",
     discussion_position: "Where do you land on this question?",
     discussion_reply: "How do you answer that challenge?",
+    discussion_followup: "What else would you like to add to this exchange?",
     wrap_up: "What are you leaving the table with?",
   },
   ko: {
@@ -67,6 +68,7 @@ const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
     memorable_scene: "어떤 장면이 가장 오래 남았나요?",
     discussion_position: "이 질문에 대해 어디에 서 있나요?",
     discussion_reply: "그 반론에는 어떻게 답하시겠어요?",
+    discussion_followup: "이 대화에 어떤 생각을 더 보태고 싶나요?",
     wrap_up: "오늘 테이블에서 무엇을 가지고 떠나시나요?",
   },
 };
@@ -190,6 +192,7 @@ const COPY = {
     challengedLine: "The line you are answering",
     discussionChoice: "How would you like to continue?",
     joinDiscussion: "Join the discussion",
+    addThought: "Add another thought",
     keepListening: "Keep listening",
     continueDiscussion: "Continue the discussion",
     wrapDiscussion: "Wrap up",
@@ -359,6 +362,7 @@ const COPY = {
     challengedLine: "지금 답변할 발언",
     discussionChoice: "이 토론을 어떻게 이어갈까요?",
     joinDiscussion: "내 의견 보태기",
+    addThought: "의견 덧붙이기",
     keepListening: "한 번 더 듣기",
     continueDiscussion: "토론 조금 더 이어보기",
     wrapDiscussion: "이쯤에서 마무리",
@@ -1736,6 +1740,7 @@ export function App() {
         language,
         seed,
         personas,
+        userDisplayName: userDisplayName.trim() || copy.displayNamePlaceholder,
         waitForAdvance(turn) {
           return new Promise<void>((resolve) => {
             const speakerId = turn.speaker === "moderator" ? "moderator" : turn.speaker.id;
@@ -2513,21 +2518,19 @@ export function App() {
                   {language === "ko"
                     ? discussionDecision.phase === "after_join"
                       ? discussionDecision.round === 1
-                        ? "방금 생긴 쟁점을 두 독자가 더 밀어붙이게 하거나, 지금의 긴장을 남긴 채 마무리할 수 있습니다."
-                        : "한 차례 더 이어진 쟁점을 마지막으로 한 번 더 듣거나, 지금 직접 마무리를 선택할 수 있습니다."
-                      : "직접 의견을 보태거나, 두 독자의 논쟁을 조금 더 듣거나, 남은 쟁점을 그대로 두고 마무리할 수 있습니다."
+                      ? "방금 생긴 쟁점에 의견을 더하거나, 독자들의 대화를 더 듣거나, 지금의 긴장을 남긴 채 마무리할 수 있습니다."
+                        : "마지막으로 의견을 덧붙이거나 대화를 한 번 더 듣고, 언제 마무리할지 직접 선택할 수 있습니다."
+                      : "직접 의견을 보태거나, 독자들의 논쟁을 조금 더 듣거나, 남은 쟁점을 그대로 두고 마무리할 수 있습니다."
                     : discussionDecision.phase === "after_join"
                       ? discussionDecision.round === 1
-                        ? "Let the two readers push the new disagreement further, or leave the tension open and wrap up."
-                        : "Hear one final exchange on the remaining disagreement, or choose to close the table now."
+                      ? "Add another thought, hear the readers continue, or leave the tension open and wrap up."
+                        : "Add one final thought, hear one more exchange, or choose to close the table now."
                       : "Join with your own view, hear one more exchange, or leave the remaining tension open and wrap up."}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {discussionDecision.phase === "before_join" && (
-                    <button type="button" onClick={() => submitDiscussionDecision("join")} className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-bold text-amber-950">
-                      {copy.joinDiscussion}
-                    </button>
-                  )}
+                  <button type="button" onClick={() => submitDiscussionDecision("join")} className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-bold text-amber-950">
+                    {discussionDecision.phase === "before_join" ? copy.joinDiscussion : copy.addThought}
+                  </button>
                   {discussionDecision.canListen && (
                     <button type="button" onClick={() => submitDiscussionDecision("listen")} className="rounded-lg border border-amber-200/30 bg-white/10 px-4 py-2 text-sm font-semibold text-amber-50">
                       {discussionDecision.phase === "after_join" ? copy.continueDiscussion : copy.keepListening}

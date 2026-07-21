@@ -36,7 +36,7 @@ describe("room atmosphere", () => {
   it("raises tension for a direct challenge and softens it during support and closing", () => {
     const baseline = deriveInitialAtmosphere([PERSONAS[0], PERSONAS[3], PERSONAS[6]]);
     const challenged = updateAtmosphereForTask(baseline, "CHALLENGE_PERSONA");
-    const supported = updateAtmosphereForTask(challenged, "SUPPORT_USER");
+    const supported = updateAtmosphereForTask(challenged, "BRIDGE_EXCHANGE");
     const closed = updateAtmosphereForTask(supported, "DISCUSSION_SUMMARY");
 
     expect(challenged.tension).toBeGreaterThan(baseline.tension);

@@ -62,6 +62,7 @@ export interface RecapRequest {
   date: string;
   book: ConfirmedBook;
   personas: PersonaCard[];
+  userDisplayName: string;
   transcript: Utterance[];
   personaStances: Record<string, number>;
   userStances: Record<string, { stance: number; paraphrase: string }>;

@@ -170,7 +170,7 @@ function personaIntroduction(persona: PersonaCard, language: AppLanguage): strin
   }
   return language === "ko"
     ? `안녕하세요, ${name}이고 ${persona.roleLabel.ko}로 지내고 있어요. ${persona.socialIntroSeed.ko}`
-    : `Hi, I'm ${name}. My day job is ${persona.roleLabel.en.toLowerCase()}. ${persona.socialIntroSeed.en}`;
+    : `Hi, I'm ${name}, and my day job is ${persona.roleLabel.en.toLowerCase()}. ${persona.socialIntroSeed.en}`;
 }
 
 function closingReflection(persona: PersonaCard, language: AppLanguage): string {
@@ -247,7 +247,7 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
     ? {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
         FIRST_IMPRESSION: input.notes?.overallTake,
-        OPEN_PERSONA_POSITION: `${moodLead} ${targetName}님, 저는 “${topic}”를 판단할 때 무엇보다 먼저 살필 것은 ${reason}이라고 생각합니다.`,
+        OPEN_PERSONA_POSITION: `${moodLead} ${input.discussionFocus ? `앞서 나온 “${excerpt(input.discussionFocus, "대화의 실마리", 80)}”를 이어, ` : ""}${targetName}님, 저는 “${topic}”를 판단할 때 ${reason}을 먼저 살펴야 한다고 생각합니다.`,
         CHALLENGE_PERSONA: `${targetName}님, 그 주장은 중요한 예외를 너무 빨리 정리합니다. 같은 근거가 반대 결론을 낳는 경우까지 어떻게 설명하시겠어요?`,
         RESPOND_TO_PERSONA: `${targetName}님이 짚은 예외는 인정하지만 제 결론까지 무너지지는 않습니다. 오히려 ${reason}을 얼마나 중요하게 볼 것인지가 아직 남은 차이입니다.`,
         CHALLENGE_USER: `저는 “${topic}”라는 질문에서 그 결론을 조금 더 밀어보고 싶습니다. 방금 말씀하신 근거가 가장 강한 반대 사례까지 설명할 수 있다고 보시나요?`,
@@ -258,13 +258,14 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
             : "저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 구체적인 장면은 지어내지 않고, 여러분이 기억한 순간을 들은 뒤 제 관점을 보태겠습니다.",
         REACT_TO_USER_SCENE: `방금 들은 “${userMoment}” 덕분에 앞선 질문이 훨씬 구체적으로 다가옵니다. 제 관심은 ${categoryLens.ko[persona.category]} 쪽에 있습니다. 그 대목이 무엇을 보여 주고 무엇을 끝내 설명하지 않는지 함께 보겠습니다.`,
         RESPOND_TO_USER_REPLY: `그 답은 제가 문제 삼은 구분을 더 분명하게 해 줍니다. 그래도 ${reason} 쪽에 무게를 두면 놓친 결과가 남아 있어, 이견이 완전히 풀리지는 않았어요.`,
-        SUPPORT_USER: `${targetName}님, ${categoryLens.ko[persona.category]}에 비춰 보면 방금 나온 구분이 작품의 다른 근거도 설명할 수 있다고 봅니다. 다만 그 해석이 모든 결과를 대신 설명한다고 넓혀 버리면 중요한 예외를 놓칠 수 있습니다.`,
+        RESPOND_TO_USER_FOLLOWUP: `${targetName}님이 덧붙인 구분은 논점을 더 또렷하게 만듭니다. 그래도 ${reason}이라는 기준에서 보면 아직 설명되지 않는 결과가 하나 남습니다.`,
+        BRIDGE_EXCHANGE: `${targetName}님, 방금 오간 답변과 반론의 차이를 ${categoryLens.ko[persona.category]}의 관점에서 다시 보고 싶습니다. 어느 한쪽을 반복하기보다 작품의 다른 근거가 그 경계를 어디에 긋는지 살펴보겠습니다.`,
         CLOSING_REFLECTION: closingReflection(persona, input.language),
       }
     : {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
         FIRST_IMPRESSION: input.notes?.overallTake,
-        OPEN_PERSONA_POSITION: `${moodLead} ${targetName}, I think ${reason} should carry the most weight when we answer ${topic}.`,
+        OPEN_PERSONA_POSITION: `${moodLead} ${input.discussionFocus ? `Following the earlier thread about “${excerpt(input.discussionFocus, "the conversation thread", 80)},” ` : ""}${targetName}, I think ${reason} should carry the most weight when we answer ${topic}.`,
         CHALLENGE_PERSONA: `${targetName}, that claim closes an important exception too quickly. How does it explain the same evidence leading to the opposite conclusion?`,
         RESPOND_TO_PERSONA: `${targetName}'s exception matters, but it does not undo my conclusion. Our unresolved difference is how much weight to give ${reason}.`,
         CHALLENGE_USER: `I want to press that conclusion about ${topic}. Does the evidence you named really account for the strongest counterexample?`,
@@ -275,7 +276,8 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
             : "I want to return to the passage where the book's central tension becomes clearest. I will not invent a scene here; I would rather hear the moment you actually remember and respond to that evidence.",
         REACT_TO_USER_SCENE: `Hearing “${userMoment}” makes the earlier question much more concrete. Through ${categoryLens.en[persona.category]}, I want to examine both what that moment shows and what it leaves unexplained.`,
         RESPOND_TO_USER_REPLY: `That answer clarifies the distinction I was testing. Some consequences remain unexplained when I focus on ${reason}, so the objection is not fully resolved.`,
-        SUPPORT_USER: `${targetName}, I think the distinction just raised can explain different evidence through ${categoryLens.en[persona.category]}. Its limit is that it may erase an important exception if we let it stand in for every consequence.`,
+        RESPOND_TO_USER_FOLLOWUP: `${targetName}'s added distinction makes the issue clearer. From ${reason}, one consequence still remains unexplained.`,
+        BRIDGE_EXCHANGE: `${targetName}, I want to pick up the difference that answer and objection just exposed through ${categoryLens.en[persona.category]}. Rather than repeat either side, I will test where different evidence from the book places that boundary.`,
         CLOSING_REFLECTION: closingReflection(persona, input.language),
       };
   const utterance =
@@ -311,11 +313,11 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         FIRST_IMPRESSIONS_OPEN: "소개해 주셔서 고맙습니다. 이제 책으로 들어가되 구체적인 장면은 다음 순서에 남겨 두고, 책을 덮었을 때의 전체적인 느낌이나 질문부터 한 분씩 이야기해 볼까요?",
         DEVILS_ADVOCATE: "잠시 반대편에서 밀어붙여 보겠습니다. 모두가 이 해석에 동의한다면 우리가 시험하지 않고 지나치는 근거는 무엇일까요?",
         SCENES_OPEN: `“${userFirstImpression}”라는 첫인상이 어디에서 시작됐는지 궁금해지네요. 이번에는 그 느낌을 만든 구체적인 장면이나 대목 하나를 골라볼까요?`,
-        TOPIC_OPEN: `${input.discussionFocus ? `앞선 이야기에서는 ${input.discussionFocus}이 계속 남았습니다. ` : ""}그래서 오늘의 중심 질문은 이것입니다. ${topic}`,
+        TOPIC_OPEN: `${input.discussionFocus ? `앞선 이야기에서 ${input.discussionFocus}라는 문제를 직접 짚었습니다. ` : ""}그 흐름을 이어 오늘의 중심 질문을 살펴보겠습니다. ${topic}`,
         ASK_USER_POSITION: "서로 다른 입장의 끝을 들어봤습니다. 여러분은 이 질문에 대해 어디에 서 있나요?",
         TOPIC_CLOSE: `오늘 우리는 “${stripTerminal(topic, "이 질문")}”라는 질문을 놓고 이야기했습니다. 같은 근거가 낳은 해석의 차이를 합의로 덮지 않고 기억해 두겠습니다.`,
-        WRAP_OPEN: "테이블을 떠나기 전에 묻겠습니다. 오늘 대화가 여러분의 생각을 움직였나요?",
-        DISCUSSION_SUMMARY: `오늘 테이블에서는 질문 “${stripTerminal(topic, "중심 질문")}”를 중심에 두고 서로 다른 판단의 근거를 비교했습니다. 각자의 생각을 솔직하게 들려주신 모든 분께 고맙습니다. 이제 무엇이 움직였고 무엇이 끝내 남았는지 모임 기록으로 확인하겠습니다.`,
+        WRAP_OPEN: "이견은 남아 있지만 어디에서 판단이 갈리는지는 더 선명해졌습니다. 오늘 대화가 여러분의 생각을 어떻게 움직였는지 마지막으로 들려주시겠어요?",
+        DISCUSSION_SUMMARY: `오늘 테이블에서는 질문 “${stripTerminal(topic, "중심 질문")}”를 중심에 두고 서로 다른 판단의 근거를 비교했습니다. 테이블에서 직접 나온 구분 덕분에 논쟁의 경계도 더 또렷해졌습니다. 일부 판단은 움직였지만 가장 강한 반론은 여전히 남아 있습니다. 각자의 생각을 솔직하게 나눠 주셔서 고맙고, 이제 모임 기록에서 그 변화와 이견을 함께 확인하겠습니다.`,
       }
     : {
         WELCOME: `Welcome to Open Reading Club. We will discuss ${input.book.title} by ${input.book.author}, but first let us meet the people sitting with us tonight.`,
@@ -326,8 +328,8 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         TOPIC_OPEN: `${input.discussionFocus ? `The earlier conversation kept returning to ${input.discussionFocus}. ` : ""}That gives us our central question: ${topic}`,
         ASK_USER_POSITION: "You have heard the edges of the disagreement. Where do you land on this question?",
         TOPIC_CLOSE: `We tested how the same evidence can support different answers to ${stripTerminal(topic, "this question")}. The remaining difference matters more than a forced consensus.`,
-        WRAP_OPEN: "Before we leave the table, did this discussion move your view?",
-        DISCUSSION_SUMMARY: `Tonight the table compared the reasons behind different answers to ${stripTerminal(topic, "the central question")}. Thank you all for bringing your own judgment and listening through the disagreement. I will put what shifted and what remained unresolved into the written recap now.`,
+        WRAP_OPEN: "The disagreement remains, but its fault line is clearer now. Before we leave the table, how did this conversation move your view?",
+        DISCUSSION_SUMMARY: `Tonight the table compared the reasons behind different answers to ${stripTerminal(topic, "the central question")}. The user's distinction made the boundary of that disagreement clearer. Some judgments moved, while the strongest counterclaim remains unresolved. Thank you all for sharing the table, and the written recap comes next.`,
       };
 
   return utteranceSchema.parse({
@@ -390,10 +392,11 @@ export class MockGenerationClient implements GenerationClient {
     const rawScores = input.book.candidateTopics.map((topic, index) => ({
       topic,
       relevance: topicPreference(topic, conversation) + (index === 1 ? 0.45 : 0),
+      userRelevance: topicPreference(topic, userConversation),
     }));
     const selected = [...rawScores].sort((left, right) => right.relevance - left.relevance)[0];
     return discussionFocusSchema.parse({
-      topic_scores: rawScores.map(({ topic, relevance }) => ({
+      topic_scores: rawScores.map(({ topic, relevance, userRelevance }) => ({
         topic,
         relevance: Math.min(2, relevance),
         evidence:
@@ -404,10 +407,15 @@ export class MockGenerationClient implements GenerationClient {
             : topic === selected.topic
               ? "the first impression and chosen moment shared at the table"
               : "a question indirectly connected to the earlier conversation",
+        user_relevance: Math.min(2, userRelevance),
+        user_evidence: userConversation
+          ? excerpt(userConversation, input.language === "ko" ? "사용자 발언" : "the user's remark", 160)
+          : null,
       })),
       emergent_question: null,
       emergent_relevance: 0,
       emergent_evidence: null,
+      emergent_user_relevance: 0,
     });
   }
 
@@ -436,7 +444,7 @@ export class MockGenerationClient implements GenerationClient {
       const stance = input.personaStances[persona.id]?.toFixed(1) ?? "0.0";
       return `${stance} — ${categoryLens[input.language][persona.category]}`;
     });
-    const headers = [isKorean ? "주제" : "Topic", ...names, isKorean ? "나" : "You"];
+    const headers = [isKorean ? "주제" : "Topic", ...names, input.userDisplayName];
     const row = [
       topic,
       ...personaCells,

@@ -3,8 +3,24 @@ import type {
   ReadingNotesOutput,
   UtteranceOutput,
 } from "../api/contracts";
+import type { UtteranceTask } from "../api/generationClient";
 import type { AppLanguage } from "../types";
 import { countSentences } from "./sentenceValidation";
+
+const EXACT_SENTENCE_COUNTS: Partial<Record<UtteranceTask, number>> = {
+  PERSONA_INTRODUCTION: 2,
+  CHALLENGE_PERSONA: 2,
+  RESPOND_TO_PERSONA: 2,
+  RESPOND_TO_USER_REPLY: 2,
+  RESPOND_TO_USER_FOLLOWUP: 2,
+  BRIDGE_EXCHANGE: 2,
+  CLOSING_REFLECTION: 2,
+  DISCUSSION_SUMMARY: 4,
+};
+
+function endsWithCompleteSentence(text: string): boolean {
+  return /[.!?…。？！](?:["'”’)\]])*$/u.test(text.trim());
+}
 
 export function validateBookIdentificationQuality(output: BookIdentificationOutput): string[] {
   const issues: string[] = [];
@@ -95,14 +111,23 @@ export function validateUtteranceQuality(
   output: UtteranceOutput,
   speaker: "persona" | "moderator",
   shelfReferenceAllowed: boolean,
+  context?: { language: AppLanguage; task: UtteranceTask },
 ): string[] {
   const issues: string[] = [];
   const count = countSentences(output.utterance);
   const minimum = speaker === "persona" ? 2 : 1;
   const maximum = speaker === "persona" ? 4 : 3;
+  const exactSentenceCount = context ? EXACT_SENTENCE_COUNTS[context.task] : undefined;
 
-  if (count < minimum || count > maximum) {
+  if (exactSentenceCount !== undefined && count !== exactSentenceCount) {
+    issues.push(
+      `${context!.task} utterance must contain exactly ${exactSentenceCount} sentences; received ${count}`,
+    );
+  } else if (exactSentenceCount === undefined && (count < minimum || count > maximum)) {
     issues.push(`${speaker} utterance must contain ${minimum}-${maximum} sentences; received ${count}`);
+  }
+  if (context && !endsWithCompleteSentence(output.utterance)) {
+    issues.push("utterance must end with a complete sentence");
   }
   if (!shelfReferenceAllowed && output.shelf_ref !== null) {
     issues.push("shelf_ref must be null because this turn has no shelf-reference budget");
@@ -112,6 +137,36 @@ export function validateUtteranceQuality(
     !output.utterance.toLocaleLowerCase().includes(output.shelf_ref.toLocaleLowerCase())
   ) {
     issues.push("shelf_ref must name a book that is explicitly mentioned in the utterance");
+  }
+
+  const discussionTasks = new Set<UtteranceTask>([
+    "OPEN_PERSONA_POSITION",
+    "CHALLENGE_PERSONA",
+    "RESPOND_TO_PERSONA",
+    "CHALLENGE_USER",
+    "RESPOND_TO_USER_REPLY",
+    "RESPOND_TO_USER_FOLLOWUP",
+    "BRIDGE_EXCHANGE",
+  ]);
+  if (context && discussionTasks.has(context.task)) {
+    if (/[;；]/u.test(output.utterance)) {
+      issues.push("spoken discussion dialogue must not use semicolons");
+    }
+
+    const sentenceLengthLimit = context.language === "ko" ? 110 : 200;
+    const sentenceSegments =
+      typeof Intl.Segmenter === "function"
+        ? [...new Intl.Segmenter(context.language, { granularity: "sentence" }).segment(output.utterance)]
+            .map(({ segment }) => segment.trim())
+            .filter(Boolean)
+        : output.utterance.split(/(?<=[.!?。？！])(?:["')\]]*)\s+/u).filter(Boolean);
+    sentenceSegments.forEach((sentence, index) => {
+      if ([...sentence].length > sentenceLengthLimit) {
+        issues.push(
+          `spoken discussion sentence ${index + 1} exceeds ${sentenceLengthLimit} characters`,
+        );
+      }
+    });
   }
 
   return issues;
@@ -136,7 +191,11 @@ const RECAP_HEADINGS: Record<AppLanguage, string[]> = {
   ],
 };
 
-export function validateRecapQuality(markdown: string, language: AppLanguage = "en"): string[] {
+export function validateRecapQuality(
+  markdown: string,
+  language: AppLanguage = "en",
+  participantNames: string[] = [],
+): string[] {
   const issues = RECAP_HEADINGS[language].filter((heading) => !markdown.includes(heading)).map(
     (heading) => `recap is missing heading: ${heading}`,
   );
@@ -148,6 +207,20 @@ export function validateRecapQuality(markdown: string, language: AppLanguage = "
   if (!titlePattern.test(markdown)) {
     issues.push("recap must start with a dated level-one Reading Table Recap heading");
   }
+
+  const finalPositionHeading = RECAP_HEADINGS[language][1];
+  const nextHeading = RECAP_HEADINGS[language][2];
+  const finalPositionStart = markdown.indexOf(finalPositionHeading);
+  const nextHeadingStart = markdown.indexOf(nextHeading);
+  const finalPositionSection =
+    finalPositionStart >= 0 && nextHeadingStart > finalPositionStart
+      ? markdown.slice(finalPositionStart, nextHeadingStart)
+      : "";
+  participantNames.forEach((name) => {
+    if (!finalPositionSection.includes(name)) {
+      issues.push(`recap final-position section must include participant: ${name}`);
+    }
+  });
 
   const longQuotedPassage = markdown.match(/[“"][^”"\n]{180,}[”"]/u);
   if (longQuotedPassage) {

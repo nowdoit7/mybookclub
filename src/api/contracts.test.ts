@@ -77,10 +77,13 @@ describe("structured output contracts", () => {
           topic,
           relevance: index,
           evidence: `Evidence ${index}`,
+          user_relevance: index,
+          user_evidence: index === 0 ? null : `User evidence ${index}`,
         })),
         emergent_question: null,
         emergent_relevance: 0,
         emergent_evidence: null,
+        emergent_user_relevance: 0,
       }).topic_scores,
     ).toHaveLength(3);
   });

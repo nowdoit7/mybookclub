@@ -144,6 +144,87 @@ describe("utterance quality validation", () => {
       ),
     ).toContain("shelf_ref must name a book that is explicitly mentioned in the utterance");
   });
+
+  it("rejects essay-like punctuation in substantive discussion", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: "그 반론은 이해합니다; 하지만 이 장면의 결과는 다르게 봐야 해요. 저는 아직 책임의 경계가 남는다고 생각합니다.",
+          stance: 1,
+          refers_to: "marcus",
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+        { language: "ko", task: "RESPOND_TO_PERSONA" },
+      ),
+    ).toContain("spoken discussion dialogue must not use semicolons");
+  });
+
+  it("rejects an overlong spoken sentence without calling another model", () => {
+    const overlongSentence = `${"이 장면의 책임을 다른 각도에서 살펴보면 ".repeat(5)}결론이 달라집니다.`;
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: `${overlongSentence} 그래서 저는 그 판단을 그대로 받아들이기 어렵습니다.`,
+          stance: -1,
+          refers_to: "maddie",
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+        { language: "ko", task: "CHALLENGE_PERSONA" },
+      ),
+    ).toContain("spoken discussion sentence 1 exceeds 110 characters");
+  });
+
+  it("enforces the exact two-sentence contract for a directed reader clash", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: "I disagree with that reading. The later scene points elsewhere. What makes your evidence decisive?",
+          stance: -1,
+          refers_to: "jamal",
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+        { language: "en", task: "CHALLENGE_PERSONA" },
+      ),
+    ).toContain("CHALLENGE_PERSONA utterance must contain exactly 2 sentences; received 3");
+  });
+
+  it("rejects dialogue that stops before the final sentence is complete", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: "I agree that the evidence changes the question. What later scene proves that rather than simply—",
+          stance: 0.5,
+          refers_to: "marcus",
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+        { language: "en", task: "RESPOND_TO_PERSONA" },
+      ),
+    ).toContain("utterance must end with a complete sentence");
+  });
+
+  it("rejects an incomplete moderator summary", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: "The central disagreement remained open. David clarified what the evidence could prove. Jam,",
+          stance: null,
+          refers_to: null,
+          shelf_ref: null,
+        },
+        "moderator",
+        false,
+        { language: "en", task: "DISCUSSION_SUMMARY" },
+      ),
+    ).toContain("utterance must end with a complete sentence");
+  });
 });
 
 describe("recap quality validation", () => {
@@ -166,6 +247,12 @@ What would change your mind?`;
     expect(validateRecapQuality(recap)).toEqual([]);
     expect(validateRecapQuality(`${recap}\nWhat remains unresolved?`)).toContain(
       "recap must end with exactly one question to sleep on",
+    );
+  });
+
+  it("requires every named participant in the final-position section", () => {
+    expect(validateRecapQuality(recap, "en", ["You", "Maddie"])).toContain(
+      "recap final-position section must include participant: Maddie",
     );
   });
 });

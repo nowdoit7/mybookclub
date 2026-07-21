@@ -116,9 +116,10 @@ describe("recap participant labels", () => {
     const newton = GUEST_PERSONAS.find(({ id }) => id === "isaac-newton")!;
     const dev = selectPersonas("demo").find(({ id }) => id === "dev")!;
 
-    expect(localizedRecapParticipants([newton, dev], "ko")).toEqual([
+    expect(localizedRecapParticipants([newton, dev], "ko", "우찬")).toEqual([
       { id: "isaac-newton", name: "아이작 뉴턴" },
       { id: "dev", name: "데브" },
+      { id: "user", name: "우찬" },
     ]);
   });
 });

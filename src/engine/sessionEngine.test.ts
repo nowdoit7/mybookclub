@@ -14,7 +14,7 @@ describe("SessionEngine", () => {
     });
 
     expect(result.state.stage).toBe("WRAP_UP");
-    expect(result.state.transcript).toHaveLength(33);
+    expect(result.state.transcript).toHaveLength(31);
     expect(Object.values(result.state.roomAtmosphere).every((value) => value >= 0 && value <= 1)).toBe(
       true,
     );
@@ -89,7 +89,9 @@ describe("SessionEngine", () => {
       const sentenceCount = countSentences(utterance.text);
       if (utterance.speaker === "moderator") {
         expect(sentenceCount).toBeGreaterThanOrEqual(1);
-        expect(sentenceCount).toBeLessThanOrEqual(3);
+        expect(sentenceCount).toBeLessThanOrEqual(
+          utterance === state.transcript.at(-1) ? 4 : 3,
+        );
       } else {
         expect(sentenceCount).toBeGreaterThanOrEqual(2);
         expect(sentenceCount).toBeLessThanOrEqual(4);
@@ -129,7 +131,7 @@ describe("SessionEngine", () => {
       turn.speaker === "user" ? [index] : [],
     );
 
-    expect(turns).toHaveLength(11);
+    expect(turns).toHaveLength(9);
     expect(userIndexes).toHaveLength(2);
     expect(state.discussionRoles).toBeDefined();
     expect(turns[1]).toMatchObject({
@@ -140,10 +142,10 @@ describe("SessionEngine", () => {
       speaker: state.discussionRoles?.leadB,
       refersTo: state.discussionRoles?.leadA,
     });
-    expect(turns[3]).toMatchObject({
-      speaker: state.discussionRoles?.leadA,
-      refersTo: state.discussionRoles?.leadB,
-    });
+    expect(turns[3]).toMatchObject({ speaker: "moderator" });
+    expect(
+      turns.slice(0, 3).filter(({ speaker }) => speaker !== "moderator"),
+    ).toHaveLength(2);
 
     const challengeIndex = turns.findIndex(
       ({ speaker, refersTo }) =>
@@ -153,8 +155,143 @@ describe("SessionEngine", () => {
     expect(turns[challengeIndex].text.match(/[?？]/gu)).toHaveLength(1);
     expect(turns[challengeIndex + 1]?.speaker).toBe("user");
     expect(turns[challengeIndex + 2]?.speaker).toBe(state.discussionRoles?.challenger);
-    expect(turns[challengeIndex + 3]?.speaker).toBe(state.discussionRoles?.supporter);
+    expect(turns[challengeIndex + 3]?.speaker).toBe(state.discussionRoles?.bridgeReader);
+    expect(
+      new Set(
+        turns
+          .filter(({ speaker }) => state.personas.some(({ id }) => id === speaker))
+          .map(({ speaker }) => speaker),
+      ),
+    ).toEqual(new Set(state.personas.map(({ id }) => id)));
+  });
 
+  it("uses a code-owned three-turn opening before the first discussion checkpoint", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateUtterance = client.generateUtterance.bind(client);
+    const discussionTasks: string[] = [];
+    let tasksAtCheckpoint: string[] = [];
+    client.generateUtterance = async (input) => {
+      if (input.stage === "DISCUSSION") discussionTasks.push(input.task);
+      return originalGenerateUtterance(input);
+    };
+
+    await new SessionEngine(client).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+      requestDiscussionAction(turn) {
+        if (turn.phase === "before_join") tasksAtCheckpoint = [...discussionTasks];
+        return Promise.resolve("wrap");
+      },
+    });
+
+    const committedTaskOrder = tasksAtCheckpoint.filter(
+      (task, index) => index === 0 || task !== tasksAtCheckpoint[index - 1],
+    );
+    expect(committedTaskOrder).toEqual([
+      "TOPIC_OPEN",
+      "OPEN_PERSONA_POSITION",
+      "CHALLENGE_PERSONA",
+    ]);
+  });
+
+  it("weights a user-backed thread above a generally relevant but user-distant topic", async () => {
+    const client = new MockGenerationClient();
+    const originalExtractFocus = client.extractDiscussionFocus.bind(client);
+    let expectedTopic = "";
+    client.extractDiscussionFocus = async (input) => {
+      const base = await originalExtractFocus(input);
+      expectedTopic = input.book.candidateTopics[1];
+      return {
+        ...base,
+        topic_scores: input.book.candidateTopics.map((topic, index) => ({
+          topic,
+          relevance: index === 0 ? 2 : index === 1 ? 1 : 0,
+          evidence: `Table evidence ${index}`,
+          user_relevance: index === 1 ? 2 : 0,
+          user_evidence: index === 1 ? "The user's memorable scene supports this thread." : null,
+        })),
+        emergent_question: null,
+        emergent_relevance: 0,
+        emergent_evidence: null,
+        emergent_user_relevance: 0,
+      };
+    };
+
+    const { state } = await new SessionEngine(client).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+    });
+
+    expect(state.activeTopic).toBe(expectedTopic);
+  });
+
+  it("lets the same challenger answer before a third reader bridges the exchange", async () => {
+    const actions = ["join", "join", "wrap"] as const;
+    let actionIndex = 0;
+    const followUp = "I want to add one more distinction about responsibility.";
+    const { state } = await new SessionEngine(new MockGenerationClient()).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+      userInputs: { discussionFollowUp: followUp },
+      requestDiscussionAction() {
+        return Promise.resolve(actions[actionIndex++] ?? "wrap");
+      },
+    });
+
+    const discussion = state.transcript.filter(({ stage }) => stage === "DISCUSSION");
+    const challengeIndex = discussion.findIndex(
+      ({ speaker, refersTo }) =>
+        speaker === state.discussionRoles?.challenger && refersTo === "user",
+    );
+    const followUpIndex = discussion.findIndex(({ text }) => text === followUp);
+    expect(challengeIndex).toBeGreaterThan(-1);
+    expect(discussion[challengeIndex + 1]?.speaker).toBe("user");
+    expect(discussion[challengeIndex + 2]?.speaker).toBe(state.discussionRoles?.challenger);
+    expect(discussion[challengeIndex + 3]?.speaker).toBe(state.discussionRoles?.bridgeReader);
+    expect(followUpIndex).toBeGreaterThan(challengeIndex);
+    expect(discussion[followUpIndex + 1]).toMatchObject({ refersTo: "user" });
+  });
+
+  it("uses a reader rather than the moderator when every stance is close to the user", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateNotes = client.generateReadingNotes.bind(client);
+    client.generateReadingNotes = async (input) => {
+      const output = await originalGenerateNotes(input);
+      return {
+        ...output,
+        overall_stance: 0,
+        stance_by_topic: output.stance_by_topic.map((item) => ({ ...item, stance: 0 })),
+      };
+    };
+    client.extractUserStance = async (input) => ({
+      stance: 0,
+      paraphrase: input.text.trim().slice(0, 240) || "No position was offered.",
+    });
+
+    const { state } = await new SessionEngine(client).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+    });
+
+    expect(state.discussionRoles?.challenger).not.toBe("moderator");
+    expect(state.personas.some(({ id }) => id === state.discussionRoles?.challenger)).toBe(true);
+  });
+
+  it("gives an explicitly invited imagined guest a turn in the main discussion", async () => {
+    const guest = GUEST_PERSONAS.find(({ id }) => id === "william-shakespeare")!;
+    const personas = selectPersonas("demo", guest.id);
+    const { state } = await new SessionEngine(new MockGenerationClient()).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+      personas,
+    });
+
+    expect(
+      state.transcript.some(
+        ({ stage, speaker }) => stage === "DISCUSSION" && speaker === guest.id,
+      ),
+    ).toBe(true);
+    expect([state.discussionRoles?.leadA, state.discussionRoles?.leadB]).toContain(guest.id);
   });
 
   it("lets the user observe one bounded extension and then wrap without a forced position", async () => {
@@ -175,7 +312,7 @@ describe("SessionEngine", () => {
     expect(state.discussionListenCount).toBe(1);
     expect(decisionIndex).toBe(2);
     expect(discussion.filter(({ speaker }) => speaker === "user")).toHaveLength(0);
-    expect(discussion).toHaveLength(7);
+    expect(discussion).toHaveLength(5);
     expect(state.userStances[state.activeTopic!]).toBeUndefined();
   });
 
@@ -215,12 +352,10 @@ describe("SessionEngine", () => {
     ]);
     expect(state.discussionListenCount).toBe(2);
     const discussion = state.transcript.filter(({ stage }) => stage === "DISCUSSION");
-    const extension = discussion.slice(-5, -1);
-    expect(discussion.at(-1)?.speaker).toBe("moderator");
+    const extension = discussion.slice(-4);
     expect(extension).toHaveLength(4);
     for (let index = 0; index < extension.length; index += 2) {
       expect(extension[index].speaker).not.toBe(extension[index + 1].speaker);
-      expect(extension[index].refersTo).toBe(extension[index + 1].speaker);
       expect(extension[index + 1].refersTo).toBe(extension[index].speaker);
     }
   });
@@ -398,7 +533,7 @@ describe("SessionEngine", () => {
       },
     });
 
-    expect(advanceCount).toBe(27);
+    expect(advanceCount).toBe(25);
     expect(inputCount).toBe(6);
     expect(completionWaitCount).toBe(1);
     expect(state.transcript.filter(({ speaker }) => speaker === "user").map(({ text }) => text)).toEqual(
@@ -529,7 +664,7 @@ describe("SessionEngine", () => {
     });
 
     expect(result.state.book.title).toBe("최근에 읽은 책");
-    expect(result.state.transcript).toHaveLength(33);
+    expect(result.state.transcript).toHaveLength(31);
     expect(result.state.transcript[0].text).toMatch(/[가-힣]/u);
     expect(result.recapMarkdown).toContain("## 토론 요약");
     expect(result.recapMarkdown).toContain("## 잠들기 전 생각할 질문");

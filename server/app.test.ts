@@ -152,6 +152,7 @@ describe("server boundary", () => {
         date: "2026-07-17",
         book,
         personas,
+        userDisplayName: "You",
         transcript: [
           {
             speaker: "moderator",

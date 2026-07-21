@@ -67,10 +67,17 @@ export interface ReadingNotes {
 }
 
 export interface DiscussionFocus {
-  topicScores: Array<{ topic: string; relevance: number; evidence: string }>;
+  topicScores: Array<{
+    topic: string;
+    relevance: number;
+    evidence: string;
+    userRelevance: number;
+    userEvidence?: string;
+  }>;
   emergentQuestion?: string;
   emergentRelevance: number;
   emergentEvidence?: string;
+  emergentUserRelevance: number;
 }
 
 export interface ConfirmedBook {
@@ -99,7 +106,17 @@ export type UserTurnKind =
   | "memorable_scene"
   | "discussion_position"
   | "discussion_reply"
+  | "discussion_followup"
   | "wrap_up";
+
+export type DiscussionPhase =
+  | "opening"
+  | "base_clash"
+  | "awaiting_user_choice"
+  | "user_exchange"
+  | "bridge_reader"
+  | "continuation_checkpoint"
+  | "closing";
 
 export interface Utterance {
   speaker: string;
@@ -126,9 +143,9 @@ export interface SessionState {
     leadA: string;
     leadB: string;
     challenger?: string;
-    supporter?: string;
-    observer?: string;
+    bridgeReader?: string;
   };
+  discussionPhase?: DiscussionPhase;
   discussionListenCount: number; // 0..2 bounded reader-to-reader extensions
   seed?: string;
 }

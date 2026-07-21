@@ -42,6 +42,19 @@ function evaluate(result: CompletedSession): Check[] {
   const challengeIndex = discussion.findIndex(
     ({ speaker, refersTo }) => speaker === roles?.challenger && refersTo === "user",
   );
+  const bridgeIndex = discussion.findIndex(
+    ({ speaker }) => speaker === roles?.bridgeReader,
+  );
+  const spokenDiscussionTurns = discussion.filter(
+    ({ speaker }) => personaIds.has(speaker),
+  );
+  const essayLikeTurnCount = spokenDiscussionTurns.filter(
+    ({ text }) =>
+      /[;；]/u.test(text) ||
+      text
+        .split(/(?<=[.!?。？！])\s+/u)
+        .some((sentence) => [...sentence].length > (/[가-힣]/u.test(sentence) ? 110 : 200)),
+  ).length;
 
   return [
     {
@@ -82,11 +95,19 @@ function evaluate(result: CompletedSession): Check[] {
         roles?.leadA !== roles?.leadB &&
         discussion[leadOpeningIndex + 1]?.speaker === roles?.leadB &&
         discussion[leadOpeningIndex + 1]?.refersTo === roles?.leadA &&
-        discussion[leadOpeningIndex + 2]?.speaker === roles?.leadA &&
-        discussion[leadOpeningIndex + 2]?.refersTo === roles?.leadB,
+        discussion[leadOpeningIndex + 2]?.speaker === "moderator",
       detail: roles
-        ? `${roles.leadA} and ${roles.leadB} exchange a position, challenge, and response`
+        ? `${roles.leadA} opens, ${roles.leadB} challenges once, then code returns the floor`
         : "roles missing",
+    },
+    {
+      name: "causal user exchange",
+      passed:
+        challengeIndex >= 0 &&
+        discussion[challengeIndex + 1]?.speaker === "user" &&
+        discussion[challengeIndex + 2]?.speaker === roles?.challenger &&
+        bridgeIndex === challengeIndex + 3,
+      detail: "user reply returns to the challenger before the third reader bridges",
     },
     {
       name: "concentrated discussion floor",
@@ -94,7 +115,12 @@ function evaluate(result: CompletedSession): Check[] {
         new Set(
           discussion.filter(({ speaker }) => personaIds.has(speaker)).map(({ speaker }) => speaker),
         ).size <= 3,
-      detail: "two leads carry the clash while at most one reader supports it",
+      detail: "two leads carry the clash while a third reader may bridge it",
+    },
+    {
+      name: "spoken discussion style",
+      passed: essayLikeTurnCount === 0,
+      detail: `${essayLikeTurnCount} semicolon-heavy or overlong persona turns`,
     },
     {
       name: "distinct closing movement",

@@ -119,9 +119,8 @@ describe("MockGenerationClient", () => {
       allowShelfReference: false,
     });
 
-    expect(countSentences(output.utterance)).toBeGreaterThanOrEqual(2);
-    expect(countSentences(output.utterance)).toBeLessThanOrEqual(3);
-    expect(output.utterance).toMatch(language === "ko" ? /모든 분께 고맙습니다/u : /Thank you all/iu);
+    expect(countSentences(output.utterance)).toBe(4);
+    expect(output.utterance).toMatch(language === "ko" ? /고맙/u : /Thank you all/iu);
     expect(output.utterance).toMatch(language === "ko" ? /모임 기록/u : /written recap/iu);
   });
 

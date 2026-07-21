@@ -48,7 +48,8 @@ export const utteranceTaskSchema = z.enum([
   "TOPIC_OPEN",
   "ASK_USER_POSITION",
   "RESPOND_TO_USER_REPLY",
-  "SUPPORT_USER",
+  "RESPOND_TO_USER_FOLLOWUP",
+  "BRIDGE_EXCHANGE",
   "TOPIC_CLOSE",
   "WRAP_OPEN",
   "CLOSING_REFLECTION",
@@ -241,6 +242,7 @@ export const recapRequestSchema = z
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
     book: confirmedBookSchema,
     personas: z.array(personaCardSchema).length(3),
+    userDisplayName: boundedString(1, 32),
     transcript: z.array(transcriptUtteranceSchema).min(1).max(80),
     personaStances: z.record(z.string(), z.number().min(-2).max(2)),
     userStances: z.record(
@@ -297,6 +299,8 @@ export const discussionFocusSchema = z
             topic: boundedString(1, 160),
             relevance: z.number().min(0).max(2),
             evidence: boundedString(1, 240),
+            user_relevance: z.number().min(0).max(2),
+            user_evidence: boundedString(1, 240).nullable(),
           })
           .strict(),
       )
@@ -304,6 +308,7 @@ export const discussionFocusSchema = z
     emergent_question: boundedString(1, 160).nullable(),
     emergent_relevance: z.number().min(0).max(2),
     emergent_evidence: boundedString(1, 240).nullable(),
+    emergent_user_relevance: z.number().min(0).max(2),
   })
   .strict();
 

@@ -51,6 +51,7 @@ export interface ScriptedUserInputs {
   memorableScene: string;
   discussion: string;
   discussionReply: string;
+  discussionFollowUp: string;
   wrapUp: string;
 }
 
@@ -62,6 +63,7 @@ export interface RunSessionOptions {
   confirmedBook?: ConfirmedBook;
   seed?: string;
   personas?: PersonaCard[];
+  userDisplayName?: string;
   userInputs?: Partial<ScriptedUserInputs>;
   onUtterance?: (utterance: Utterance) => void;
   onAtmosphereChange?: (atmosphere: RoomAtmosphere) => void;
@@ -91,6 +93,8 @@ const SIMULATED_USER_INPUTS: ScriptedUserInputs = {
     "I think the strongest interpretation has to account for both the book's choices and the consequences those choices leave unresolved.",
   discussionReply:
     "That objection matters, but I still think my reading holds if we distinguish the character's intention from the consequences the book shows us.",
+  discussionFollowUp:
+    "I want to add that this distinction changes how I weigh the responsibility, even though it does not remove the cost.",
   wrapUp:
     "I am leaving with a wider view of the book, although I still want to test my original response against the other readings I heard.",
 };
@@ -126,10 +130,17 @@ function normalizeNotes(output: ReadingNotesOutput): ReadingNotes {
 
 function normalizeDiscussionFocus(output: DiscussionFocusOutput): DiscussionFocus {
   return {
-    topicScores: output.topic_scores,
+    topicScores: output.topic_scores.map((item) => ({
+      topic: item.topic,
+      relevance: item.relevance,
+      evidence: item.evidence,
+      userRelevance: item.user_relevance,
+      userEvidence: item.user_evidence ?? undefined,
+    })),
     emergentQuestion: output.emergent_question ?? undefined,
     emergentRelevance: output.emergent_relevance,
     emergentEvidence: output.emergent_evidence ?? undefined,
+    emergentUserRelevance: output.emergent_user_relevance,
   };
 }
 
@@ -196,8 +207,11 @@ export function selectDiscussionTopic(
     const extracted = focus?.topicScores.find((item) => item.topic === topic);
     return {
       topic,
-      evidence: phraseOnly(extracted?.evidence),
-      score: (extracted?.relevance ?? 0) * 2 + topicSpread(topic),
+      evidence: phraseOnly(extracted?.userEvidence ?? extracted?.evidence),
+      score:
+        (extracted?.relevance ?? 0) * 2 +
+        (extracted?.userRelevance ?? 0) * 3 +
+        topicSpread(topic),
     };
   });
 
@@ -208,6 +222,7 @@ export function selectDiscussionTopic(
       evidence: phraseOnly(focus.emergentEvidence),
       score:
         focus.emergentRelevance * 2 +
+        focus.emergentUserRelevance * 3 +
         Math.max(...overallStances) -
         Math.min(...overallStances) -
         0.35,
@@ -224,6 +239,20 @@ export function selectLeadDebaters(
   notes: Record<string, ReadingNotes>,
 ): [PersonaCard, PersonaCard] {
   if (personas.length < 2) throw new Error("At least two personas are required for a debate.");
+  const invitedGuest = personas.find(({ imaginedGuest }) => Boolean(imaginedGuest));
+  if (invitedGuest) {
+    const guestStance = getTopicStance(notes[invitedGuest.id], topic);
+    const opponent = personas
+      .filter(({ id }) => id !== invitedGuest.id)
+      .sort(
+        (left, right) =>
+          Math.abs(getTopicStance(notes[right.id], topic) - guestStance) -
+          Math.abs(getTopicStance(notes[left.id], topic) - guestStance),
+      )[0];
+    return [invitedGuest, opponent].sort(
+      (left, right) => getTopicStance(notes[left.id], topic) - getTopicStance(notes[right.id], topic),
+    ) as [PersonaCard, PersonaCard];
+  }
   let selected: [PersonaCard, PersonaCard] = [personas[0], personas[1]];
   let largestDistance = -1;
   for (let left = 0; left < personas.length - 1; left += 1) {
@@ -311,6 +340,7 @@ export class SessionEngine {
   private readonly onAtmosphereChange?: (atmosphere: RoomAtmosphere) => void;
   private readonly onStatus?: (message: string) => void;
   private language: AppLanguage = "en";
+  private userDisplayName = "You";
   private waitForAdvance?: RunSessionOptions["waitForAdvance"];
   private requestUserInput?: RunSessionOptions["requestUserInput"];
   private waitForSessionComplete?: RunSessionOptions["waitForSessionComplete"];
@@ -331,6 +361,8 @@ export class SessionEngine {
 
   async run(options: RunSessionOptions = {}): Promise<CompletedSession> {
     this.language = options.language ?? "en";
+    this.userDisplayName =
+      options.userDisplayName?.trim() || (this.language === "ko" ? "나" : "You");
     this.waitForAdvance = options.waitForAdvance;
     this.requestUserInput = options.requestUserInput;
     this.waitForSessionComplete = options.waitForSessionComplete;
@@ -400,7 +432,11 @@ export class SessionEngine {
     await this.runIntro(userInputs.intro, notePromises);
     await this.runFirstImpressions(userInputs.firstImpression);
     await this.runMemorableScenes(userInputs.memorableScene);
-    await this.runDiscussion(userInputs.discussion, userInputs.discussionReply);
+    await this.runDiscussion(
+      userInputs.discussion,
+      userInputs.discussionReply,
+      userInputs.discussionFollowUp,
+    );
     await this.runWrapUp(userInputs.wrapUp);
 
     this.onStatus?.("Generating meeting recap");
@@ -484,6 +520,7 @@ export class SessionEngine {
         output,
         isModerator ? "moderator" : "persona",
         allowShelfReference,
+        { language: this.language, task },
       );
       if (!isModerator && task === "FIRST_IMPRESSION") {
         const authorPerspective = resolveGuestAuthorPerspective(
@@ -505,10 +542,10 @@ export class SessionEngine {
         issues.push("TOPIC_OPEN must state the code-selected active topic verbatim");
       }
       if (
-        (task === "CHALLENGE_USER" || task === "DEVILS_ADVOCATE") &&
+        (task === "CHALLENGE_PERSONA" || task === "CHALLENGE_USER" || task === "DEVILS_ADVOCATE") &&
         (output.utterance.match(/[?？]/gu)?.length ?? 0) !== 1
       ) {
-        issues.push("a user challenge must ask exactly one pointed question");
+        issues.push("a direct challenge must ask exactly one pointed question");
       }
       if (options.targetSpeaker && output.refers_to !== options.targetSpeaker) {
         issues.push("a directed turn must preserve the code-selected target speaker");
@@ -546,7 +583,7 @@ export class SessionEngine {
             DEVILS_ADVOCATE: "잠시 반대편에서 묻겠습니다. 지금의 해석이 놓치고 있는 가장 강한 반례는 무엇일까요?",
             TOPIC_CLOSE: "이견은 완전히 풀리지 않았지만 어디에서 갈리는지는 분명해졌습니다. 이 긴장을 남겨 둔 채 마무리로 가겠습니다.",
             WRAP_OPEN: "이제 각자 오늘 테이블에서 가져갈 생각을 하나씩 남겨보겠습니다. 처음 생각과 달라진 점이 없어도 괜찮습니다.",
-            DISCUSSION_SUMMARY: "오늘은 같은 책의 근거가 서로 다른 판단으로 이어지는 지점을 살폈습니다. 함께 이야기해 주셔서 고맙습니다. 남은 이견과 생각의 움직임을 이제 모임 기록에 담겠습니다.",
+            DISCUSSION_SUMMARY: "오늘은 같은 책의 근거가 서로 다른 판단으로 이어지는 지점을 살폈습니다. 여러분이 보탠 구분 덕분에 의견이 갈리는 경계도 더 선명해졌습니다. 몇몇 판단은 움직였지만 가장 강한 반론은 아직 남아 있습니다. 함께 이야기해 주셔서 고맙고, 이제 모임 기록에서 그 흐름을 확인하겠습니다.",
           }
         : {
             WELCOME: "Welcome to Open Reading Club. Before discussing the book, let us first meet the people sharing the table tonight.",
@@ -558,7 +595,7 @@ export class SessionEngine {
             DEVILS_ADVOCATE: "Let me push from the other side. What is the strongest counterexample this reading might miss?",
             TOPIC_CLOSE: "The disagreement is not resolved, but its fault line is clearer. Let us carry that tension into the closing round.",
             WRAP_OPEN: "Let us each leave one thought from tonight's table. It is fine if your original view has not changed.",
-            DISCUSSION_SUMMARY: "Tonight we examined how the same evidence can lead readers toward different judgments. Thank you all for sharing the table. The written recap will preserve both the movement and the disagreement that remains.",
+            DISCUSSION_SUMMARY: "Tonight we examined how the same evidence can lead readers toward different judgments. Your distinctions made the fault line between those judgments clearer. Some views moved, while the strongest counterclaim remains unresolved. Thank you all for sharing the table, and the written recap comes next.",
           };
       return {
         utterance: moderatorLines[task] ?? (ko
@@ -596,10 +633,14 @@ export class SessionEngine {
       utterance = ko
         ? `저는 제 관점이 가장 불편하게 흔들린 장면을 다시 보고 싶습니다. 그 순간이 ${lens}인 제게도 간단한 결론을 허락하지 않았어요.`
         : `I want to return to the scene that most unsettled my usual lens. It refused to give even a ${lens.toLowerCase()} an easy conclusion.`;
-    } else if (task === "SUPPORT_USER") {
+    } else if (task === "RESPOND_TO_USER_FOLLOWUP") {
       utterance = ko
-        ? `${targetLabel}님, 방금 나온 구분은 다른 근거도 설명할 여지가 있다고 봅니다. 다만 중요한 예외까지 지워 버리면 그 해석도 너무 넓어집니다.`
-        : `${target}, I think the distinction just offered can account for other evidence as well. Its limit is that it becomes too broad if it erases an important exception.`;
+        ? "덧붙인 설명으로 입장의 경계가 더 또렷해졌습니다. 그래도 다른 결과 하나는 아직 설명되지 않아 그 부분은 남겨 두고 싶어요."
+        : "That addition makes the boundary of the position clearer. One consequence still remains unexplained, so I want to keep that part open.";
+    } else if (task === "BRIDGE_EXCHANGE") {
+      utterance = ko
+        ? `${targetLabel}님, 방금 오간 답변과 반론의 차이에서 다른 기준 하나가 보입니다. 어느 한쪽을 반복하기보다 작품의 다른 근거가 그 경계를 어디에 긋는지 살펴보겠습니다.`
+        : `${target}, that answer and objection expose another standard worth testing. Rather than repeat either side, I want to see where different evidence from the book places that boundary.`;
     } else if (task === "REACT_TO_USER_SCENE") {
       utterance = ko
         ? "방금 짚은 장면은 그 선택의 의미뿐 아니라 뒤에 남은 대가도 함께 보게 합니다. 한쪽만 강조할 때 사라지는 것이 무엇인지 조금 더 붙잡고 싶어요."
@@ -725,7 +766,7 @@ export class SessionEngine {
     await this.appendUser(text, target);
   }
 
-  private selectChallenger(target: string, userStance: number): PersonaCard | undefined {
+  private selectChallenger(target: string, userStance: number): PersonaCard {
     const scored = this.state.personas.map((persona) => ({
       persona,
       distance: Math.abs(
@@ -733,9 +774,9 @@ export class SessionEngine {
           (target === "overall_impression"
             ? this.state.notes[persona.id].overallStance
             : getTopicStance(this.state.notes[persona.id], target)),
-      ),
+        ),
     }));
-    if (scored.every(({ distance }) => distance < 0.5)) return undefined;
+    if (scored.length === 0) throw new Error("A reader is required to challenge the user.");
     scored.sort((left, right) => right.distance - left.distance);
     const alternative = scored.find(({ persona }) => persona.id !== this.lastChallengerId);
     const challenger = (alternative ?? scored[0]).persona;
@@ -751,7 +792,13 @@ export class SessionEngine {
       : notes.stanceByTopic.find((item) => item.topic === target)?.reason;
   }
 
-  private selectSupporter(
+  private discussionTurnCount(personaId: string): number {
+    return this.state.transcript.filter(
+      ({ stage, speaker }) => stage === "DISCUSSION" && speaker === personaId,
+    ).length;
+  }
+
+  private selectBridgeReader(
     target: string,
     userStance: number,
     challenger: PersonaCard | "moderator",
@@ -759,6 +806,8 @@ export class SessionEngine {
     return [...this.state.personas]
       .filter((persona) => challenger === "moderator" || persona.id !== challenger.id)
       .sort((left, right) => {
+        const turnDifference = this.discussionTurnCount(left.id) - this.discussionTurnCount(right.id);
+        if (turnDifference !== 0) return turnDifference;
         const leftDistance = Math.abs(
           userStance -
             (target === "overall_impression"
@@ -771,8 +820,76 @@ export class SessionEngine {
               ? this.state.notes[right.id].overallStance
               : getTopicStance(this.state.notes[right.id], target)),
         );
-        return leftDistance - rightDistance;
+        return rightDistance - leftDistance;
       })[0];
+  }
+
+  private bridgeTarget(
+    topic: string,
+    userStance: number,
+    bridgeReader: PersonaCard,
+    challenger: PersonaCard | "moderator",
+  ): string {
+    if (challenger === "moderator") return "user";
+    const bridgeStance = getTopicStance(this.state.notes[bridgeReader.id], topic);
+    const challengerStance = getTopicStance(this.state.notes[challenger.id], topic);
+    return Math.abs(bridgeStance - userStance) <= Math.abs(bridgeStance - challengerStance)
+      ? challenger.id
+      : "user";
+  }
+
+  private selectFollowUpResponder(topic: string, userStance: number): PersonaCard {
+    const lastSpeaker = this.state.transcript.at(-1)?.speaker;
+    return [...this.state.personas].sort((left, right) => {
+      const leftRepeat = left.id === lastSpeaker ? 1 : 0;
+      const rightRepeat = right.id === lastSpeaker ? 1 : 0;
+      if (leftRepeat !== rightRepeat) return leftRepeat - rightRepeat;
+      const turnDifference = this.discussionTurnCount(left.id) - this.discussionTurnCount(right.id);
+      if (turnDifference !== 0) return turnDifference;
+      return (
+        Math.abs(userStance - getTopicStance(this.state.notes[right.id], topic)) -
+        Math.abs(userStance - getTopicStance(this.state.notes[left.id], topic))
+      );
+    })[0];
+  }
+
+  private async appendContinuationChain(topic: string): Promise<void> {
+    const lastPersonaId = [...this.state.transcript]
+      .reverse()
+      .find(({ stage, speaker }) =>
+        stage === "DISCUSSION" && this.state.personas.some(({ id }) => id === speaker),
+      )?.speaker;
+    const lastPersona = this.state.personas.find(({ id }) => id === lastPersonaId);
+    const first = [...this.state.personas]
+      .filter(({ id }) => id !== lastPersona?.id)
+      .sort((left, right) => {
+        const turnDifference = this.discussionTurnCount(left.id) - this.discussionTurnCount(right.id);
+        if (turnDifference !== 0) return turnDifference;
+        if (!lastPersona) return 0;
+        return (
+          Math.abs(
+            getTopicStance(this.state.notes[right.id], topic) -
+              getTopicStance(this.state.notes[lastPersona.id], topic),
+          ) -
+          Math.abs(
+            getTopicStance(this.state.notes[left.id], topic) -
+              getTopicStance(this.state.notes[lastPersona.id], topic),
+          )
+        );
+      })[0];
+    const second = [...this.state.personas]
+      .filter(({ id }) => id !== first.id && id !== lastPersona?.id)
+      .sort((left, right) => this.discussionTurnCount(left.id) - this.discussionTurnCount(right.id))[0] ??
+      lastPersona!;
+
+    await this.appendGenerated(first, "RESPOND_TO_PERSONA", {
+      activeTopic: topic,
+      targetSpeaker: lastPersona?.id ?? second.id,
+    });
+    await this.appendGenerated(second, "RESPOND_TO_PERSONA", {
+      activeTopic: topic,
+      targetSpeaker: first.id,
+    });
   }
 
   private async challengeUser(target: string): Promise<PersonaCard | "moderator"> {
@@ -791,13 +908,6 @@ export class SessionEngine {
       return "moderator";
     }
     const challenger = this.selectChallenger(target, userArgument.stance);
-    if (!challenger) {
-      await this.appendGenerated("moderator", "DEVILS_ADVOCATE", {
-        activeTopic: target,
-        userArgument,
-      });
-      return "moderator";
-    }
     await this.appendGenerated(challenger, "CHALLENGE_USER", {
       activeTopic: target,
       targetSpeaker: "user",
@@ -891,8 +1001,13 @@ export class SessionEngine {
     });
   }
 
-  private async runDiscussion(userInput: string, userReply: string): Promise<void> {
+  private async runDiscussion(
+    userInput: string,
+    userReply: string,
+    userFollowUp: string,
+  ): Promise<void> {
     this.setStage("DISCUSSION");
+    this.state.discussionPhase = "opening";
     const focus = await this.discussionFocusPromise;
     const selected = selectDiscussionTopic(
       this.state.book,
@@ -907,13 +1022,9 @@ export class SessionEngine {
       this.state.personas,
       this.state.notes,
     );
-    const observer = this.state.personas.find(
-      (persona) => persona.id !== leadA.id && persona.id !== leadB.id,
-    );
     this.state.discussionRoles = {
       leadA: leadA.id,
       leadB: leadB.id,
-      observer: observer?.id,
     };
     await this.appendGenerated("moderator", "TOPIC_OPEN", {
       activeTopic: topic,
@@ -922,29 +1033,21 @@ export class SessionEngine {
     await this.appendGenerated(leadA, "OPEN_PERSONA_POSITION", {
       activeTopic: topic,
       targetSpeaker: leadB.id,
+      discussionFocus: selected.evidence,
     });
+    this.state.discussionPhase = "base_clash";
     await this.appendGenerated(leadB, "CHALLENGE_PERSONA", {
       activeTopic: topic,
       targetSpeaker: leadA.id,
     });
-    await this.appendGenerated(leadA, "RESPOND_TO_PERSONA", {
-      activeTopic: topic,
-      targetSpeaker: leadB.id,
-    });
+    this.state.discussionPhase = "awaiting_user_choice";
 
     let action = this.requestDiscussionAction
       ? await this.requestDiscussionAction({ round: 0, canListen: true, phase: "before_join" })
       : "join";
     if (action === "listen") {
       this.state.discussionListenCount = 1;
-      await this.appendGenerated(leadB, "RESPOND_TO_PERSONA", {
-        activeTopic: topic,
-        targetSpeaker: leadA.id,
-      });
-      await this.appendGenerated(leadA, "RESPOND_TO_PERSONA", {
-        activeTopic: topic,
-        targetSpeaker: leadB.id,
-      });
+      await this.appendContinuationChain(topic);
       action = this.requestDiscussionAction
         ? await this.requestDiscussionAction({ round: 1, canListen: false, phase: "before_join" })
         : "join";
@@ -952,6 +1055,7 @@ export class SessionEngine {
     }
 
     if (action === "join") {
+      this.state.discussionPhase = "user_exchange";
       await this.appendGenerated("moderator", "ASK_USER_POSITION", { activeTopic: topic });
       await this.requestAndAppendUser(userInput, "discussion_position", topic);
       const challenger = await this.challengeUser(topic);
@@ -976,46 +1080,61 @@ export class SessionEngine {
               },
       });
 
-      const supporter = this.selectSupporter(topic, updatedUserArgument.stance, challenger);
+      const bridgeReader = this.selectBridgeReader(
+        topic,
+        updatedUserArgument.stance,
+        challenger,
+      );
+      const bridgeTarget = this.bridgeTarget(
+        topic,
+        updatedUserArgument.stance,
+        bridgeReader,
+        challenger,
+      );
       this.state.discussionRoles = {
         ...this.state.discussionRoles,
         challenger: challenger === "moderator" ? "moderator" : challenger.id,
-        supporter: supporter.id,
+        bridgeReader: bridgeReader.id,
       };
-      await this.appendGenerated(supporter, "SUPPORT_USER", {
+      this.state.discussionPhase = "bridge_reader";
+      await this.appendGenerated(bridgeReader, "BRIDGE_EXCHANGE", {
         activeTopic: topic,
-        targetSpeaker: challenger === "moderator" ? "moderator" : challenger.id,
+        targetSpeaker: bridgeTarget,
         userArgument: {
           ...updatedUserArgument,
-          personaReason: this.personaReasonFor(supporter, topic),
+          personaReason: this.personaReasonFor(bridgeReader, topic),
         },
       });
 
-      while (
-        this.state.discussionListenCount < MAX_DISCUSSION_EXTENSIONS &&
-        this.requestDiscussionAction
-      ) {
+      let continuationCount = 0;
+      this.state.discussionPhase = "continuation_checkpoint";
+      while (continuationCount < MAX_DISCUSSION_EXTENSIONS && this.requestDiscussionAction) {
         const postJoinAction = await this.requestDiscussionAction({
-          round: this.state.discussionListenCount + 1,
+          round: continuationCount + 1,
           canListen: true,
           phase: "after_join",
         });
-        if (postJoinAction !== "listen") break;
-        this.state.discussionListenCount += 1;
-        const lastSpeaker = this.state.transcript.at(-1)?.speaker;
-        const first = lastSpeaker === leadA.id ? leadB : leadA;
-        const second = first.id === leadA.id ? leadB : leadA;
-        await this.appendGenerated(first, "RESPOND_TO_PERSONA", {
-          activeTopic: topic,
-          targetSpeaker: second.id,
-        });
-        await this.appendGenerated(second, "RESPOND_TO_PERSONA", {
-          activeTopic: topic,
-          targetSpeaker: first.id,
-        });
+        if (postJoinAction === "wrap") break;
+        continuationCount += 1;
+        if (postJoinAction === "join") {
+          await this.requestAndAppendUser(userFollowUp, "discussion_followup", topic);
+          const followUpArgument = this.state.userStances[topic] ?? updatedUserArgument;
+          const responder = this.selectFollowUpResponder(topic, followUpArgument.stance);
+          await this.appendGenerated(responder, "RESPOND_TO_USER_FOLLOWUP", {
+            activeTopic: topic,
+            targetSpeaker: "user",
+            userArgument: {
+              ...followUpArgument,
+              personaReason: this.personaReasonFor(responder, topic),
+            },
+          });
+        } else {
+          this.state.discussionListenCount += 1;
+          await this.appendContinuationChain(topic);
+        }
       }
     }
-    await this.appendGenerated("moderator", "TOPIC_CLOSE", { activeTopic: topic });
+    this.state.discussionPhase = "closing";
   }
 
   private async runWrapUp(userInput: string): Promise<void> {
@@ -1024,7 +1143,7 @@ export class SessionEngine {
     await this.requestAndAppendUser(userInput, "wrap_up");
     const closingIds = [
       this.state.discussionRoles?.challenger,
-      this.state.discussionRoles?.supporter,
+      this.state.discussionRoles?.bridgeReader,
       this.state.discussionRoles?.leadA,
       this.state.discussionRoles?.leadB,
       ...this.state.personas.map(({ id }) => id),
@@ -1054,6 +1173,7 @@ export class SessionEngine {
       date: new Date().toISOString().slice(0, 10),
       book: this.state.book,
       personas: this.state.personas,
+      userDisplayName: this.userDisplayName,
       transcript: this.state.transcript,
       personaStances: Object.fromEntries(
         this.state.personas.map((persona) => [
@@ -1069,7 +1189,10 @@ export class SessionEngine {
         ...baseRequest,
         validationError,
       });
-      const issues = validateRecapQuality(output.markdown, this.language);
+      const issues = validateRecapQuality(output.markdown, this.language, [
+        ...this.state.personas.map(({ id }) => localizedSpeakerName(id, this.language)),
+        this.userDisplayName,
+      ]);
       if (issues.length === 0) return output.markdown;
       validationError = issues.join("; ");
     }

@@ -334,9 +334,10 @@ interface SessionState {
     leadA: string;                // first side of the persona clash
     leadB: string;                // opposing reader
     challenger?: string;          // persona id | "moderator", after user joins
-    supporter?: string;           // optional third reader
-    observer?: string;            // seated but intentionally silent in discussion
+    bridgeReader?: string;         // third reader who extends the user/challenger exchange
   };
+  discussionPhase?: "opening" | "base_clash" | "awaiting_user_choice" |
+    "user_exchange" | "bridge_reader" | "continuation_checkpoint" | "closing";
   discussionListenCount: number;  // 0..2 in MVP
   seed?: string;
 }
@@ -482,10 +483,12 @@ schema fields to optional TypeScript properties.
 
 #### Discussion-focus extraction
 
-After Stage 3, one strict structured-output call scores how strongly the actual
-Stage 2/3 conversation supports each of the three confirmed candidate topics and
-may propose one grounded emergent question. The model extracts evidence; code
-combines relevance with persona stance spread and makes the final topic choice.
+After Stage 3, one strict structured-output call separately scores how strongly
+the whole Stage 2/3 conversation and the user's own contributions support each of
+the three confirmed candidate topics, and may propose one grounded emergent
+question. The model extracts evidence; code gives extra weight to user relevance,
+combines it with whole-table relevance and persona stance spread, and makes the
+final topic choice.
 This preserves the rule that the model never controls session flow.
 
 The full transcript remains in browser state and recap export. Model requests use
@@ -504,9 +507,11 @@ limit; only older context may be compacted.
         "properties": {
           "topic": { "type": "string", "minLength": 1, "maxLength": 160 },
           "relevance": { "type": "number", "minimum": 0, "maximum": 2 },
-          "evidence": { "type": "string", "minLength": 1, "maxLength": 240 }
+          "evidence": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "user_relevance": { "type": "number", "minimum": 0, "maximum": 2 },
+          "user_evidence": { "type": ["string", "null"], "maxLength": 240 }
         },
-        "required": ["topic", "relevance", "evidence"],
+        "required": ["topic", "relevance", "evidence", "user_relevance", "user_evidence"],
         "additionalProperties": false
       },
       "minItems": 3,
@@ -514,9 +519,10 @@ limit; only older context may be compacted.
     },
     "emergent_question": { "type": ["string", "null"], "maxLength": 160 },
     "emergent_relevance": { "type": "number", "minimum": 0, "maximum": 2 },
-    "emergent_evidence": { "type": ["string", "null"], "maxLength": 240 }
+    "emergent_evidence": { "type": ["string", "null"], "maxLength": 240 },
+    "emergent_user_relevance": { "type": "number", "minimum": 0, "maximum": 2 }
   },
-  "required": ["topic_scores", "emergent_question", "emergent_relevance", "emergent_evidence"],
+  "required": ["topic_scores", "emergent_question", "emergent_relevance", "emergent_evidence", "emergent_user_relevance"],
   "additionalProperties": false
 }
 ```
@@ -539,11 +545,16 @@ limit; only older context may be compacted.
 ## 7. Session flow — the 5-stage state machine
 
 Global rules enforced by code:
-- Persona utterances: **2–4 sentences**; moderator utterances: **1–3 sentences**.
+- Persona utterances: **2–4 sentences**; moderator utterances: **1–3 sentences**,
+  except the final spoken discussion summary, which is exactly 4 sentences.
   Prompt instructions and `maxLength` are guards, not proof. Count sentences in
   application code, perform one structured repair retry on failure, then use a
   short role-appropriate fallback and log the validation failure. Never truncate
   generated prose mid-sentence.
+- Substantive discussion turns sound spoken, not essay-like. Prompts keep direct
+  challenges and replies to two short sentences. Code rejects semicolons and
+  sentences longer than 110 Korean characters or 200 English characters, using
+  the existing single repair retry rather than another style-judging model call.
 - A persona may cite its bookshelf **at most once per stage** (tracked in code; the
   directive says "you may/may not reference your shelf this turn").
 - The user is prompted at fixed points; the app waits for input (no timeout in MVP).
@@ -642,35 +653,45 @@ interpretations; quote at most a short phrase; never reproduce passages.
 
 ### Stage 4 — DISCUSSION (the main event)
 - Code selects exactly **1 topic** from the confirmed book's candidate list or
-  one grounded emergent question. It combines structured relevance scores from
-  the real Stage 2/3 conversation with persona stance spread.
-- Code selects the two personas with the widest stance distance on that topic as
-  `leadA` and `leadB`. The model never selects speakers or decides whether the
-  session continues.
+  one grounded emergent question. It combines whole-table relevance, higher-
+  weighted user relevance, and persona stance spread from the real Stage 2/3
+  conversation. Alex and `leadA` receive the same selected evidence thread, so
+  the first claim cannot silently substitute an unrelated topic.
+- Code normally selects the two personas with the widest stance distance on that
+  topic as `leadA` and `leadB`. When the user explicitly invited an imagined
+  guest, that guest becomes one lead and code selects the furthest eligible
+  reader as the other, guaranteeing that the session's special guest participates
+  in the main discussion. The model never selects speakers or decides whether
+  the session continues.
 - Base round (code-controlled):
   1. Alex explains the conversational thread and states the exact topic.
   2. `leadA` advances a committed claim from private notes and addresses `leadB`.
-  3. `leadB` directly challenges that claim and addresses `leadA`.
-  4. `leadA` answers once without turning toward the user.
-  5. The UI exposes a **discussion checkpoint**, not a generated utterance:
+  3. `leadB` directly challenges that claim, addresses `leadA`, and asks exactly
+     one pointed question.
+  4. The UI exposes a **discussion checkpoint**, not a generated utterance:
      `join`, `listen`, or `wrap`.
+- The pre-checkpoint sequence above is a fixed engine invariant. There is exactly
+  one AI-to-AI clash before the user chooses; `leadA` does not answer a third time.
 - `listen` schedules one additional two-reader exchange. It is available once
   before the user joins and at post-join checkpoints until the whole topic has
   used its code-owned maximum of two extensions. Before the user joins, the
   next checkpoint offers `join` or `wrap`.
 - `join` asks the user for a position, extracts stance, and selects the persona
-  furthest from that position as challenger. The challenger asks one pointed
-  question, the next turn belongs to the user, and the challenger responds once.
-  Code may add the remaining closest reader once as supporter when their
-  evidence is genuinely distinct; no one speaks for symmetry.
-- After the challenger response and supporter turn, code exposes a checkpoint:
-  `listen` means "continue the discussion" for one two-reader exchange, while
-  `wrap` closes the topic. When one extension remains, the same checkpoint is
-  shown again after that exchange. The user therefore decides whether an
-  interesting conflict receives a second bounded pass instead of being moved
-  automatically into WRAP_UP.
-- `wrap` or the extension cap makes Alex close with a concise tension summary,
-  never a false resolution. Unresolved disagreement is carried into WRAP_UP.
+  furthest from that position as challenger. Even when all stance distances are
+  small, a reader still challenges; Alex uses the devil's-advocate fallback only
+  when the user passes without a position. The challenger asks one pointed
+  question, the next turn belongs to the user, and that same challenger responds
+  once so the exchange never breaks causally. Code then chooses the least-heard
+  eligible third reader as `bridgeReader`; they must pick up the exact exchange,
+  add distinct evidence, and may not merely praise or support the user.
+- After the bridge turn, code exposes another checkpoint. `join` lets the user add
+  another thought and schedules one direct response, `listen` schedules one
+  rotating two-reader exchange, and `wrap` closes the topic. Up to two bounded
+  post-join continuations are allowed. Selection favors readers with fewer main-
+  discussion turns so a seated reader does not remain permanently silent.
+- `wrap` or the extension cap carries the unresolved disagreement directly into
+  WRAP_UP. Alex does not generate a duplicate topic-closing summary immediately
+  before the wrap invitation.
 - Expected discussion size is roughly 7–15 generated/user utterances depending
   on the chosen route. One topic and two listening extensions are hard caps.
 
@@ -685,9 +706,10 @@ interpretations; quote at most a short phrase; never reproduce passages.
   genuinely changed their position; they must not copy the user's analogy,
   occupation, wording, or personal plan into their own conclusion, open a new
   argument, or use an identical generic sign-off.
-- Moderator gives a substantive 2–3 sentence spoken summary: central
-  disagreement, what shifted, and what remains unresolved, then thanks the
-  readers and says that the written recap is next. After the summary's normal
+- Moderator gives a substantive, exactly 4-sentence spoken summary: central
+  disagreement, one precise user contribution, what genuinely shifted, and the
+  strongest unresolved counterclaim, then thanks the readers and says in the
+  session language that the written recap is next. After the summary's normal
   reading delay, trigger **recap generation** (§10) → recap screen.
 
 ---
@@ -730,8 +752,10 @@ directive to challenger:
 
 The pointed question opens a second user turn immediately. The challenged line
 and challenger portrait remain visible while the user writes. After the user
-answers, the challenger responds once; a supporter is optional and must add
-distinct evidence. No other persona exchange is scheduled for symmetry.
+answers, the same challenger responds once, then a code-selected third reader
+bridges that exact exchange with distinct evidence. Later continuations rotate
+through the least-heard eligible readers rather than returning permanently to one
+pair.
 
 If `|userStance - all persona stances| < 0.5` (everyone genuinely agrees),
 the moderator itself plays devil's advocate: "Let me push back for a moment…"
@@ -776,6 +800,10 @@ Template (mirrors a real book-club recap):
 
 The stance map final state is embedded as the table above. This document is the
 demo's closing shot: real club recap (left) vs. app recap (right).
+
+The recap request includes the user's local display name. Validation requires all
+three seated readers and the user to appear in the final-position section; a recap
+that silently drops the user receives the existing single repair retry.
 
 Recap excerpts may quote only the session transcript, not passages from the
 book. Apply the same short-phrase copyright rule during recap generation and
@@ -879,8 +907,9 @@ Layout (desktop, single screen):
 - User turns are visually distinguished at the table and in the input area and are a
   hard stop. They cannot be reached or submitted without an explicit reader action.
 - Discussion checkpoints use three explicit controls where applicable: "Join
-  the discussion", "Keep listening", and "Wrap up". They are engine actions,
-  not generated dialogue and not transcript messages.
+  the discussion" (or "Add another thought" after joining), "Keep listening",
+  and "Wrap up". They are engine actions, not generated dialogue and not
+  transcript messages.
 - Stance map: slide-up panel; horizontal axis per topic (-2 critical … +2 sympathetic),
   dots = participants, animated when stances update.
 - Recap screen: tabs for rendered meeting recap and the complete conversation,
@@ -1243,8 +1272,11 @@ Context: {last few utterances}. 1-3 sentences, warm and crisp. JSON only.
 - **API failure mid-session:** retry ×2 with backoff → toast "The table lost its
   train of thought — press Next to retry." State machine can always regenerate the
   current utterance idempotently.
-- **Schema or sentence-count failure:** one structured repair retry with the
-  exact validation error; then a role-appropriate fallback utterance and log.
+- **Schema, sentence-count, or incomplete-sentence failure:** one structured
+  repair retry with the exact validation error; then a role-appropriate fallback
+  utterance and log. Directed two-sentence exchanges and the four-sentence final
+  moderator summary are validated against those exact counts, and every generated
+  utterance must end with sentence-closing punctuation.
   Fallbacks use public role/task language only and never splice, excerpt, or
   truncate private reading notes into dialogue. Never append invalid output to
   the transcript.

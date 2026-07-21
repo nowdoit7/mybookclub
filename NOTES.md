@@ -79,3 +79,9 @@
 - 2026-07-21: Preserved special attribution boundaries for posthumous compilations, poetic corpora, traditional works, represented subjects, and fictional characters; authorship remains contestable and is never repeated as authority.
 - 2026-07-21: A targeted GPT-5.6 live check made Machiavelli open with “When I wrote this book,” defend the work's diagnostic aim, and leave its moral vulnerability open to challenge.
 - 2026-07-21: Unified dialogue-playback forward controls as `Next`/`다음` while keeping table entry, stage changes, and recap navigation explicitly labeled.
+- 2026-07-21: Rebuilt the main discussion as one code-owned reader clash, then user position → challenger reply → third-reader bridge; later checkpoints now let the user add another thought or hear a rotating exchange.
+- 2026-07-21: Weighted topic selection toward the user's actual remarks, added local spoken-style guards without another model call, and made Alex's four-sentence closing plus the recap preserve the user's contribution.
+- 2026-07-21: Updated the mock evaluator for the new causal discussion flow; five neutral sessions passed 15/15 checks, including spoken-style limits.
+- 2026-07-21: Targeted live samples produced short, directed conversational turns on GPT-5.6 and Terra, but a fictional-book probe exposed invented scene details, so evidence grounding remains the next dialogue-quality fix.
+- 2026-07-22: Rejected model lines that stop mid-sentence, enforced exact two-sentence directed exchanges and the four-sentence moderator close, and kept the single repair retry as the recovery path.
+- 2026-07-22: Kept Alex in the moderator role whenever the user states a position by always assigning a persona challenger, and guaranteed an explicitly invited imagined guest a lead role in the main discussion.
