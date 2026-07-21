@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { GenerationApiError, HttpGenerationClient } from "./httpGenerationClient";
+import {
+  GenerationApiError,
+  HttpGenerationClient,
+  resolveGenerationApiBaseUrl,
+} from "./httpGenerationClient";
 import { clearGenerationDiagnostics, getGenerationDiagnostics } from "./diagnostics";
 
 afterEach(() => {
@@ -9,6 +13,16 @@ afterEach(() => {
 });
 
 describe("HttpGenerationClient", () => {
+  it("bypasses the Firebase Hosting timeout on deployed sites", () => {
+    expect(resolveGenerationApiBaseUrl("reading-table-buildweek.web.app")).toBe(
+      "https://us-central1-fir-test-f3fef.cloudfunctions.net/readingTableApi/api/generate",
+    );
+    expect(resolveGenerationApiBaseUrl("reading-table-buildweek.firebaseapp.com")).toBe(
+      "https://us-central1-fir-test-f3fef.cloudfunctions.net/readingTableApi/api/generate",
+    );
+    expect(resolveGenerationApiBaseUrl("localhost")).toBe("/api/generate");
+  });
+
   it("sends a stable server-side session id and validates the response", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

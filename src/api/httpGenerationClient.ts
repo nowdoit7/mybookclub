@@ -30,6 +30,20 @@ interface GenerationApiErrorOptions {
   detail?: string;
 }
 
+const FIREBASE_FUNCTION_API_BASE_URL =
+  "https://us-central1-fir-test-f3fef.cloudfunctions.net/readingTableApi/api/generate";
+
+const FIREBASE_HOSTING_NAMES = new Set([
+  "reading-table-buildweek.web.app",
+  "reading-table-buildweek.firebaseapp.com",
+]);
+
+export function resolveGenerationApiBaseUrl(hostname = globalThis.location?.hostname ?? ""): string {
+  return FIREBASE_HOSTING_NAMES.has(hostname)
+    ? FIREBASE_FUNCTION_API_BASE_URL
+    : "/api/generate";
+}
+
 export class GenerationApiError extends Error {
   constructor(
     readonly code: string,
@@ -43,7 +57,7 @@ export class GenerationApiError extends Error {
 
 export class HttpGenerationClient implements GenerationClient {
   constructor(
-    private readonly baseUrl = "/api/generate",
+    private readonly baseUrl = resolveGenerationApiBaseUrl(),
     private readonly sessionId: string = crypto.randomUUID(),
   ) {}
 

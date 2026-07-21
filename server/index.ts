@@ -11,7 +11,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "http://localhost:5173")
   .map((origin) => origin.trim())
   .filter(Boolean);
 const sessionCallLimit = Number(process.env.SESSION_CALL_LIMIT ?? 60);
-const model = process.env.OPENAI_MODEL ?? "gpt-5.6";
+const model = process.env.OPENAI_MODEL ?? "gpt-5.6-terra";
 
 const generationClient: GenerationClient = process.env.OPENAI_API_KEY
   ? new OpenAIGenerationClient(

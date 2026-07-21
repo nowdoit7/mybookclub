@@ -89,6 +89,25 @@ const personaCardSchema = z
         energy: z.number().min(0).max(1),
       })
       .strict(),
+    imaginedGuest: z
+      .object({
+        kind: z.enum(["historical", "legendary", "literary"]),
+        documentedAchievement: z
+          .object({
+            en: boundedString(1, 800),
+            ko: boundedString(1, 800),
+          })
+          .strict(),
+        signatureReadingMove: z
+          .object({
+            en: boundedString(1, 600),
+            ko: boundedString(1, 600),
+          })
+          .strict(),
+        sourceUrls: z.array(z.string().url().max(500)).min(1).max(5),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

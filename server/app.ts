@@ -31,6 +31,7 @@ interface RequestLogger {
 interface CreateAppOptions {
   generationClient: GenerationClient;
   allowedOrigins: string[];
+  trustProxy?: boolean | number;
   sessionCallLimit?: number;
   liveGenerationAvailable?: boolean;
   model?: string;
@@ -216,14 +217,16 @@ function createSessionCallLimiter(limit: number, exposeErrorDetails: boolean) {
 export function createApp({
   generationClient,
   allowedOrigins,
+  trustProxy,
   sessionCallLimit = 60,
   liveGenerationAvailable = true,
-  model = "gpt-5.6",
+  model = "gpt-5.6-terra",
   exposeErrorDetails = false,
   logger = consoleLogger,
 }: CreateAppOptions) {
   const app = express();
 
+  if (trustProxy !== undefined) app.set("trust proxy", trustProxy);
   app.disable("x-powered-by");
   app.use((request, response, next) => {
     void request;

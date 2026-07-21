@@ -49,3 +49,29 @@
 - 2026-07-19: Added one bounded post-join continue-or-wrap checkpoint, fixed user-turn portrait focus and avatar centering, and carried the reading-room visual shell through setup and recap.
 - 2026-07-19: Let the reader extend a live disagreement through a second bounded checkpoint, assigned distinct prepared scene anchors when available, and removed all private-note text from quality fallbacks.
 - 2026-07-19: Reframed WRAP_UP as a social closing: all three readers prepare distinct two-sentence takeaways and farewells in parallel, then Alex thanks the table and hands off to the written recap.
+- 2026-07-21: Isolated the hackathon demo on a named Firebase Hosting target so the reused test project's default site remains untouched.
+- 2026-07-21: Wrapped the existing Express proxy in a bounded Cloud Functions v2 entry point, with same-origin `/api` rewrites and an `OPENAI_API_KEY` Secret Manager binding.
+- 2026-07-21: Added user-controlled looping BGM across setup, discussion, and recap; playback starts only on request at 50% volume so silent visits do not download the licensed track.
+- 2026-07-21: Added client-only SFX for buttons, stage changes, reader entrances, typewriter dialogue, and user turns. Sounds are independently toggleable, throttled, and never control session flow.
+- 2026-07-21: Disabled HTML caching for fresh deployments while keeping the small audio assets CDN-cacheable.
+- 2026-07-21: Changed BGM from opt-in playback to best-effort autoplay with a first-interaction fallback, preserving the 50% default volume and manual controls.
+- 2026-07-21: Added a first-screen imagined-guest evaluation selector for Pascal, Newton, and Smith; one chosen guest replaces the matching regular-reader category and uses no portrait.
+- 2026-07-21: Kept historical portrayal bounded with visible reconstruction disclosure, prompt-level anti-quotation rules, and explicit roster injection so UI and engine cannot diverge.
+- 2026-07-21: Bypassed Firebase Hosting's 60-second dynamic rewrite limit by routing deployed live generation directly to the 180-second Cloud Function while keeping local development same-origin.
+- 2026-07-21: Enabled explicit proxy trust for the Firebase runtime and distinguished delayed private-note preparation from generic live-generation failures.
+- 2026-07-21: Connected dedicated Pascal, Newton, and Smith portraits to setup selection, participant cards, avatars, and the focused dialogue stage while retaining initials as the load-error fallback.
+- 2026-07-21: Raised the low-amplitude typewriter SFX above the BGM floor and records one safe diagnostic when a browser rejects any sound effect.
+- 2026-07-21: Replaced the generic `Next speaker` control with action-specific paging, user-turn, stage-start, and recap labels; waiting scenes now distinguish notes, dialogue, stage changes, and recap work.
+- 2026-07-21: Tightened directed-turn metadata, removed system-like wording from live and mock dialogue fallbacks, surfaced fallback diagnostics in production, and localized recap participant names.
+- 2026-07-21: Expanded the opt-in imagined-guest test pool to 21 portrait-backed historical, legendary, and literary readers, balanced 7/7/7 across the three engine categories.
+- 2026-07-21: Added one first-impression signature moment that performs an achievement-informed reading move without résumé recitals, fake quotations, or repeated biography on later turns.
+- 2026-07-21: Ran two neutral-fixture GPT-5.6 evaluations across all 21 guests; the final pass had 21 successful structured responses and removed self-explaining or immersion-breaking phrasing.
+- 2026-07-21: Fixed deployed imagined-guest 400s by admitting the typed guest grounding block through every strict browser API contract and added guest request coverage for notes, utterances, and recap.
+- 2026-07-21: Renamed the product Open Reading Club, made public sessions GPT-5.6-only, and reordered setup around book verification followed by regular or imagined-guest conversation tabs.
+- 2026-07-21: Added source-checking progress UI and a truthful one-click series-to-single-book correction without allowing ambiguous results to start a session.
+- 2026-07-21: Added a client-only "Send by email" recap action: share-capable devices receive the Markdown file, while desktop fallback copies the full recap and opens a bounded mail draft without server-side email data.
+- 2026-07-21: Made dialogue playback button-only: clicking the stage or pressing Space/Enter no longer completes or advances a line, preventing accidental progression while reading.
+- 2026-07-21: Centered user-turn input at 70% desktop width, increased response text to 16px, and corrected the helper copy to name the actual Share action.
+- 2026-07-21: Switched the public and local live default from the GPT-5.6 Sol alias to `gpt-5.6-terra`, preserving the same structured contracts while targeting roughly half the token price; the deployed single-note smoke returned valid structured output in 9.3 seconds.
+- 2026-07-21: Bounded private-note prefetch to two concurrent calls and added one targeted retry for transient connection, rate-limit, or upstream failures after a deployed 136-second `openai_connection_failed` response.
+- 2026-07-21: Matched AI dialogue frames to the user input frame at a centered 70% desktop width while retaining near-full-width mobile layouts.

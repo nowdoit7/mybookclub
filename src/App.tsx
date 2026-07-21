@@ -9,11 +9,24 @@ import { recordGenerationDiagnostic } from "./api/diagnostics";
 import type { GenerationClient } from "./api/generationClient";
 import { SessionEngine, toConfirmedBook } from "./engine/sessionEngine";
 import { localizedSpeakerName, localizedSpeakerRole, STAGE_LABELS } from "./localization";
-import { PERSONAS, portraitUrlFor, selectPersonas } from "./personas";
+import {
+  GUEST_PERSONAS,
+  findPersona,
+  isImaginedGuestId,
+  portraitUrlFor,
+  selectPersonas,
+} from "./personas";
+import type { ImaginedGuestId } from "./personas";
+import {
+  recapEmailSubject,
+  recapFilename,
+  recapMailtoUrl,
+} from "./recapSharing";
 import { formatTranscriptAsMarkdown } from "./transcriptExport";
 import type {
   AppLanguage,
   BookScope,
+  Category,
   ConfirmedBook,
   DiscussionAction,
   DiscussionDecisionTurn,
@@ -25,6 +38,7 @@ import type {
 } from "./types";
 import { DiagnosticsPanel } from "./ui/DiagnosticsPanel";
 import { buildDialoguePages } from "./ui/dialoguePaging";
+import { useSoundEffects } from "./ui/useSoundEffects";
 import { UserAvatarArtwork } from "./ui/UserAvatar";
 import { USER_AVATARS, type UserAvatarId } from "./ui/userAvatars";
 
@@ -35,6 +49,8 @@ const STAGES: StageId[] = [
   "DISCUSSION",
   "WRAP_UP",
 ];
+
+const INITIAL_BGM_VOLUME = 0.5;
 
 const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
   en: {
@@ -57,11 +73,12 @@ const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
 
 const COPY = {
   en: {
-    prototype: "Text prototype",
-    mockBadge: "Mock · no API credits",
-    liveBadge: "Live · GPT-5.6 API",
+    prototype: "AI book club",
+    productName: "Open Reading Club",
+    mockBadge: "Internal mock",
+    liveBadge: "GPT-5.6",
     description:
-      "Enter a portrait-led reading room where every line moves only when you are ready.",
+      "Revisit what you have read with AI readers and widen your thinking through different perspectives.",
     bookSetup: "Bring a book to the table",
     scopeLabel: "Discussion scope",
     scopeLabels: { single_book: "One book", series: "Full series" },
@@ -82,6 +99,8 @@ const COPY = {
     identifyingSeries: "Identifying the series…",
     verifyingBook: "Searching the web and verifying this book…",
     verifyingSeries: "Searching the web and verifying this series…",
+    verificationProgressHint:
+      "This usually takes 10–30 seconds. Keep this page open while the sources are checked.",
     identifiedBook: "Web-verified book",
     identifiedSeries: "Web-verified series",
     mockIdentifiedBook: "Mock preview · details are not verified",
@@ -93,7 +112,12 @@ const COPY = {
       mock: "mock only",
     },
     verificationSources: "Verification sources",
-    verificationBlocked: "Correct the title or author and search again before starting a live session.",
+    verificationBlocked: "This result is not verified yet, so it cannot start a discussion.",
+    retryAsSingleBook: "Verify this title as one book",
+    retryAsSeries: "Verify this title as a full series",
+    scopeCorrectionHint:
+      "The search found one book rather than a confirmed series. Keep the title and verify it again as a single book.",
+    verifyBeforeStart: "Verify the book before starting",
     confirmBook: "Yes, this is my book — start the session",
     confirmSeries: "Yes, this is my series — start the session",
     bookRequired: "Enter a book title first.",
@@ -101,7 +125,7 @@ const COPY = {
     currentBook: "Tonight's book",
     privacyTitle: "Data & privacy",
     privacy:
-      "In live mode, your book title is sent to OpenAI for web verification, and your messages are sent to generate the discussion. This session is stored only in this browser and is not saved by The Reading Table's server.",
+      "Your book title is sent to OpenAI for web verification, and your messages are sent to generate the discussion. This session is stored only in this browser and is not saved by Open Reading Club's server.",
     mockPrivacy:
       "This prototype uses deterministic mock responses, so nothing is sent to OpenAI during this walkthrough.",
     start: "Start mock session",
@@ -123,10 +147,13 @@ const COPY = {
     previous: "Previous",
     revealPage: "Show full line",
     nextPage: "Next page",
-    advanceSpeaker: "Next speaker",
+    advanceSpeaker: "Next line",
+    advanceToUser: "Your turn",
+    startStage: (stageName: string) => `Begin ${stageName}`,
+    viewRecap: "View meeting recap",
     returnLive: "Return to current line",
     enterTable: "Enter the table",
-    thinking: "Thinking…",
+    thinking: "Preparing…",
     sessionComplete: "Session complete",
     recapTitle: "Meeting recap",
     newSession: "Start a new session",
@@ -142,13 +169,21 @@ const COPY = {
     copyRecap: "Copy meeting recap",
     recapCopied: "Recap copied",
     downloadMarkdown: "Download Markdown",
+    emailRecap: "Send by email",
+    sharingRecap: "Opening share options…",
+    emailReady: "Email draft opened",
+    emailShareFailed: "Could not open email sharing",
     manualHint: "Dialogue advances only when you choose Next.",
+    submitHint: "Choose Share to send your response to the table.",
     readingTable: "Reading table",
     tableReady: "Everyone is here. Alex will open the session when you are ready.",
     sceneTransition: "Scene transition",
+    dialoguePreparing: "Preparing dialogue",
     stageReady: (stageName: string) => `${stageName} is ready to begin.`,
     preparingRoom: "Preparing the next part of the conversation…",
-    nextTurnReady: (name: string) => `${name} is next. Choose Next speaker when you are ready.`,
+    preparingNotes: (progress: string) => `The readers are gathering their thoughts · ${progress}`,
+    preparingRecap: "Turning today's conversation into the meeting recap…",
+    nextTurnReady: (name: string) => `${name}'s next line is ready.`,
     preparingTurn: (name: string) => `Preparing ${name}'s next line…`,
     earlierDialogue: (stageName: string) => `Earlier dialogue · ${stageName}`,
     currentDialogue: "Current dialogue",
@@ -166,7 +201,22 @@ const COPY = {
     liveMode: "Live GPT-5.6",
     mockModeHint: "Fast deterministic responses for UI testing.",
     liveModeHint: "Web-verifies the book, then generates a real discussion using API credits.",
-    liveChecking: "Checking the local API server…",
+    guestTestTitle: "Choose an imagined guest",
+    guestTestHint:
+      "Choose one imagined historical, legendary, or literary reader. The guest replaces one regular reader in the same category.",
+    guestNone: "No guest",
+    guestBadge: "Imagined guest",
+    guestDisclosure:
+      "Generated dialogue is an imagined interpretation grounded in documented ideas or canonical traits, not a real quotation or the figure's actual view of this book.",
+    guestLiveHint: "This guest joins the same GPT-5.6 discussion as the regular readers.",
+    participationTitle: "Choose your conversation",
+    regularConversation: "Join the regular club",
+    regularConversationHint: "Meet three AI readers with different perspectives.",
+    inviteGuest: "Invite an imagined guest",
+    inviteGuestHint:
+      "Replace one regular reader with a historical, legendary, or literary guest.",
+    chooseGuest: "Choose one guest to invite before starting.",
+    liveChecking: "Checking the GPT-5.6 service…",
     liveReady: (model: string) => `${model} is ready on the server.`,
     liveUnavailable: "Live mode is unavailable. Check the server API key and restart it.",
     serverNotConfigured: "The server API key is not configured.",
@@ -174,9 +224,11 @@ const COPY = {
     modelRefused: "The model could not generate this turn safely.",
     incompleteOutput: "A reader's response ended before it was complete. Please retry the session.",
     invalidStructuredOutput: "A reader returned an unusable structured response. Please retry the session.",
-    liveGenerationFailed: "The live API request failed. The mock mode is still available.",
+    readingNotesDelayed:
+      "A reader's private notes took too long to prepare. Please retry the session; your introduction was not the cause.",
+    liveGenerationFailed: "The GPT-5.6 request failed. Check diagnostics and try again.",
     readingNotesReady: (progress: string) => `Reader notes ready: ${progress}`,
-    retryingReadingNotes: "A reader's notes were incomplete, so only that reader is retrying.",
+    retryingReadingNotes: "One reader's notes were delayed or incomplete, so only that reader is retrying.",
     currentSpeaker: "Speaking",
     nextSpeaker: "Next",
     yourTurn: "Your turn",
@@ -190,11 +242,12 @@ const COPY = {
     youRole: "Book-club member",
   },
   ko: {
-    prototype: "텍스트 프로토타입",
-    mockBadge: "모의 응답 · API 크레딧 미사용",
-    liveBadge: "실제 연결 · GPT-5.6 API",
+    prototype: "AI 독서 모임",
+    productName: "Open Reading Club",
+    mockBadge: "내부 모의 테스트",
+    liveBadge: "GPT-5.6",
     description:
-      "초상화가 있는 독서 모임에 입장해, 모든 대사를 원하는 속도로 직접 넘겨보세요.",
+      "읽은 책을 AI 독자들과 다시 생각하고, 서로 다른 관점으로 사고를 넓혀보세요.",
     bookSetup: "읽은 책을 테이블에 올려주세요",
     scopeLabel: "토론 범위",
     scopeLabels: { single_book: "한 권", series: "시리즈 전체" },
@@ -215,6 +268,8 @@ const COPY = {
     identifyingSeries: "시리즈를 확인하고 있습니다…",
     verifyingBook: "웹에서 도서 정보를 검색하고 검증하고 있습니다…",
     verifyingSeries: "웹에서 시리즈 구성 정보를 검색하고 검증하고 있습니다…",
+    verificationProgressHint:
+      "보통 10~30초 정도 걸립니다. 출처를 확인하는 동안 이 페이지를 그대로 두세요.",
     identifiedBook: "웹에서 검증된 책",
     identifiedSeries: "웹에서 검증된 시리즈",
     mockIdentifiedBook: "모의 미리보기 · 도서 정보는 검증되지 않음",
@@ -226,7 +281,12 @@ const COPY = {
       mock: "모의 정보",
     },
     verificationSources: "검증에 사용한 출처",
-    verificationBlocked: "제목이나 저자를 수정한 뒤 다시 검색해야 실제 세션을 시작할 수 있습니다.",
+    verificationBlocked: "아직 검증이 완료되지 않은 결과라서 이 정보로는 모임을 시작할 수 없습니다.",
+    retryAsSingleBook: "이 제목을 한 권으로 다시 검증",
+    retryAsSeries: "이 제목을 시리즈 전체로 다시 검증",
+    scopeCorrectionHint:
+      "확인된 시리즈가 아니라 한 권의 책이 검색됐습니다. 제목은 유지하고 단권으로 다시 검증해보세요.",
+    verifyBeforeStart: "도서 검증을 완료해야 시작할 수 있습니다",
     confirmBook: "네, 이 책이 맞습니다 — 모임 시작",
     confirmSeries: "네, 이 시리즈가 맞습니다 — 모임 시작",
     bookRequired: "먼저 책 제목을 입력해주세요.",
@@ -234,7 +294,7 @@ const COPY = {
     currentBook: "오늘의 책",
     privacyTitle: "데이터 및 개인정보",
     privacy:
-      "실제 모드에서는 도서 검증을 위해 책 제목이 OpenAI 웹 검색에 사용되고, 토론 생성을 위해 메시지가 전송됩니다. 이 세션은 현재 브라우저에만 저장되며 리딩 테이블 서버에는 저장되지 않습니다.",
+      "도서 검증을 위해 책 제목이 OpenAI 웹 검색에 사용되고, 토론 생성을 위해 메시지가 전송됩니다. 이 세션은 현재 브라우저에만 저장되며 Open Reading Club 서버에는 저장되지 않습니다.",
     mockPrivacy:
       "이 프로토타입은 결정론적 모의 응답을 사용하므로 이번 체험에서는 OpenAI로 아무 내용도 전송되지 않습니다.",
     start: "모의 세션 시작",
@@ -256,10 +316,13 @@ const COPY = {
     previous: "이전",
     revealPage: "대사 전체 보기",
     nextPage: "다음 페이지",
-    advanceSpeaker: "다음 사람",
+    advanceSpeaker: "다음 발언",
+    advanceToUser: "내 차례로",
+    startStage: (stageName: string) => `${stageName} 시작`,
+    viewRecap: "모임 기록 보기",
     returnLive: "현재 대사로 돌아가기",
     enterTable: "테이블 입장",
-    thinking: "생각 중…",
+    thinking: "준비 중…",
     sessionComplete: "세션 완료",
     recapTitle: "모임 기록",
     newSession: "새 세션 시작",
@@ -275,13 +338,21 @@ const COPY = {
     copyRecap: "모임 기록 복사",
     recapCopied: "기록 복사됨",
     downloadMarkdown: "Markdown 다운로드",
+    emailRecap: "메일로 보내기",
+    sharingRecap: "공유 옵션을 여는 중…",
+    emailReady: "메일 작성 화면을 열었습니다",
+    emailShareFailed: "메일 공유를 열지 못했습니다",
     manualHint: "다음 버튼을 눌러야 대화가 진행됩니다.",
+    submitHint: "공유 버튼을 눌러야 내 발언이 전달됩니다.",
     readingTable: "리딩 테이블",
     tableReady: "모두 모였습니다. 준비되면 알렉스가 모임을 시작합니다.",
     sceneTransition: "장면 전환",
-    stageReady: (stageName: string) => `${stageName} 단계로 넘어갑니다.`,
+    dialoguePreparing: "대화 준비 중",
+    stageReady: (stageName: string) => `${stageName} 단계가 준비되었습니다.`,
     preparingRoom: "다음 대화를 준비하고 있습니다…",
-    nextTurnReady: (name: string) => `${name}의 다음 발언이 준비되어 있습니다. 준비되면 다음 사람을 눌러주세요.`,
+    preparingNotes: (progress: string) => `독자들이 책에 대한 생각을 정리하고 있습니다 · ${progress}`,
+    preparingRecap: "오늘의 대화를 모임 기록으로 정리하고 있습니다…",
+    nextTurnReady: (name: string) => `${name}의 다음 발언이 준비되었습니다.`,
     preparingTurn: (name: string) => `${name}의 발언을 준비하고 있습니다…`,
     earlierDialogue: (stageName: string) => `이전 대화 · ${stageName}`,
     currentDialogue: "현재 대화",
@@ -299,7 +370,21 @@ const COPY = {
     liveMode: "실제 GPT-5.6",
     mockModeHint: "UI 확인용으로 빠르고 동일한 응답을 사용합니다.",
     liveModeHint: "도서를 웹에서 검증한 뒤 실제 토론을 생성하며 API 크레딧을 사용합니다.",
-    liveChecking: "로컬 API 서버를 확인하고 있습니다…",
+    guestTestTitle: "상상 속 게스트 선택",
+    guestTestHint:
+      "이번 세션에 참여할 역사·전승·문학 독자 한 명을 직접 선택합니다. 게스트는 같은 성향의 일반 독자 한 명을 대신합니다.",
+    guestNone: "게스트 없음",
+    guestBadge: "상상 속 게스트",
+    guestDisclosure:
+      "생성된 대사는 기록된 사상이나 원작의 특징을 바탕으로 재구성한 해석이며, 실제 인용문이나 이 책에 대한 당사자의 실제 견해가 아닙니다.",
+    guestLiveHint: "선택한 게스트도 일반 독자와 동일한 GPT-5.6 토론에 참여합니다.",
+    participationTitle: "대화 방식 선택",
+    regularConversation: "일반 대화하기",
+    regularConversationHint: "서로 다른 관점의 AI 독자 세 명과 모임을 시작합니다.",
+    inviteGuest: "상상 속 게스트 초대하기",
+    inviteGuestHint: "일반 독자 한 명 대신 역사·전승·문학 속 인물을 초대합니다.",
+    chooseGuest: "모임을 시작하기 전에 초대할 게스트 한 명을 선택해주세요.",
+    liveChecking: "GPT-5.6 연결 상태를 확인하고 있습니다…",
     liveReady: (model: string) => `서버의 ${model} 연결 준비가 완료되었습니다.`,
     liveUnavailable: "실제 모드를 사용할 수 없습니다. 서버 API 키와 재시작 상태를 확인해주세요.",
     serverNotConfigured: "서버에 API 키가 설정되지 않았습니다.",
@@ -307,9 +392,11 @@ const COPY = {
     modelRefused: "모델이 이 발언을 안전하게 생성할 수 없었습니다.",
     incompleteOutput: "독자 응답이 완성되기 전에 종료되었습니다. 세션을 다시 시도해주세요.",
     invalidStructuredOutput: "독자의 구조화 응답을 사용할 수 없습니다. 세션을 다시 시도해주세요.",
-    liveGenerationFailed: "실제 API 요청에 실패했습니다. 모의 응답 모드는 계속 사용할 수 있습니다.",
+    readingNotesDelayed:
+      "한 독자의 비공개 노트 준비가 너무 오래 걸렸습니다. 자기소개 내용의 문제는 아니므로 세션을 다시 시도해주세요.",
+    liveGenerationFailed: "GPT-5.6 요청에 실패했습니다. 진단 정보를 확인한 뒤 다시 시도해주세요.",
     readingNotesReady: (progress: string) => `독서 노트 준비: ${progress}`,
-    retryingReadingNotes: "완성되지 않은 독자의 노트만 다시 준비하고 있습니다.",
+    retryingReadingNotes: "한 독자의 노트가 지연되었거나 완성되지 않아 해당 노트만 다시 준비하고 있습니다.",
     currentSpeaker: "발언 중",
     nextSpeaker: "다음",
     yourTurn: "내 차례",
@@ -326,11 +413,27 @@ const COPY = {
 
 type Screen = "setup" | "session" | "recap";
 type InputRequest = { stage: StageId; target?: string; kind: UserTurnKind };
+
+type SessionPreparationStatus =
+  | { kind: "reading_notes"; progress: string }
+  | { kind: "recap" };
 type CopyStatus = "idle" | "copied" | "failed";
+type RecapShareStatus = "idle" | "sharing" | "ready" | "failed";
 type RecapView = "recap" | "transcript";
 type GenerationMode = "mock" | "live";
 type LiveAvailability = "checking" | "available" | "unavailable";
+type ConversationKind = "regular" | "imagined_guest";
 type DiscussionDecisionRequest = DiscussionDecisionTurn;
+
+function resolveGenerationMode(
+  search: string,
+  environmentMode: string,
+): GenerationMode {
+  const params = new URLSearchParams(search);
+  if (params.get("live") === "1") return "live";
+  if (params.get("mock") === "1") return "mock";
+  return environmentMode === "test" ? "mock" : "live";
+}
 
 async function writeToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
@@ -352,7 +455,7 @@ async function writeToClipboard(text: string): Promise<void> {
 function speakerColor(speaker: string): string {
   if (speaker === "moderator") return "#6b4f2c";
   if (speaker === "user") return "#1f4f46";
-  return PERSONAS.find((persona) => persona.id === speaker)?.avatarColor ?? "#57534e";
+  return findPersona(speaker)?.avatarColor ?? "#57534e";
 }
 
 function speakerDisplayName(
@@ -481,6 +584,7 @@ function ParticipantCard({
 }) {
   const name = speakerDisplayName(speaker, language, userDisplayName);
   const role = speakerDisplayRole(speaker, language);
+  const imaginedGuest = isImaginedGuestId(speaker);
 
   return (
     <div
@@ -511,7 +615,14 @@ function ParticipantCard({
         />
       )}
       <div className="min-w-0">
-        <p className="truncate text-xs font-bold sm:text-sm">{name}</p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="truncate text-xs font-bold sm:text-sm">{name}</p>
+          {imaginedGuest && (
+            <span className="shrink-0 rounded-full bg-violet-200 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wide text-violet-950">
+              {COPY[language].guestBadge}
+            </span>
+          )}
+        </div>
         <p className={`truncate text-[9px] sm:text-[10px] ${active ? "text-stone-600" : "text-current opacity-65"}`}>
           {role}
         </p>
@@ -601,7 +712,13 @@ function normalizePageNavigation(
   return { knownPageCount: pageCount, cursor: 0, revealedCursor: 0 };
 }
 
-function useTypewriter(text: string, pageKey: string) {
+function useTypewriter(
+  text: string,
+  pageKey: string,
+  onTick: () => void,
+  onStop: () => void,
+  soundEnabled: boolean,
+) {
   const shouldReduceMotion =
     import.meta.env.MODE === "test" ||
     (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -624,10 +741,19 @@ function useTypewriter(text: string, pageKey: string) {
     return () => window.clearInterval(timer);
   }, [pageKey, shouldReduceMotion, text]);
 
+  useEffect(() => {
+    if (soundEnabled && visibleLength > 0 && visibleLength < text.length) onTick();
+  }, [onTick, soundEnabled, text.length, visibleLength]);
+
+  useEffect(() => onStop, [onStop, pageKey]);
+
   return {
     visibleText: text.slice(0, visibleLength),
     typing: visibleLength < text.length,
-    complete: () => setReveal({ pageKey, visibleLength: text.length }),
+    complete: () => {
+      onStop();
+      setReveal({ pageKey, visibleLength: text.length });
+    },
   };
 }
 
@@ -640,12 +766,15 @@ function ConversationStage({
   inputRequest,
   activeSpeaker,
   upcomingSpeaker,
+  preparationStatus,
   canAdvance,
   busy,
   onAdvance,
   interactionPanel,
   userAvatarId,
   userDisplayName,
+  onTalkTick,
+  onTalkStop,
 }: {
   language: AppLanguage;
   stage: StageId;
@@ -655,12 +784,15 @@ function ConversationStage({
   inputRequest?: InputRequest;
   activeSpeaker?: string;
   upcomingSpeaker?: string;
+  preparationStatus?: SessionPreparationStatus;
   canAdvance: boolean;
   busy: boolean;
   onAdvance: () => void;
   interactionPanel?: ReactNode;
   userAvatarId: UserAvatarId;
   userDisplayName: string;
+  onTalkTick: () => void;
+  onTalkStop: () => void;
 }) {
   const copy = COPY[language];
   const pages = useMemo(() => buildDialoguePages(transcript, language), [language, transcript]);
@@ -681,6 +813,7 @@ function ConversationStage({
   );
   const isOpeningScene = !currentUtterance;
   const isPreparingNextTurn = busy && !isBrowsingHistory;
+  const isStageChangeScene = isOpeningScene || isStageTransition;
   const isTransitionScene = isOpeningScene || isStageTransition || isPreparingNextTurn;
   const isUserTurn = Boolean(inputRequest);
   const displayPage = isTransitionScene || isUserTurn ? undefined : currentPage;
@@ -709,15 +842,23 @@ function ConversationStage({
   const transitionText = busy
     ? transitionSpeakerName
       ? copy.preparingTurn(transitionSpeakerName)
-      : copy.preparingRoom
+      : preparationStatus?.kind === "reading_notes"
+        ? copy.preparingNotes(preparationStatus.progress)
+        : preparationStatus?.kind === "recap"
+          ? copy.preparingRecap
+          : copy.preparingRoom
     : transitionSpeakerName
       ? copy.nextTurnReady(transitionSpeakerName)
       : isOpeningScene
         ? copy.tableReady
         : copy.stageReady(STAGE_LABELS[language][stage]);
+  const transitionLabel = isStageChangeScene ? copy.sceneTransition : copy.dialoguePreparing;
   const { visibleText, typing, complete } = useTypewriter(
     displayPage?.text ?? "",
     displayPage?.key ?? `transition:${stage}`,
+    onTalkTick,
+    onTalkStop,
+    !isHistoricalPage,
   );
 
   const nextPage = () => {
@@ -751,9 +892,15 @@ function ConversationStage({
       : cursor < revealedCursor || (displayPage && displayPage.pageIndex < displayPage.pageCount - 1)
       ? copy.nextPage
       : displayPage
-          ? copy.advanceSpeaker
-          : transcript.length === 0
-            ? copy.enterTable
+        ? showClosingCast
+          ? copy.viewRecap
+          : upcomingSpeaker === "user"
+            ? copy.advanceToUser
+            : copy.advanceSpeaker
+        : transcript.length === 0
+          ? copy.enterTable
+          : isStageTransition
+            ? copy.startStage(STAGE_LABELS[language][stage])
             : copy.advanceSpeaker;
   const canMoveWithinRevealedPages =
     cursor < revealedCursor ||
@@ -761,20 +908,10 @@ function ConversationStage({
   const nextDisabled =
     busy || (!(displayPage && typing) && !canMoveWithinRevealedPages && !canAdvance);
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (interactionPanel || (event.key !== " " && event.key !== "Enter")) return;
-    const target = event.target as HTMLElement;
-    if (["INPUT", "TEXTAREA", "BUTTON", "A"].includes(target.tagName)) return;
-    event.preventDefault();
-    nextPage();
-  };
-
   return (
     <section
-      className="relative h-full min-h-[36rem] overflow-hidden rounded-[1.75rem] border border-amber-100/15 bg-[#1c130d] shadow-[0_28px_90px_rgba(0,0,0,0.55)] outline-none"
+      className="relative h-full min-h-[36rem] overflow-hidden rounded-[1.75rem] border border-amber-100/15 bg-[#1c130d] shadow-[0_28px_90px_rgba(0,0,0,0.55)]"
       aria-label={copy.readingTable}
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
     >
       <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/reading-room-bg.png')" }} />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,6,4,0.7)_0%,rgba(20,12,7,0.12)_32%,rgba(5,4,3,0.7)_100%)]" />
@@ -846,7 +983,7 @@ function ConversationStage({
                 {STAGE_LABELS[language][stage]}
               </p>
               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-100/50">
-                {isTransitionScene ? copy.sceneTransition : copy.currentDialogue}
+                {isTransitionScene ? transitionLabel : copy.currentDialogue}
               </p>
             </div>
           ) : (
@@ -862,8 +999,8 @@ function ConversationStage({
             <div className="absolute inset-x-3 bottom-3 z-20 sm:inset-x-8 sm:bottom-6">{interactionPanel}</div>
           ) : (
             <div
-              className="absolute inset-x-3 bottom-3 z-20 h-40 rounded-2xl border border-amber-100/25 bg-stone-950/90 p-4 text-left text-stone-100 shadow-[0_24px_70px_rgba(0,0,0,0.6)] backdrop-blur-md sm:inset-x-8 sm:bottom-6 sm:h-44 sm:p-5"
-              onClick={nextPage}
+              data-testid="dialogue-box"
+              className="absolute bottom-3 left-1/2 z-20 h-40 w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-2xl border border-amber-100/25 bg-stone-950/90 p-4 text-left text-stone-100 shadow-[0_24px_70px_rgba(0,0,0,0.6)] backdrop-blur-md sm:bottom-6 sm:h-44 sm:w-[calc(100%-4rem)] sm:p-5 lg:w-[70%]"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -874,7 +1011,7 @@ function ConversationStage({
                   </p>
                   <span className="truncate text-xs text-stone-400">
                     {isTransitionScene
-                      ? copy.sceneTransition
+                      ? transitionLabel
                       : isHistoricalPage && currentUtterance
                         ? copy.earlierDialogue(STAGE_LABELS[language][currentUtterance.stage])
                         : speakerDisplayRole(primarySpeaker, language)}
@@ -1033,11 +1170,94 @@ function RenderedRecap({ markdown }: { markdown: string }) {
   );
 }
 
+function BgmControl({
+  language,
+  playing,
+  volume,
+  onToggle,
+  onVolumeChange,
+}: {
+  language: AppLanguage;
+  playing: boolean;
+  volume: number;
+  onToggle: () => void;
+  onVolumeChange: (volume: number) => void;
+}) {
+  const playLabel = language === "ko" ? "배경음악 재생" : "Play background music";
+  const pauseLabel = language === "ko" ? "배경음악 일시정지" : "Pause background music";
+  const volumeLabel = language === "ko" ? "배경음악 볼륨" : "Background music volume";
+
+  return (
+    <div className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border border-amber-100/20 bg-stone-950/80 px-2 text-amber-50 shadow-lg backdrop-blur-md">
+      <button
+        type="button"
+        data-bgm-toggle="true"
+        aria-label={playing ? pauseLabel : playLabel}
+        aria-pressed={playing}
+        title={playing ? pauseLabel : playLabel}
+        onClick={onToggle}
+        className="grid size-7 place-items-center rounded-lg bg-amber-300 text-[11px] font-black text-amber-950 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-100"
+      >
+        <span aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span>
+      </button>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.05"
+        value={volume}
+        aria-label={volumeLabel}
+        title={`${volumeLabel}: ${Math.round(volume * 100)}%`}
+        onChange={(event) => onVolumeChange(Number(event.currentTarget.value))}
+        className="h-1 w-14 cursor-pointer accent-amber-300 sm:w-20"
+      />
+      <output className="hidden w-8 text-right text-[10px] font-semibold text-amber-100/70 xl:block">
+        {Math.round(volume * 100)}%
+      </output>
+    </div>
+  );
+}
+
+function SfxControl({
+  language,
+  enabled,
+  onToggle,
+}: {
+  language: AppLanguage;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  const label =
+    language === "ko"
+      ? `효과음 ${enabled ? "끄기" : "켜기"}`
+      : `${enabled ? "Disable" : "Enable"} sound effects`;
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={enabled}
+      title={label}
+      onClick={onToggle}
+      className={`h-9 shrink-0 rounded-xl border px-3 text-[10px] font-black tracking-wide shadow-lg backdrop-blur-md transition ${
+        enabled
+          ? "border-amber-200/30 bg-amber-300 text-amber-950 hover:bg-amber-200"
+          : "border-amber-100/20 bg-stone-950/80 text-amber-100/55 hover:text-amber-50"
+      }`}
+    >
+      SFX {enabled ? "ON" : "OFF"}
+    </button>
+  );
+}
+
 export function App() {
   const [language, setLanguage] = useState<AppLanguage>("ko");
-  const [generationMode, setGenerationMode] = useState<GenerationMode>("mock");
+  const generationMode = resolveGenerationMode(window.location.search, import.meta.env.MODE);
+  const [conversationKind, setConversationKind] = useState<ConversationKind>("regular");
+  const [selectedGuestId, setSelectedGuestId] = useState<ImaginedGuestId | "none">("none");
+  const [guestCategoryFilter, setGuestCategoryFilter] = useState<Category>("analytical");
   const [liveAvailability, setLiveAvailability] = useState<LiveAvailability>("checking");
-  const [liveModel, setLiveModel] = useState("gpt-5.6");
+  const [liveModel, setLiveModel] = useState("gpt-5.6-terra");
   const [bookScope, setBookScope] = useState<BookScope>("single_book");
   const [roomAtmosphere, setRoomAtmosphere] = useState<RoomAtmosphere>();
   const [bookTitleInput, setBookTitleInput] = useState("");
@@ -1051,6 +1271,7 @@ export function App() {
   const [transcript, setTranscript] = useState<Utterance[]>([]);
   const [canAdvance, setCanAdvance] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [preparationStatus, setPreparationStatus] = useState<SessionPreparationStatus>();
   const [inputRequest, setInputRequest] = useState<InputRequest>();
   const [discussionDecision, setDiscussionDecision] = useState<DiscussionDecisionRequest>();
   const [inputText, setInputText] = useState("");
@@ -1058,17 +1279,31 @@ export function App() {
   const [error, setError] = useState("");
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   const [recapCopyStatus, setRecapCopyStatus] = useState<CopyStatus>("idle");
+  const [recapShareStatus, setRecapShareStatus] = useState<RecapShareStatus>("idle");
   const [recapView, setRecapView] = useState<RecapView>("recap");
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [userAvatarId, setUserAvatarId] = useState<UserAvatarId>("reader-1");
   const [userDisplayName, setUserDisplayName] = useState("");
   const [activeSpeaker, setActiveSpeaker] = useState<string>();
   const [upcomingSpeaker, setUpcomingSpeaker] = useState<string>();
+  const [bgmPlaying, setBgmPlaying] = useState(false);
+  const [bgmVolume, setBgmVolume] = useState(INITIAL_BGM_VOLUME);
   const inputResolver = useRef<((value: string) => void) | null>(null);
   const discussionDecisionResolver = useRef<((value: DiscussionAction) => void) | null>(null);
   const playbackActionRef = useRef<(() => void) | null>(null);
   const generationClientRef = useRef<GenerationClient | null>(null);
+  const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const soundStageRef = useRef<StageId>("INTRO");
+  const lastSoundSpeakerRef = useRef<string>();
+  const soundEffects = useSoundEffects();
   const copy = COPY[language];
+  const selectedGuest =
+    conversationKind !== "imagined_guest" || selectedGuestId === "none"
+      ? undefined
+      : GUEST_PERSONAS.find((persona) => persona.id === selectedGuestId);
+  const visibleGuests = GUEST_PERSONAS.filter(
+    (persona) => persona.category === guestCategoryFilter,
+  );
   const confirmedVerificationStatus =
     confirmedBook?.verificationStatus ?? (generationMode === "mock" ? "mock" : "ambiguous");
   const confirmedSources = confirmedBook?.sources ?? [];
@@ -1076,12 +1311,35 @@ export function App() {
   const confirmedIncludedTitles = confirmedBook?.includedTitles ?? [];
   const canStartSession = Boolean(
     confirmedBook &&
-      (generationMode === "mock" || confirmedVerificationStatus === "verified"),
+      (generationMode === "mock" || confirmedVerificationStatus === "verified") &&
+      (conversationKind === "regular" || selectedGuest),
   );
+  const canRetryAsSingleBook = Boolean(
+    confirmedBook &&
+      generationMode === "live" &&
+      bookScope === "series" &&
+      confirmedVerificationStatus !== "verified" &&
+      confirmedIncludedTitles.length <= 1,
+  );
+  const startButtonLabel = !confirmedBook
+    ? copy.verifyBeforeStart
+    : confirmedVerificationStatus !== "verified" && generationMode === "live"
+      ? copy.verifyBeforeStart
+      : conversationKind === "imagined_guest" && !selectedGuest
+        ? copy.chooseGuest
+        : confirmedWorkScope === "series"
+          ? copy.confirmSeries
+          : copy.confirmBook;
 
   const generationErrorMessage = (caught: unknown): string => {
     if (!(caught instanceof GenerationApiError)) {
       return caught instanceof Error ? caught.message : copy.sessionFailed;
+    }
+    if (
+      caught.options.endpoint === "reading-notes" &&
+      (caught.status === 502 || caught.status === 504)
+    ) {
+      return copy.readingNotesDelayed;
     }
     return caught.code === "server_not_configured"
       ? copy.serverNotConfigured
@@ -1133,11 +1391,94 @@ export function App() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const audio = document.createElement("audio");
+    audio.src = "/MyBookClub.mp3";
+    audio.loop = true;
+    audio.preload = "auto";
+    audio.volume = INITIAL_BGM_VOLUME;
+
+    let disposed = false;
+    let fallbackAttached = false;
+
+    function removeAutoplayFallback() {
+      if (!fallbackAttached) return;
+      document.removeEventListener("pointerdown", startOnInteraction, true);
+      document.removeEventListener("keydown", startOnInteraction, true);
+      fallbackAttached = false;
+    }
+
+    function startOnInteraction(event: Event) {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-bgm-toggle]")) return;
+      void audio.play().catch(() => undefined);
+    }
+
+    function attachAutoplayFallback() {
+      if (disposed || fallbackAttached) return;
+      document.addEventListener("pointerdown", startOnInteraction, true);
+      document.addEventListener("keydown", startOnInteraction, true);
+      fallbackAttached = true;
+    }
+
+    const handlePlay = () => {
+      removeAutoplayFallback();
+      setBgmPlaying(true);
+    };
+    const handlePause = () => setBgmPlaying(false);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    bgmAudioRef.current = audio;
+    void audio.play().catch(attachAutoplayFallback);
+
+    return () => {
+      disposed = true;
+      removeAutoplayFallback();
+      audio.pause();
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeAttribute("src");
+      bgmAudioRef.current = null;
+    };
+  }, []);
+
   useEffect(
     () => () => {
       playbackActionRef.current = null;
     },
     [],
+  );
+
+  const toggleBgm = useCallback(() => {
+    const audio = bgmAudioRef.current;
+    if (!audio) return;
+    if (!audio.paused) {
+      audio.pause();
+      return;
+    }
+    void audio.play().catch(() => setBgmPlaying(false));
+  }, []);
+
+  const changeBgmVolume = useCallback((volume: number) => {
+    const boundedVolume = Math.min(1, Math.max(0, volume));
+    setBgmVolume(boundedVolume);
+    if (bgmAudioRef.current) bgmAudioRef.current.volume = boundedVolume;
+  }, []);
+
+  const bgmControl = (
+    <BgmControl
+      language={language}
+      playing={bgmPlaying}
+      volume={bgmVolume}
+      onToggle={toggleBgm}
+      onVolumeChange={changeBgmVolume}
+    />
+  );
+  const audioControls = (
+    <div className="flex shrink-0 items-center gap-2">
+      {bgmControl}
+      <SfxControl language={language} enabled={soundEffects.enabled} onToggle={soundEffects.toggle} />
+    </div>
   );
 
   const invalidateBookConfirmation = () => {
@@ -1146,8 +1487,7 @@ export function App() {
     generationClientRef.current = null;
   };
 
-  const identifyBook = async (event: FormEvent) => {
-    event.preventDefault();
+  const runBookIdentification = async (scope: BookScope) => {
     const title = bookTitleInput.trim();
     if (!title) {
       setIdentificationError(copy.bookRequired);
@@ -1163,7 +1503,7 @@ export function App() {
       const identified = await client.identifyBook({
         title,
         author: bookAuthorInput.trim() || undefined,
-        scope: bookScope,
+        scope,
         language,
       });
       setConfirmedBook(toConfirmedBook(identified));
@@ -1177,6 +1517,16 @@ export function App() {
     } finally {
       setIdentifyingBook(false);
     }
+  };
+
+  const identifyBook = (event: FormEvent) => {
+    event.preventDefault();
+    void runBookIdentification(bookScope);
+  };
+
+  const retryBookWithScope = (scope: BookScope) => {
+    setBookScope(scope);
+    void runBookIdentification(scope);
   };
 
   const copyTranscript = async () => {
@@ -1227,16 +1577,73 @@ export function App() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    const safeTitle = confirmedBook.title
-      .normalize("NFKD")
-      .replace(/[^\p{L}\p{N}]+/gu, "-")
-      .replace(/^-+|-+$/gu, "")
-      .toLocaleLowerCase()
-      .slice(0, 80) || "book";
-    anchor.download = `recap-${safeTitle}-${new Date().toISOString().slice(0, 10)}.md`;
+    anchor.download = recapFilename(confirmedBook.title, new Date().toISOString().slice(0, 10));
     anchor.click();
     URL.revokeObjectURL(url);
   };
+
+  const shareRecapByEmail = async () => {
+    if (!recap || !confirmedBook || recapShareStatus === "sharing") return;
+    setRecapShareStatus("sharing");
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = recapFilename(confirmedBook.title, date);
+    const subject = recapEmailSubject(confirmedBook.title, language);
+    const file = new File([recap], filename, { type: "text/markdown;charset=utf-8" });
+
+    if (
+      typeof navigator.share === "function" &&
+      (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }))
+    ) {
+      try {
+        await navigator.share({
+          title: subject,
+          text: language === "ko"
+            ? `《${confirmedBook.title}》 모임 기록을 공유합니다.`
+            : `Sharing my meeting recap for ${confirmedBook.title}.`,
+          files: [file],
+        });
+        setRecapShareStatus("ready");
+        return;
+      } catch (caught) {
+        if (caught instanceof DOMException && caught.name === "AbortError") {
+          setRecapShareStatus("idle");
+          return;
+        }
+      }
+    }
+
+    let copiedToClipboard = false;
+    try {
+      await writeToClipboard(recap);
+      copiedToClipboard = true;
+      setRecapCopyStatus("copied");
+    } catch {
+      // The bounded recap preview remains available in the mail draft.
+    }
+
+    try {
+      window.location.assign(
+        recapMailtoUrl({
+          title: confirmedBook.title,
+          recap,
+          language,
+          copiedToClipboard,
+        }),
+      );
+      setRecapShareStatus("ready");
+    } catch {
+      setRecapShareStatus("failed");
+    }
+  };
+
+  const recapShareButtonLabel =
+    recapShareStatus === "sharing"
+      ? copy.sharingRecap
+      : recapShareStatus === "ready"
+        ? copy.emailReady
+        : recapShareStatus === "failed"
+          ? copy.emailShareFailed
+          : copy.emailRecap;
 
   const startSession = () => {
     if (!confirmedBook) {
@@ -1248,6 +1655,9 @@ export function App() {
       return;
     }
     playbackActionRef.current = null;
+    soundStageRef.current = "INTRO";
+    lastSoundSpeakerRef.current = undefined;
+    soundEffects.stopTalk();
     setScreen("session");
     window.scrollTo(0, 0);
     setTranscript([]);
@@ -1256,8 +1666,10 @@ export function App() {
     setTranscriptOpen(false);
     setDiscussionDecision(undefined);
     setRecapCopyStatus("idle");
+    setRecapShareStatus("idle");
     setError("");
     setBusy(true);
+    setPreparationStatus(undefined);
     setActiveSpeaker(undefined);
     setUpcomingSpeaker(undefined);
     setRoomAtmosphere(undefined);
@@ -1267,14 +1679,30 @@ export function App() {
       (generationMode === "live" ? new HttpGenerationClient() : new MockGenerationClient());
     const requestedSeed = new URLSearchParams(window.location.search).get("seed");
     const seed = requestedSeed || crypto.randomUUID();
-    const personas = selectPersonas(seed);
+    const personas = selectPersonas(seed, selectedGuest?.id);
     setSessionPersonas(personas);
     const engine = new SessionEngine(generationClient, {
       onStatus(message) {
         if (message.startsWith("Stage: ")) {
           const nextStage = message.slice("Stage: ".length) as StageId;
+          if (nextStage !== soundStageRef.current) {
+            soundEffects.playChapterChange();
+            soundStageRef.current = nextStage;
+          }
           setStage(nextStage);
-        } else if (import.meta.env.DEV && message.startsWith("Quality fallback: ")) {
+          if (nextStage !== "INTRO") setPreparationStatus(undefined);
+        } else if (message === "Generating private reading notes in parallel") {
+          setPreparationStatus({ kind: "reading_notes", progress: `0/${personas.length}` });
+        } else if (message.startsWith("Reading notes ready: ")) {
+          setPreparationStatus({
+            kind: "reading_notes",
+            progress: message.slice("Reading notes ready: ".length),
+          });
+        } else if (message.startsWith("Retrying reading notes: ")) {
+          setPreparationStatus({ kind: "reading_notes", progress: copy.retryingReadingNotes });
+        } else if (message === "Generating meeting recap") {
+          setPreparationStatus({ kind: "recap" });
+        } else if (message.startsWith("Quality fallback: ")) {
           recordGenerationDiagnostic({
             id: crypto.randomUUID(),
             timestamp: new Date().toISOString(),
@@ -1288,6 +1716,10 @@ export function App() {
         }
       },
       onUtterance(utterance) {
+        if (utterance.speaker !== "user" && utterance.speaker !== lastSoundSpeakerRef.current) {
+          soundEffects.playMemberShow();
+        }
+        lastSoundSpeakerRef.current = utterance.speaker;
         setActiveSpeaker(utterance.speaker);
         setUpcomingSpeaker(undefined);
         setCopyStatus("idle");
@@ -1303,6 +1735,7 @@ export function App() {
         confirmedBook,
         language,
         seed,
+        personas,
         waitForAdvance(turn) {
           return new Promise<void>((resolve) => {
             const speakerId = turn.speaker === "moderator" ? "moderator" : turn.speaker.id;
@@ -1320,6 +1753,8 @@ export function App() {
               setInputRequest(turn);
               setCanAdvance(false);
               setBusy(false);
+              soundEffects.stopTalk();
+              soundEffects.playYourTurn();
             });
           });
         },
@@ -1333,6 +1768,8 @@ export function App() {
               setUpcomingSpeaker(undefined);
               setCanAdvance(false);
               setBusy(false);
+              soundEffects.stopTalk();
+              soundEffects.playYourTurn();
             });
           });
         },
@@ -1345,12 +1782,14 @@ export function App() {
       })
       .then((result) => {
         setRecap(result.recapMarkdown);
+        setPreparationStatus(undefined);
         setTranscriptOpen(false);
         setScreen("recap");
         playbackActionRef.current = null;
         setBusy(false);
       })
       .catch((caught: unknown) => {
+        setPreparationStatus(undefined);
         setError(generationErrorMessage(caught));
         playbackActionRef.current = null;
         setBusy(false);
@@ -1388,12 +1827,16 @@ export function App() {
 
   const startNewSession = () => {
     playbackActionRef.current = null;
+    soundStageRef.current = "INTRO";
+    lastSoundSpeakerRef.current = undefined;
+    soundEffects.stopTalk();
     inputResolver.current = null;
     discussionDecisionResolver.current = null;
     setScreen("setup");
     setBookTitleInput("");
     setBookAuthorInput("");
     setRoomAtmosphere(undefined);
+    setPreparationStatus(undefined);
     setConfirmedBook(undefined);
     setSessionPersonas([]);
     setIdentificationError("");
@@ -1403,6 +1846,7 @@ export function App() {
     setRecapView("recap");
     setTranscriptOpen(false);
     setRecapCopyStatus("idle");
+    setRecapShareStatus("idle");
     setInputRequest(undefined);
     setDiscussionDecision(undefined);
     setStage("INTRO");
@@ -1415,7 +1859,7 @@ export function App() {
       <main className="relative min-h-screen overflow-hidden bg-[#0d0907] px-5 py-10 text-stone-900 sm:py-14">
         <div className="fixed inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/reading-room-bg.png')" }} />
         <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,rgba(64,38,19,0.18),rgba(6,4,3,0.86)_72%)]" />
-        <section className="relative z-10 mx-auto max-w-5xl rounded-[2rem] border border-amber-100/20 bg-[#fffaf0]/95 p-8 shadow-[0_32px_100px_rgba(0,0,0,0.62)] backdrop-blur-sm sm:p-12">
+        <section className="relative z-10 mx-auto flex max-w-5xl flex-col rounded-[2rem] border border-amber-100/20 bg-[#fffaf0]/95 p-8 shadow-[0_32px_100px_rgba(0,0,0,0.62)] backdrop-blur-sm sm:p-12">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">
               <span>{copy.prototype}</span>
@@ -1424,92 +1868,40 @@ export function App() {
                 {generationMode === "live" ? copy.liveBadge : copy.mockBadge}
               </span>
             </div>
-            <div
-              className="inline-flex rounded-xl border border-stone-300 bg-white p-1"
-              role="group"
-              aria-label="Language"
-            >
-              {(["ko", "en"] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={language === option}
-                  onClick={() => {
-                    setLanguage(option);
-                    invalidateBookConfirmation();
-                  }}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
-                    language === option
-                      ? "bg-stone-900 text-white"
-                      : "text-stone-600 hover:bg-stone-100"
-                  }`}
-                >
-                  {option === "ko" ? "한국어" : "English"}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {audioControls}
+              <div
+                className="inline-flex rounded-xl border border-stone-300 bg-white p-1"
+                role="group"
+                aria-label="Language"
+              >
+                {(["ko", "en"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={language === option}
+                    onClick={() => {
+                      setLanguage(option);
+                      invalidateBookConfirmation();
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                      language === option
+                        ? "bg-stone-900 text-white"
+                        : "text-stone-600 hover:bg-stone-100"
+                    }`}
+                  >
+                    {option === "ko" ? "한국어" : "English"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <h1 className="mt-5 font-serif text-5xl leading-none sm:text-6xl">The Reading Table</h1>
+          <h1 className="mt-5 font-serif text-5xl leading-none sm:text-6xl">{copy.productName}</h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-stone-700">
             {copy.description}
           </p>
 
-          <div className="mt-10 rounded-2xl border border-stone-200 bg-white p-5">
-            <p className="text-sm font-semibold">{copy.modeTitle}</p>
-            <div className="mt-3 grid grid-cols-2 gap-2" role="group" aria-label={copy.modeTitle}>
-              <button
-                type="button"
-                aria-pressed={generationMode === "mock"}
-                onClick={() => {
-                  setGenerationMode("mock");
-                  invalidateBookConfirmation();
-                }}
-                className={`rounded-xl border p-3 text-left transition ${
-                  generationMode === "mock"
-                    ? "border-stone-900 bg-stone-900 text-white"
-                    : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
-                }`}
-              >
-                <span className="block text-sm font-semibold">{copy.mockMode}</span>
-                <span className={`mt-1 block text-xs leading-5 ${generationMode === "mock" ? "text-stone-300" : "text-stone-500"}`}>
-                  {copy.mockModeHint}
-                </span>
-              </button>
-              <button
-                type="button"
-                aria-pressed={generationMode === "live"}
-                disabled={liveAvailability !== "available"}
-                onClick={() => {
-                  setGenerationMode("live");
-                  invalidateBookConfirmation();
-                }}
-                className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  generationMode === "live"
-                    ? "border-emerald-800 bg-emerald-800 text-white"
-                    : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
-                }`}
-              >
-                <span className="block text-sm font-semibold">{copy.liveMode}</span>
-                <span className={`mt-1 block text-xs leading-5 ${generationMode === "live" ? "text-emerald-100" : "text-stone-500"}`}>
-                  {copy.liveModeHint}
-                </span>
-              </button>
-            </div>
-            <p
-              className={`mt-3 text-xs font-medium ${
-                liveAvailability === "available" ? "text-emerald-800" : "text-stone-500"
-              }`}
-              aria-live="polite"
-            >
-              {liveAvailability === "checking"
-                ? copy.liveChecking
-                : liveAvailability === "available"
-                  ? copy.liveReady(liveModel)
-                  : copy.liveUnavailable}
-            </p>
-          </div>
-
-          <form onSubmit={(event) => void identifyBook(event)} className="mt-5 rounded-2xl border border-stone-200 bg-white p-5">
+          <form onSubmit={(event) => void identifyBook(event)} className="order-2 mt-8 rounded-2xl border border-stone-200 bg-white p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
               {copy.bookSetup}
             </p>
@@ -1518,14 +1910,15 @@ export function App() {
               <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label={copy.scopeLabel}>
                 {(["single_book", "series"] as const).map((scope) => (
                   <button
-                    key={scope}
-                    type="button"
-                    aria-pressed={bookScope === scope}
+                   key={scope}
+                   type="button"
+                   disabled={identifyingBook}
+                   aria-pressed={bookScope === scope}
                     onClick={() => {
                       setBookScope(scope);
                       invalidateBookConfirmation();
                     }}
-                    className={`rounded-xl border p-3 text-left transition ${
+                   className={`rounded-xl border p-3 text-left transition disabled:cursor-wait disabled:opacity-60 ${
                       bookScope === scope
                         ? "border-amber-800 bg-amber-50 text-amber-950"
                         : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
@@ -1543,7 +1936,8 @@ export function App() {
               <label className="text-sm font-semibold text-stone-700">
                 {bookScope === "series" ? copy.seriesTitleLabel : copy.bookTitleLabel}
                 <input
-                  aria-label={bookScope === "series" ? copy.seriesTitleLabel : copy.bookTitleLabel}
+                   aria-label={bookScope === "series" ? copy.seriesTitleLabel : copy.bookTitleLabel}
+                   disabled={identifyingBook}
                   value={bookTitleInput}
                   onChange={(event) => {
                     setBookTitleInput(event.target.value);
@@ -1553,26 +1947,31 @@ export function App() {
                     bookScope === "series" ? copy.seriesTitlePlaceholder : copy.bookTitlePlaceholder
                   }
                   maxLength={200}
-                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 font-normal outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200"
+                   className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 font-normal outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200 disabled:cursor-wait disabled:bg-stone-100"
                 />
               </label>
               <label className="text-sm font-semibold text-stone-700">
                 {copy.authorLabel}
-                <input
-                  value={bookAuthorInput}
+                 <input
+                   disabled={identifyingBook}
+                   value={bookAuthorInput}
                   onChange={(event) => {
                     setBookAuthorInput(event.target.value);
                     invalidateBookConfirmation();
                   }}
                   placeholder={copy.authorPlaceholder}
                   maxLength={120}
-                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 font-normal outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200"
+                   className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2.5 font-normal outline-none focus:border-amber-600 focus:ring-2 focus:ring-amber-200 disabled:cursor-wait disabled:bg-stone-100"
                 />
               </label>
             </div>
             <button
               type="submit"
-              disabled={identifyingBook || !bookTitleInput.trim()}
+              disabled={
+                identifyingBook ||
+                !bookTitleInput.trim() ||
+                (generationMode === "live" && liveAvailability !== "available")
+              }
               className="mt-4 rounded-xl border border-stone-300 bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-800 hover:bg-stone-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {identifyingBook
@@ -1590,7 +1989,41 @@ export function App() {
                   : bookScope === "series"
                     ? copy.identifySeries
                     : copy.identifyBook}
-            </button>
+             </button>
+            {identifyingBook && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950"
+              >
+                <span
+                  className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-amber-700 border-t-transparent"
+                  aria-hidden="true"
+                />
+                <span>
+                  <span className="block text-sm font-semibold">
+                    {bookScope === "series" ? copy.verifyingSeries : copy.verifyingBook}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-amber-900/75">
+                    {copy.verificationProgressHint}
+                  </span>
+                </span>
+              </div>
+            )}
+            {generationMode === "live" && !identifyingBook && (
+              <p
+                className={`mt-3 text-xs font-medium ${
+                  liveAvailability === "available" ? "text-emerald-800" : "text-stone-500"
+                }`}
+                aria-live="polite"
+              >
+                {liveAvailability === "checking"
+                  ? copy.liveChecking
+                  : liveAvailability === "available"
+                    ? copy.liveReady(liveModel)
+                    : copy.liveUnavailable}
+              </p>
+            )}
             {identificationError && (
               <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">
                 {identificationError}
@@ -1600,7 +2033,7 @@ export function App() {
 
           {confirmedBook && (
             <section
-              className={`mt-5 rounded-2xl border p-5 ${
+              className={`order-3 mt-5 rounded-2xl border p-5 ${
                 confirmedVerificationStatus === "verified"
                   ? "border-emerald-200 bg-emerald-50"
                   : confirmedVerificationStatus === "mock"
@@ -1667,10 +2100,23 @@ export function App() {
                   </ul>
                 </div>
               )}
-              {generationMode === "live" && confirmedVerificationStatus !== "verified" && (
-                <p className="mt-3 rounded-xl bg-amber-100 p-3 text-sm text-amber-950">
-                  {copy.verificationBlocked}
-                </p>
+               {generationMode === "live" && confirmedVerificationStatus !== "verified" && (
+                <div className="mt-3 rounded-xl bg-amber-100 p-3 text-sm text-amber-950">
+                  <p>{copy.verificationBlocked}</p>
+                  {canRetryAsSingleBook && (
+                    <div className="mt-3 border-t border-amber-200 pt-3">
+                      <p className="text-xs leading-5 text-amber-900/80">{copy.scopeCorrectionHint}</p>
+                      <button
+                        type="button"
+                        disabled={identifyingBook}
+                        onClick={() => void retryBookWithScope("single_book")}
+                        className="mt-2 rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-800 disabled:cursor-wait disabled:opacity-50"
+                      >
+                        {copy.retryAsSingleBook}
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
               <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-600">
                 {confirmedBook.candidateTopics.map((topic) => <li key={topic}>{topic}</li>)}
@@ -1679,7 +2125,135 @@ export function App() {
           )}
 
           {confirmedBook && (
-            <section className="mt-5 rounded-2xl border border-amber-200 bg-[#2a1a10] p-5 text-amber-50">
+            <section className="order-4 mt-5 rounded-2xl border border-violet-200 bg-violet-50/90 p-5">
+              <div>
+                <p className="text-sm font-semibold text-violet-950">{copy.participationTitle}</p>
+                <p className="mt-1 text-xs leading-5 text-violet-900/70">
+                  {conversationKind === "regular" ? copy.regularConversationHint : copy.inviteGuestHint}
+                </p>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2" role="tablist" aria-label={copy.participationTitle}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={conversationKind === "regular"}
+                  onClick={() => {
+                    setConversationKind("regular");
+                    setSelectedGuestId("none");
+                  }}
+                  className={`rounded-xl border p-3 text-left transition ${
+                    conversationKind === "regular"
+                      ? "border-stone-900 bg-stone-900 text-white"
+                      : "border-violet-200 bg-white text-stone-700 hover:bg-violet-100"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{copy.regularConversation}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={conversationKind === "imagined_guest"}
+                  onClick={() => setConversationKind("imagined_guest")}
+                  className={`rounded-xl border p-3 text-left transition ${
+                    conversationKind === "imagined_guest"
+                      ? "border-violet-800 bg-violet-900 text-white"
+                      : "border-violet-200 bg-white text-violet-950 hover:bg-violet-100"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{copy.inviteGuest}</span>
+                </button>
+              </div>
+
+              {conversationKind === "imagined_guest" && (
+                <div role="tabpanel" className="mt-5 border-t border-violet-200 pt-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-violet-950">{copy.guestTestTitle}</p>
+                      <p className="mt-1 max-w-2xl text-xs leading-5 text-violet-900/70">
+                        {copy.guestTestHint}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-violet-200 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-violet-950">
+                      TEST
+                    </span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2" role="group" aria-label={language === "ko" ? "게스트 성향" : "Guest lens"}>
+                    {(["emotional", "analytical", "contextual"] as const).map((category) => {
+                      const selected = guestCategoryFilter === category;
+                      const label =
+                        language === "ko"
+                          ? { emotional: "감성", analytical: "분석", contextual: "맥락" }[category]
+                          : { emotional: "Emotional", analytical: "Analytical", contextual: "Contextual" }[category];
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setGuestCategoryFilter(category)}
+                          className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                            selected
+                              ? "border-violet-800 bg-violet-900 text-white"
+                              : "border-violet-200 bg-white text-violet-900 hover:bg-violet-100"
+                          }`}
+                        >
+                          {label} · {GUEST_PERSONAS.filter((guest) => guest.category === category).length}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto pr-1 sm:grid-cols-2" role="group" aria-label={copy.guestTestTitle}>
+                    {visibleGuests.map((guest) => {
+                      const selected = selectedGuestId === guest.id;
+                      return (
+                        <button
+                          key={guest.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setSelectedGuestId(guest.id)}
+                          className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
+                            selected
+                              ? "border-violet-800 bg-violet-900 text-white"
+                              : "border-violet-200 bg-white text-stone-700 hover:bg-violet-100"
+                          }`}
+                        >
+                          <img
+                            src={portraitUrlFor(guest.id)}
+                            alt=""
+                            className="h-14 w-12 shrink-0 rounded-lg object-cover object-top ring-1 ring-black/10"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold">
+                              {localizedSpeakerName(guest.id, language)}
+                            </span>
+                            <span className={`mt-1 block text-xs ${selected ? "text-violet-200" : "text-stone-500"}`}>
+                              {guest.roleLabel[language]}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {!selectedGuest && (
+                    <p className="mt-3 rounded-xl bg-white/80 p-3 text-xs font-semibold text-violet-900">
+                      {copy.chooseGuest}
+                    </p>
+                  )}
+                  {selectedGuest && (
+                    <div className="mt-4 rounded-xl border border-violet-200 bg-white/80 p-3 text-xs leading-5 text-violet-950">
+                      <p className="font-semibold">
+                        {copy.guestBadge}: {localizedSpeakerName(selectedGuest.id, language)}
+                      </p>
+                      <p className="mt-1 text-violet-900/75">{copy.guestDisclosure}</p>
+                      <p className="mt-1 font-medium text-violet-800">{copy.guestLiveHint}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {confirmedBook && (
+            <section className="order-5 mt-5 rounded-2xl border border-amber-200 bg-[#2a1a10] p-5 text-amber-50">
               <p className="font-serif text-xl">{copy.identityTitle}</p>
               <p className="mt-1 text-xs leading-5 text-amber-100/65">{copy.identityHint}</p>
               <label className="mt-4 block text-xs font-semibold text-amber-100" htmlFor="display-name">
@@ -1719,7 +2293,7 @@ export function App() {
             </section>
           )}
 
-          <div className="mt-5 rounded-2xl bg-stone-900 p-5 text-sm leading-6 text-stone-200">
+          <div className="order-6 mt-5 rounded-2xl bg-stone-900 p-5 text-sm leading-6 text-stone-200">
             <p className="font-semibold text-white">{copy.privacyTitle}</p>
             <p className="mt-1">{copy.privacy}</p>
             <p className="mt-2 text-stone-400">
@@ -1731,15 +2305,9 @@ export function App() {
             type="button"
             onClick={startSession}
             disabled={!canStartSession || (generationMode === "live" && liveAvailability !== "available")}
-            className="mt-8 w-full rounded-2xl bg-stone-900 px-5 py-4 font-semibold text-white transition hover:bg-stone-700 focus:outline-none focus:ring-4 focus:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="order-7 mt-8 w-full rounded-2xl bg-stone-900 px-5 py-4 font-semibold text-white transition hover:bg-stone-700 focus:outline-none focus:ring-4 focus:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {confirmedBook
-              ? confirmedWorkScope === "series"
-                ? copy.confirmSeries
-                : copy.confirmBook
-              : generationMode === "live"
-                ? copy.startLive
-                : copy.start}
+            {startButtonLabel}
           </button>
         </section>
         <DiagnosticsPanel language={language} roomAtmosphere={roomAtmosphere} />
@@ -1761,6 +2329,7 @@ export function App() {
               <h1 className="mt-2 font-serif text-4xl text-amber-50">{copy.completionTitle}</h1>
             </div>
             <div className="flex flex-wrap gap-2">
+              {audioControls}
               {recapView === "recap" ? (
                 <>
                   <button
@@ -1777,6 +2346,15 @@ export function App() {
                     className="rounded-xl border border-amber-100/25 bg-white/10 px-4 py-2 text-sm font-semibold text-amber-50 hover:bg-white/15"
                   >
                     {copy.downloadMarkdown}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void shareRecapByEmail()}
+                    disabled={recapShareStatus === "sharing"}
+                    className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-amber-950 transition hover:bg-amber-200 disabled:cursor-wait disabled:opacity-60"
+                    aria-live="polite"
+                  >
+                    {recapShareButtonLabel}
                   </button>
                 </>
               ) : (
@@ -1850,7 +2428,7 @@ export function App() {
       <header className="relative z-20 border-b border-amber-100/10 bg-[#130d09] px-3 py-3 sm:px-5">
         <div className="mx-auto flex max-w-[100rem] items-center gap-4">
           <div className="min-w-0 shrink-0">
-            <p className="font-serif text-lg text-amber-50 sm:text-xl">The Reading Table</p>
+            <p className="font-serif text-lg text-amber-50 sm:text-xl">{copy.productName}</p>
             <p className="max-w-48 truncate text-[10px] text-amber-100/45 sm:max-w-64">
               {generationMode === "live"
                 ? copy.liveSessionLabel(confirmedBook?.title ?? "")
@@ -1881,6 +2459,15 @@ export function App() {
             })}
           </ol>
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            {audioControls}
+            {selectedGuest && (
+              <span
+                className="hidden max-w-44 truncate rounded-full bg-violet-950 px-3 py-1 text-[10px] font-semibold text-violet-200 xl:inline-flex"
+                title={copy.guestDisclosure}
+              >
+                {copy.guestBadge} · {localizedSpeakerName(selectedGuest.id, language)}
+              </span>
+            )}
             <span className="hidden rounded-full bg-emerald-950 px-3 py-1 text-[10px] font-semibold text-emerald-200 sm:inline-flex">
               {generationMode === "live" ? copy.liveCredits : copy.noCredits}
             </span>
@@ -1906,11 +2493,14 @@ export function App() {
           inputRequest={inputRequest}
           activeSpeaker={activeSpeaker}
           upcomingSpeaker={upcomingSpeaker}
+          preparationStatus={preparationStatus}
           canAdvance={canAdvance}
           busy={busy}
           onAdvance={advance}
           userAvatarId={userAvatarId}
           userDisplayName={userDisplayName}
+          onTalkTick={soundEffects.playTalkTick}
+          onTalkStop={soundEffects.stopTalk}
           interactionPanel={
             error ? (
               <p role="alert" className="rounded-xl border border-red-300/40 bg-red-950/95 p-4 text-sm text-red-100 shadow-2xl">
@@ -1949,7 +2539,7 @@ export function App() {
                 </div>
               </div>
             ) : inputRequest ? (
-              <form onSubmit={handleSubmit} className="rounded-2xl border border-amber-200/30 bg-stone-950/95 p-4 text-stone-100 shadow-2xl backdrop-blur-md">
+              <form onSubmit={handleSubmit} className="w-full rounded-2xl border border-amber-200/30 bg-stone-950/95 p-4 text-stone-100 shadow-2xl backdrop-blur-md lg:mx-auto lg:w-[70%]">
                 <div className="flex items-start gap-3">
                   <UserAvatarArtwork avatarId={userAvatarId} className="h-11 w-11 shrink-0 rounded-xl" />
                   <div className="min-w-0 flex-1">
@@ -1970,10 +2560,10 @@ export function App() {
                   value={inputText}
                   onChange={(event) => setInputText(event.target.value)}
                   placeholder={copy.placeholder}
-                  className="mt-3 h-20 w-full resize-none rounded-xl border border-white/15 bg-black/25 p-3 text-sm leading-6 text-white outline-none placeholder:text-stone-600 focus:border-amber-300"
+                  className="mt-3 h-20 w-full resize-none rounded-xl border border-white/15 bg-black/25 p-3 text-base leading-7 text-white outline-none placeholder:text-stone-600 focus:border-amber-300"
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  <p className="hidden text-[10px] text-stone-500 sm:block">{copy.manualHint}</p>
+                  <p className="hidden text-[10px] text-stone-500 sm:block">{copy.submitHint}</p>
                   <div className="ml-auto flex gap-2">
                     <button type="button" onClick={() => submitUserInput("")} className="rounded-lg px-4 py-2 text-sm font-semibold text-stone-400 hover:bg-white/10">{copy.pass}</button>
                     <button type="submit" disabled={!inputText.trim()} className="rounded-lg bg-amber-300 px-5 py-2 text-sm font-bold text-amber-950 disabled:cursor-not-allowed disabled:opacity-40">{copy.share}</button>

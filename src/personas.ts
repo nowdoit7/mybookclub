@@ -1,4 +1,25 @@
 import type { Category, PersonaCard, ShelfBook } from "./types";
+import { ADAM_SMITH } from "./personas/adamSmith";
+import { BLAISE_PASCAL } from "./personas/blaisePascal";
+import { CARL_JUNG } from "./personas/carlJung";
+import { CHARLES_DARWIN } from "./personas/charlesDarwin";
+import { HANS_CHRISTIAN_ANDERSEN } from "./personas/hansChristianAndersen";
+import { HOMER } from "./personas/homer";
+import { IBN_KHALDUN } from "./personas/ibnKhaldun";
+import { ISAAC_NEWTON } from "./personas/isaacNewton";
+import { JANE_AUSTEN } from "./personas/janeAusten";
+import { MACHIAVELLI } from "./personas/machiavelli";
+import { MARY_SHELLEY } from "./personas/maryShelley";
+import { MURASAKI_SHIKIBU } from "./personas/murasakiShikibu";
+import { OCTAVIA_BUTLER } from "./personas/octaviaButler";
+import { PLUTARCH } from "./personas/plutarch";
+import { RABINDRANATH_TAGORE } from "./personas/rabindranathTagore";
+import { SAPPHO } from "./personas/sappho";
+import { SHERLOCK_HOLMES } from "./personas/sherlockHolmes";
+import { SOCRATES } from "./personas/socrates";
+import { SOR_JUANA } from "./personas/sorJuana";
+import { TONI_MORRISON } from "./personas/toniMorrison";
+import { WILLIAM_SHAKESPEARE } from "./personas/williamShakespeare";
 
 const shelf = (title: string, author: string, takeaway: string): ShelfBook => ({
   title,
@@ -201,6 +222,39 @@ export const PERSONAS: PersonaCard[] = [
   },
 ];
 
+export const GUEST_PERSONAS = [
+  BLAISE_PASCAL,
+  ISAAC_NEWTON,
+  ADAM_SMITH,
+  CHARLES_DARWIN,
+  HOMER,
+  SHERLOCK_HOLMES,
+  SAPPHO,
+  MARY_SHELLEY,
+  MACHIAVELLI,
+  SOCRATES,
+  CARL_JUNG,
+  PLUTARCH,
+  JANE_AUSTEN,
+  WILLIAM_SHAKESPEARE,
+  HANS_CHRISTIAN_ANDERSEN,
+  OCTAVIA_BUTLER,
+  TONI_MORRISON,
+  MURASAKI_SHIKIBU,
+  SOR_JUANA,
+  IBN_KHALDUN,
+  RABINDRANATH_TAGORE,
+] as const;
+export type ImaginedGuestId = (typeof GUEST_PERSONAS)[number]["id"];
+
+export function isImaginedGuestId(id: string): id is ImaginedGuestId {
+  return GUEST_PERSONAS.some((persona) => persona.id === id);
+}
+
+export function findPersona(id: string): PersonaCard | undefined {
+  return [...PERSONAS, ...GUEST_PERSONAS].find((persona) => persona.id === id);
+}
+
 const PORTRAIT_URLS: Record<string, string> = {
   moderator: "/portraits/alex.webp",
   maddie: "/portraits/maddie.webp",
@@ -211,6 +265,27 @@ const PORTRAIT_URLS: Record<string, string> = {
   sarah: "/portraits/sarah.webp",
   dev: "/portraits/dev.webp",
   jamal: "/portraits/jamal.webp",
+  "blaise-pascal": "/portraits/blaise-pascal.webp",
+  "isaac-newton": "/portraits/isaac-newton.webp",
+  "adam-smith": "/portraits/adam-smith.webp",
+  "charles-darwin": "/portraits/charles-darwin.webp",
+  homer: "/portraits/homer.webp",
+  "sherlock-holmes": "/portraits/sherlock-holmes.webp",
+  sappho: "/portraits/sappho.webp",
+  "mary-shelley": "/portraits/mary-shelley.webp",
+  machiavelli: "/portraits/machiavelli.webp",
+  socrates: "/portraits/socrates.webp",
+  "carl-jung": "/portraits/carl-jung.webp",
+  plutarch: "/portraits/plutarch.webp",
+  "jane-austen": "/portraits/jane-austen.webp",
+  "william-shakespeare": "/portraits/william-shakespeare.webp",
+  "hans-christian-andersen": "/portraits/hans-christian-andersen.webp",
+  "octavia-butler": "/portraits/octavia-butler.webp",
+  "toni-morrison": "/portraits/toni-morrison.webp",
+  "murasaki-shikibu": "/portraits/murasaki-shikibu.webp",
+  "sor-juana-ines-de-la-cruz": "/portraits/sor-juana-ines-de-la-cruz.webp",
+  "ibn-khaldun": "/portraits/ibn-khaldun.webp",
+  "rabindranath-tagore": "/portraits/rabindranath-tagore.webp",
 };
 
 export function portraitUrlFor(speaker: string): string | undefined {
@@ -231,14 +306,20 @@ function pickBySeed(category: Category, seed: string): PersonaCard {
   return candidates[hashSeed(`${seed}:${category}`) % candidates.length];
 }
 
-export function selectPersonas(seed: string = crypto.randomUUID()): PersonaCard[] {
-  if (seed === "demo") {
-    return ["maddie", "marcus", "dev"].map(
+export function selectPersonas(
+  seed: string = crypto.randomUUID(),
+  imaginedGuestId?: ImaginedGuestId,
+): PersonaCard[] {
+  const regularPersonas = seed === "demo"
+    ? ["maddie", "marcus", "dev"].map(
       (id) => PERSONAS.find((persona) => persona.id === id)!,
-    );
-  }
+    )
+    : (["emotional", "analytical", "contextual"] as const).map((category) =>
+        pickBySeed(category, seed),
+      );
 
-  return (["emotional", "analytical", "contextual"] as const).map((category) =>
-    pickBySeed(category, seed),
-  );
+  if (!imaginedGuestId) return regularPersonas;
+  const guest = GUEST_PERSONAS.find((persona) => persona.id === imaginedGuestId);
+  if (!guest) return regularPersonas;
+  return regularPersonas.map((persona) => (persona.category === guest.category ? guest : persona));
 }

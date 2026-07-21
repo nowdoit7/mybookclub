@@ -15,7 +15,7 @@ import {
   IncompleteGenerationError,
   InvalidStructuredOutputError,
 } from "../api/errors";
-import { selectPersonas } from "../personas";
+import { isImaginedGuestId, selectPersonas } from "../personas";
 import { localizedSpeakerName } from "../localization";
 import type {
   CompletedSession,
@@ -60,6 +60,7 @@ export interface RunSessionOptions {
   scope?: "single_book" | "series";
   confirmedBook?: ConfirmedBook;
   seed?: string;
+  personas?: PersonaCard[];
   userInputs?: Partial<ScriptedUserInputs>;
   onUtterance?: (utterance: Utterance) => void;
   onAtmosphereChange?: (atmosphere: RoomAtmosphere) => void;
@@ -140,6 +141,13 @@ type GenerationOptions = Partial<
 > & { allowShelfReference?: boolean };
 
 const MAX_DISCUSSION_EXTENSIONS = 2;
+const MAX_CONCURRENT_READING_NOTES = 2;
+const TRANSIENT_READING_NOTE_CODES = new Set([
+  "network_error",
+  "openai_connection_failed",
+  "openai_rate_limited",
+  "openai_unavailable",
+]);
 
 function sceneTokens(value: string): Set<string> {
   return new Set(
@@ -240,6 +248,45 @@ interface PreparedUtterance {
   shelfKey: string;
 }
 
+function createTaskLimiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
+  let activeCount = 0;
+  const pending: Array<() => void> = [];
+
+  const startNext = () => {
+    if (activeCount >= limit) return;
+    pending.shift()?.();
+  };
+
+  return <T>(task: () => Promise<T>) =>
+    new Promise<T>((resolve, reject) => {
+      const start = () => {
+        activeCount += 1;
+        void task()
+          .then(resolve, reject)
+          .finally(() => {
+            activeCount -= 1;
+            startNext();
+          });
+      };
+
+      if (activeCount < limit) start();
+      else pending.push(start);
+    });
+}
+
+function errorField(error: unknown, key: string): unknown {
+  return typeof error === "object" && error !== null ? Reflect.get(error, key) : undefined;
+}
+
+function isTransientReadingNotesError(error: unknown): boolean {
+  const code = errorField(error, "code");
+  const status = errorField(error, "status");
+  return (
+    (typeof code === "string" && TRANSIENT_READING_NOTE_CODES.has(code)) ||
+    (typeof status === "number" && [429, 502, 503, 504].includes(status))
+  );
+}
+
 function isRetryableReadingNotesError(error: unknown): boolean {
   if (
     error instanceof IncompleteGenerationError ||
@@ -247,8 +294,12 @@ function isRetryableReadingNotesError(error: unknown): boolean {
   ) {
     return true;
   }
-  if (typeof error !== "object" || error === null || !("code" in error)) return false;
-  return error.code === "incomplete_output" || error.code === "invalid_structured_output";
+  const code = errorField(error, "code");
+  return (
+    code === "incomplete_output" ||
+    code === "invalid_structured_output" ||
+    isTransientReadingNotesError(error)
+  );
 }
 
 export class SessionEngine {
@@ -301,7 +352,17 @@ export class SessionEngine {
       });
       book = toConfirmedBook(identified);
     }
-    const personas = selectPersonas(seed);
+    const personas = options.personas ?? selectPersonas(seed);
+    const categories = personas.map(({ category }) => category);
+    if (
+      personas.length !== 3 ||
+      new Set(personas.map(({ id }) => id)).size !== 3 ||
+      !(["emotional", "analytical", "contextual"] as const).every((category) =>
+        categories.includes(category),
+      )
+    ) {
+      throw new Error("A session requires three unique personas, one from each category.");
+    }
 
     this.state = {
       language: this.language,
@@ -320,9 +381,10 @@ export class SessionEngine {
 
     this.onStatus?.("Generating private reading notes in parallel");
     let readyNoteCount = 0;
+    const limitReadingNotes = createTaskLimiter(MAX_CONCURRENT_READING_NOTES);
     const notePromises = new Map(
       personas.map((persona) => {
-        const promise = this.generateNotes(persona).then((notes) => {
+        const promise = limitReadingNotes(() => this.generateNotes(persona)).then((notes) => {
           readyNoteCount += 1;
           this.onStatus?.(`Reading notes ready: ${readyNoteCount}/${personas.length}`);
           return notes;
@@ -367,9 +429,13 @@ export class SessionEngine {
         validationError = issues.join("; ");
         lastError = undefined;
       } catch (error) {
-        if (!isRetryableReadingNotesError(error) || attempt === 2) throw error;
+        const isTransient = isTransientReadingNotesError(error);
+        const finalAttempt = isTransient ? attempt === 1 : attempt === 2;
+        if (!isRetryableReadingNotesError(error) || finalAttempt) throw error;
         lastError = error;
-        this.onStatus?.(`Retrying reading notes: ${persona.name} (${attempt + 1}/2)`);
+        this.onStatus?.(
+          `Retrying reading notes: ${persona.name} (${attempt + 1}/${isTransient ? 1 : 2})`,
+        );
       }
     }
     if (lastError) throw lastError;
@@ -453,7 +519,7 @@ export class SessionEngine {
     const ko = this.language === "ko";
     const targetsUser = (options.targetSpeaker ?? "user") === "user";
     const target = localizedSpeakerName(options.targetSpeaker ?? "user", this.language);
-    const targetLabel = ko && targetsUser ? "사용자" : target;
+    const targetLabel = target;
     const topic = options.activeTopic ?? this.state.activeTopic ?? this.state.book.candidateTopics[0];
     if (speaker === "moderator") {
       const moderatorLines: Partial<Record<UtteranceTask, string>> = ko
@@ -470,7 +536,7 @@ export class SessionEngine {
             DISCUSSION_SUMMARY: "오늘은 같은 책의 근거가 서로 다른 판단으로 이어지는 지점을 살폈습니다. 함께 이야기해 주셔서 고맙습니다. 남은 이견과 생각의 움직임을 이제 모임 기록에 담겠습니다.",
           }
         : {
-            WELCOME: "Welcome to The Reading Table. Before discussing the book, let us first meet the people sharing the table tonight.",
+            WELCOME: "Welcome to Open Reading Club. Before discussing the book, let us first meet the people sharing the table tonight.",
             INVITE_USER: "Now it is your turn. Introduce yourself through your work, your current reading life, or any small detail you would like to share.",
             FIRST_IMPRESSIONS_OPEN: "Now we can open the book. Save the specific scenes for a moment and begin with the overall impression that remained when you finished.",
             SCENES_OPEN: "Those first impressions already point in different directions. Now choose one concrete scene that produced yours.",
@@ -494,13 +560,17 @@ export class SessionEngine {
     const lens = ko ? speaker.roleLabel.ko : speaker.roleLabel.en;
     let utterance: string;
     if (task === "PERSONA_INTRODUCTION") {
-      utterance = ko
-        ? `안녕하세요, ${localizedSpeakerName(speaker.id, this.language)}이고 ${speaker.roleLabel.ko}로 지내고 있어요. ${speaker.socialIntroSeed.ko}`
-        : `Hi, I'm ${speaker.name}. My day job is ${speaker.roleLabel.en.toLowerCase()}. ${speaker.socialIntroSeed.en}`;
+      utterance = isImaginedGuestId(speaker.id)
+        ? ko
+          ? `오늘은 ${localizedSpeakerName(speaker.id, this.language)}의 기록된 사고방식을 빌린 상상 속 독자로 함께합니다. ${speaker.socialIntroSeed.ko}`
+          : `Tonight I join as an imagined reader shaped by ${speaker.name}'s documented ideas. ${speaker.socialIntroSeed.en}`
+        : ko
+          ? `안녕하세요, ${localizedSpeakerName(speaker.id, this.language)}이고 ${speaker.roleLabel.ko}로 지내고 있어요. ${speaker.socialIntroSeed.ko}`
+          : `Hi, I'm ${speaker.name}. My day job is ${speaker.roleLabel.en.toLowerCase()}. ${speaker.socialIntroSeed.en}`;
     } else if (task === "CHALLENGE_USER") {
       utterance = ko
-        ? `저는 ${lens}의 눈으로 보면 그 결론을 그대로 받아들이기 어렵습니다. ${targetLabel}님이 든 근거는 가장 강한 반대 사례까지 설명할 수 있나요?`
-        : `From my perspective as a ${lens.toLowerCase()}, I cannot accept that conclusion as it stands. Can ${targetsUser ? "your evidence" : `${target}'s evidence`} also explain the strongest counterexample?`;
+        ? "그 결론을 그대로 받아들이기는 어렵습니다. 지금 든 근거가 가장 강한 반대 사례까지도 설명할 수 있을까요?"
+        : "I cannot accept that conclusion as it stands. Can your evidence also explain the strongest counterexample?";
     } else if (task === "CLOSING_REFLECTION") {
       utterance = ko
         ? `${lens}인 저는 오늘 대화에서 처음보다 더 어려운 질문 하나를 가져가게 됐습니다. 서로 다른 독자들과 이 책을 이야기해서 즐거웠어요.`
@@ -515,16 +585,17 @@ export class SessionEngine {
         : `I want to return to the scene that most unsettled my usual lens. It refused to give even a ${lens.toLowerCase()} an easy conclusion.`;
     } else if (task === "SUPPORT_USER") {
       utterance = ko
-        ? `${targetLabel}님, 사용자의 구분은 다른 근거도 설명할 여지가 있다고 봅니다. 다만 중요한 예외까지 지워 버리면 그 해석도 너무 넓어집니다.`
-        : `${target}, I think the user's distinction can account for other evidence as well. Its limit is that it becomes too broad if it erases an important exception.`;
+        ? `${targetLabel}님, 방금 나온 구분은 다른 근거도 설명할 여지가 있다고 봅니다. 다만 중요한 예외까지 지워 버리면 그 해석도 너무 넓어집니다.`
+        : `${target}, I think the distinction just offered can account for other evidence as well. Its limit is that it becomes too broad if it erases an important exception.`;
     } else if (task === "REACT_TO_USER_SCENE") {
       utterance = ko
-        ? `그 장면은 사용자가 짚은 의미만큼이나 다른 결과도 남깁니다. 저는 ${lens}의 관점에서 그 선택이 무엇을 지키고 무엇을 끝내 설명하지 못하는지 더 보고 싶어요.`
-        : `That scene leaves another consequence beside the meaning you identified. From my perspective as a ${lens.toLowerCase()}, I want to ask what the choice protects and what it still cannot explain.`;
+        ? "방금 짚은 장면은 그 선택의 의미뿐 아니라 뒤에 남은 대가도 함께 보게 합니다. 한쪽만 강조할 때 사라지는 것이 무엇인지 조금 더 붙잡고 싶어요."
+        : "The scene just raised makes me consider both the meaning of the choice and the cost left behind. I want to hold onto what disappears when we emphasize only one side.";
     } else if (task === "OPEN_PERSONA_POSITION") {
+      const stance = getTopicStance(this.state.notes[speaker.id], topic);
       utterance = ko
-        ? `${targetLabel}님, 저는 ${lens}의 관점에서 이 질문을 판단할 때 결과를 먼저 봐야 한다고 생각합니다. 같은 장면을 두고도 우리가 어디에서 갈리는지 분명히 해보고 싶어요.`
-        : `${target}, from my perspective as a ${lens.toLowerCase()}, the consequences should carry the most weight here. I want to make clear where the same evidence leads us apart.`;
+        ? `${targetLabel}님, 저는 이 질문에 ${stance >= 0.5 ? "대체로 그렇다고" : stance <= -0.5 ? "대체로 그렇지 않다고" : "한쪽으로 단정하기 어렵다고"} 봅니다. 같은 근거가 왜 서로 다른 판단으로 이어지는지 직접 나눠 보고 싶어요.`
+        : `${target}, I ${stance >= 0.5 ? "mostly agree with the proposition" : stance <= -0.5 ? "mostly reject the proposition" : "do not think the proposition supports one clean answer"}. I want to make clear why the same evidence leads us apart.`;
     } else if (task === "CHALLENGE_PERSONA") {
       utterance = ko
         ? `${targetLabel}님, 그 결론은 장면이 남긴 반대 증거를 충분히 설명하지 못합니다. 같은 근거가 다른 결과를 낳는 부분은 어떻게 보시나요?`
@@ -535,11 +606,11 @@ export class SessionEngine {
         : `${target}, I grant the limit you identified, but it does not overturn my judgment. We still disagree about which consequence of the same scene should carry more weight.`;
     } else if (task === "RESPOND_TO_USER_REPLY") {
       utterance = ko
-        ? `사용자의 답변으로 구분하려는 지점은 더 분명해졌습니다. 그래도 그 구분이 설명하지 못하는 결과가 남아 있어 제 반론은 완전히 풀리지 않았어요.`
+        ? "방금 답변으로 구분하려는 지점은 더 분명해졌습니다. 그래도 그 구분이 설명하지 못하는 결과가 남아 있어 제 반론은 완전히 풀리지 않았어요."
         : `Your answer makes the distinction clearer. My objection is not fully resolved because one consequence still falls outside that distinction.`;
     } else {
       utterance = ko
-        ? `${targetLabel}님이 짚은 부분은 이해하지만 제 판단은 아직 다릅니다. 같은 대목에서 생긴 이 차이를 조금 더 구체적으로 따져보고 싶어요.`
+        ? `${targetsUser ? "짚어 주신 부분" : `${targetLabel}님이 짚은 부분`}은 이해하지만 제 판단은 아직 다릅니다. 같은 대목에서 생긴 이 차이를 조금 더 구체적으로 따져보고 싶어요.`
         : `I understand ${targetsUser ? "your point" : `${target}'s point`}, but my judgment still differs. I want to test that difference more precisely against the same part of the book.`;
     }
     return {
@@ -699,7 +770,9 @@ export class SessionEngine {
         userArgument: {
           stance: 0,
           paraphrase:
-            this.language === "ko" ? "사용자가 첫 입장을 건너뛰었습니다." : "The user passed the first position turn.",
+            this.language === "ko"
+              ? "이번 차례에는 입장이 제시되지 않았습니다."
+              : "No position was offered in this turn.",
         },
       });
       return "moderator";
@@ -875,8 +948,8 @@ export class SessionEngine {
         stance: 0,
         paraphrase:
           this.language === "ko"
-            ? "사용자가 이 질문에 대한 입장을 건너뛰었습니다."
-            : "The user passed the position turn for this question.",
+            ? "이번 질문에는 입장이 제시되지 않았습니다."
+            : "No position was offered for this question.",
       };
       await this.appendGenerated(challenger, "RESPOND_TO_USER_REPLY", {
         activeTopic: topic,

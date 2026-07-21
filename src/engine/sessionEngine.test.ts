@@ -4,7 +4,7 @@ import { MockGenerationClient } from "../api/mockGenerationClient";
 import { IncompleteGenerationError } from "../api/errors";
 import { countSentences } from "./sentenceValidation";
 import { SessionEngine } from "./sessionEngine";
-import { PERSONAS } from "../personas";
+import { GUEST_PERSONAS, PERSONAS, selectPersonas } from "../personas";
 
 describe("SessionEngine", () => {
   it("completes the five-stage deterministic demo session", async () => {
@@ -44,6 +44,34 @@ describe("SessionEngine", () => {
     );
     expect(topicOpening?.text).toContain(result.state.activeTopic);
     expect(topicOpening?.text).toContain("earlier conversation");
+  });
+
+  it("uses an explicitly selected three-reader roster", async () => {
+    const personas = selectPersonas("demo", GUEST_PERSONAS[0].id);
+    const result = await new SessionEngine(new MockGenerationClient()).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+      personas,
+    });
+
+    expect(result.state.personas.map(({ id }) => id)).toEqual(personas.map(({ id }) => id));
+    expect(result.state.transcript.some(({ speaker }) => speaker === GUEST_PERSONAS[0].id)).toBe(true);
+    expect(
+      result.state.transcript.find(
+        ({ speaker, stage }) => speaker === GUEST_PERSONAS[0].id && stage === "INTRO",
+      )?.text,
+    ).toContain("imagined guest");
+  });
+
+  it("rejects an injected roster that breaks the three-category invariant", async () => {
+    const personas = selectPersonas("demo");
+
+    await expect(
+      new SessionEngine(new MockGenerationClient()).run({
+        title: "A Reader-Selected Book",
+        personas: [personas[0], personas[1], PERSONAS.find(({ id }) => id === "eleanor")!],
+      }),
+    ).rejects.toThrow("three unique personas, one from each category");
   });
 
   it("enforces speaker length and per-stage shelf budgets", async () => {
@@ -327,7 +355,7 @@ describe("SessionEngine", () => {
     );
   });
 
-  it("prefetches social introductions while private notes are still running", async () => {
+  it("prefetches introductions while limiting private-note generation to two calls", async () => {
     const client = new MockGenerationClient();
     const originalGenerateNotes = client.generateReadingNotes.bind(client);
     const originalGenerateUtterance = client.generateUtterance.bind(client);
@@ -343,13 +371,21 @@ describe("SessionEngine", () => {
       ]),
     );
     let noteCallsStarted = 0;
+    let activeNoteCalls = 0;
+    let maxActiveNoteCalls = 0;
     let welcomeGenerationStarted = false;
     const introductionsStarted: string[] = [];
 
     client.generateReadingNotes = async (input) => {
       noteCallsStarted += 1;
-      await noteGates.get(input.persona.id);
-      return originalGenerateNotes(input);
+      activeNoteCalls += 1;
+      maxActiveNoteCalls = Math.max(maxActiveNoteCalls, activeNoteCalls);
+      try {
+        await noteGates.get(input.persona.id);
+        return originalGenerateNotes(input);
+      } finally {
+        activeNoteCalls -= 1;
+      }
     };
     client.generateUtterance = async (input) => {
       if (input.task === "WELCOME") welcomeGenerationStarted = true;
@@ -368,7 +404,7 @@ describe("SessionEngine", () => {
     });
 
     await vi.waitFor(() => {
-      expect(noteCallsStarted).toBe(3);
+      expect(noteCallsStarted).toBe(2);
       expect(welcomeGenerationStarted).toBe(true);
     });
 
@@ -376,9 +412,11 @@ describe("SessionEngine", () => {
 
     releaseWelcome();
     noteResolvers.get("maddie")?.();
+    await vi.waitFor(() => expect(noteCallsStarted).toBe(3));
     noteResolvers.get("marcus")?.();
     noteResolvers.get("dev")?.();
     await expect(run).resolves.toMatchObject({ state: { stage: "WRAP_UP" } });
+    expect(maxActiveNoteCalls).toBe(2);
   });
 
   it("retries only an incomplete persona note and preserves the other results", async () => {
@@ -400,6 +438,26 @@ describe("SessionEngine", () => {
     ).resolves.toMatchObject({
       state: { stage: "WRAP_UP" },
     });
+    expect(Object.fromEntries(calls)).toEqual({ maddie: 1, marcus: 2, dev: 1 });
+  });
+
+  it("retries a transient reading-note connection failure once", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateNotes = client.generateReadingNotes.bind(client);
+    const calls = new Map<string, number>();
+
+    client.generateReadingNotes = async (input) => {
+      const count = (calls.get(input.persona.id) ?? 0) + 1;
+      calls.set(input.persona.id, count);
+      if (input.persona.id === "marcus" && count === 1) {
+        throw { code: "openai_connection_failed", status: 502 };
+      }
+      return originalGenerateNotes(input);
+    };
+
+    await expect(
+      new SessionEngine(client).run({ title: "A Reader-Selected Book", seed: "demo" }),
+    ).resolves.toMatchObject({ state: { stage: "WRAP_UP" } });
     expect(Object.fromEntries(calls)).toEqual({ maddie: 1, marcus: 2, dev: 1 });
   });
 
@@ -509,7 +567,10 @@ describe("SessionEngine", () => {
 
     expect(new Set(introductions.map(({ text }) => text)).size).toBe(3);
     expect(introductions.map(({ text }) => text).join(" ")).toMatch(/북톡|형사 변호사|소프트웨어 엔지니어/u);
-    expect(state.transcript.map(({ text }) => text).join(" ")).not.toContain("PRIVATE_SENTINEL");
+    const fallbackDialogue = state.transcript.map(({ text }) => text).join(" ");
+    expect(fallbackDialogue).not.toContain("PRIVATE_SENTINEL");
+    expect(fallbackDialogue).not.toContain("사용자");
+    expect(fallbackDialogue).not.toContain("관점에서");
     const closings = state.transcript.filter(
       ({ stage, speaker }) => stage === "WRAP_UP" && !["moderator", "user"].includes(speaker),
     );

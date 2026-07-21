@@ -20,6 +20,7 @@ import type {
   UtteranceRequest,
 } from "./generationClient";
 import { localizedSpeakerName, STAGE_LABELS } from "../localization";
+import { isImaginedGuestId } from "../personas";
 import type { AppLanguage, Category, PersonaCard, Utterance } from "../types";
 
 const stanceProfiles: Record<string, [number, number, number]> = {
@@ -123,13 +124,13 @@ function makeNotes(input: ReadingNotesRequest): ReadingNotesOutput {
     })),
     key_scenes: isKorean
       ? [
-          "사용자가 첫인상을 설명하며 직접 언급하는 대목.",
-          "사용자가 가장 오래 남았다고 선택하는 장면 또는 구절.",
+          "첫인상을 설명하며 직접 언급한 대목.",
+          "가장 오래 남았다고 고른 장면 또는 구절.",
           "본 토론에서 서로 다른 해석이 같은 근거를 두고 갈리는 순간.",
         ]
       : [
-          "The moment the user identifies while explaining a first impression.",
-          "The scene or passage the user chooses as the one that stayed longest.",
+          "The moment identified while explaining a first impression.",
+          "The scene or passage chosen as the one that stayed longest.",
           "The point where different readings divide over the same evidence.",
         ],
     shelf_connections: [],
@@ -150,6 +151,23 @@ function makeNotes(input: ReadingNotesRequest): ReadingNotesOutput {
 
 function personaIntroduction(persona: PersonaCard, language: AppLanguage): string {
   const name = readerName(persona, language);
+  if (isImaginedGuestId(persona.id) && persona.imaginedGuest) {
+    const guestGrounding =
+      persona.imaginedGuest.kind === "literary"
+        ? language === "ko"
+          ? "원작의 특징을 바탕으로 재구성된 문학 게스트"
+          : "an imagined literary guest grounded in the original character"
+        : persona.imaginedGuest.kind === "legendary"
+          ? language === "ko"
+            ? "전승과 작품을 바탕으로 재구성된 상상 속 게스트"
+            : "an imagined guest grounded in an attributed literary tradition"
+          : language === "ko"
+            ? "기록으로 남은 생각을 바탕으로 재구성된 상상 속 게스트"
+            : "an imagined guest reconstructed from documented ideas";
+    return language === "ko"
+      ? `저는 ${guestGrounding} ${name}입니다. ${persona.socialIntroSeed.ko}`
+      : `I'm ${name}, ${guestGrounding}. ${persona.socialIntroSeed.en}`;
+  }
   return language === "ko"
     ? `안녕하세요, ${name}이고 ${persona.roleLabel.ko}로 지내고 있어요. ${persona.socialIntroSeed.ko}`
     : `Hi, I'm ${name}. My day job is ${persona.roleLabel.en.toLowerCase()}. ${persona.socialIntroSeed.en}`;
@@ -188,7 +206,6 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
   const persona = input.speaker === "moderator" ? undefined : input.speaker;
   if (!persona) throw new Error("A persona is required for a persona mock utterance.");
   const isKorean = input.language === "ko";
-  const name = readerName(persona, input.language);
   const targetName = input.targetSpeaker
     ? localizedSpeakerName(input.targetSpeaker, input.language)
     : isKorean
@@ -201,7 +218,7 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
   const reason = categoryLens[input.language][persona.category];
   const userMoment = excerpt(
     lastUserTurn(input),
-    isKorean ? "사용자가 고른 대목" : "the moment the user selected",
+    isKorean ? "방금 고른 대목" : "the chosen moment",
     120,
   ).replace(/[.!?。？！]+$/gu, "");
   const shelfRef = input.allowShelfReference ? persona.bookshelf[0]?.title ?? null : null;
@@ -230,18 +247,18 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
     ? {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
         FIRST_IMPRESSION: input.notes?.overallTake,
-        OPEN_PERSONA_POSITION: `${moodLead} ${targetName}님, 저는 “${topic}”를 판단할 때 ${reason}을 가장 먼저 봐야 한다고 생각합니다.`,
+        OPEN_PERSONA_POSITION: `${moodLead} ${targetName}님, 저는 “${topic}”를 판단할 때 무엇보다 먼저 살필 것은 ${reason}이라고 생각합니다.`,
         CHALLENGE_PERSONA: `${targetName}님, 그 주장은 중요한 예외를 너무 빨리 정리합니다. 같은 근거가 반대 결론을 낳는 경우까지 어떻게 설명하시겠어요?`,
         RESPOND_TO_PERSONA: `${targetName}님이 짚은 예외는 인정하지만 제 결론까지 무너지지는 않습니다. 오히려 ${reason}을 얼마나 중요하게 볼 것인지가 아직 남은 차이입니다.`,
-        CHALLENGE_USER: `저는 “${topic}”라는 질문에서 그 결론을 조금 더 밀어보고 싶습니다. 사용자가 말한 근거가 가장 강한 반대 사례까지 설명할 수 있다고 보시나요?`,
+        CHALLENGE_USER: `저는 “${topic}”라는 질문에서 그 결론을 조금 더 밀어보고 싶습니다. 방금 말씀하신 근거가 가장 강한 반대 사례까지 설명할 수 있다고 보시나요?`,
         MEMORABLE_SCENE: sceneAnchor
-          ? `저는 “${sceneAnchor}” 장면에 머물겠습니다. ${reason}의 관점에서 그 순간이 무엇을 보여 주고 무엇을 끝내 남겨 두는지 생각해 보고 싶어요.`
+          ? `저는 “${sceneAnchor}”에 머물겠습니다. ${reason} 쪽에 무게를 두고, 그 순간이 무엇을 보여 주고 무엇을 끝내 남겨 두는지 생각해 보고 싶어요.`
           : shelfRef
-            ? `저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 제 책장에서는 『${shelfRef}』도 비슷한 질문을 던지지만, 지금은 사용자가 고른 장면이 무엇인지 먼저 듣겠습니다.`
-            : "저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 구체적인 장면은 제가 지어내지 않고, 사용자가 기억한 순간을 들은 뒤 제 관점을 보태겠습니다.",
-        REACT_TO_USER_SCENE: `사용자가 말한 “${userMoment}”을 기준으로 보니 ${name}에게는 앞선 질문이 훨씬 구체적으로 들립니다. 저는 ${categoryLens.ko[persona.category]}을 중심으로, 그 대목이 무엇을 보여 주고 무엇을 끝내 설명하지 않는지 함께 보겠습니다.`,
-        RESPOND_TO_USER_REPLY: `사용자의 답은 제가 문제 삼은 구분을 더 분명하게 해 줍니다. 그래도 ${reason}을 기준으로 보면 놓친 결과가 남아 있어, 이견이 완전히 풀리지는 않았어요.`,
-        SUPPORT_USER: `${targetName}님, 저는 ${categoryLens.ko[persona.category]}이라는 관점에서는 사용자의 구분이 작품의 다른 근거도 설명할 수 있다고 봅니다. 다만 그 해석이 모든 결과를 대신 설명한다고 넓혀 버리면 중요한 예외를 놓칠 수 있습니다.`,
+            ? `저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 제 책장에서는 『${shelfRef}』도 비슷한 질문을 던지지만, 지금은 어떤 장면이 오래 남았는지 먼저 듣겠습니다.`
+            : "저는 책의 중심 긴장이 가장 선명해지는 대목을 다시 보고 싶습니다. 구체적인 장면은 지어내지 않고, 여러분이 기억한 순간을 들은 뒤 제 관점을 보태겠습니다.",
+        REACT_TO_USER_SCENE: `방금 들은 “${userMoment}” 덕분에 앞선 질문이 훨씬 구체적으로 다가옵니다. 제 관심은 ${categoryLens.ko[persona.category]} 쪽에 있습니다. 그 대목이 무엇을 보여 주고 무엇을 끝내 설명하지 않는지 함께 보겠습니다.`,
+        RESPOND_TO_USER_REPLY: `그 답은 제가 문제 삼은 구분을 더 분명하게 해 줍니다. 그래도 ${reason} 쪽에 무게를 두면 놓친 결과가 남아 있어, 이견이 완전히 풀리지는 않았어요.`,
+        SUPPORT_USER: `${targetName}님, ${categoryLens.ko[persona.category]}에 비춰 보면 방금 나온 구분이 작품의 다른 근거도 설명할 수 있다고 봅니다. 다만 그 해석이 모든 결과를 대신 설명한다고 넓혀 버리면 중요한 예외를 놓칠 수 있습니다.`,
         CLOSING_REFLECTION: closingReflection(persona, input.language),
       }
     : {
@@ -254,11 +271,11 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
         MEMORABLE_SCENE: sceneAnchor
           ? `I want to stay with the scene “${sceneAnchor}.” Through ${reason}, I want to consider what that moment reveals and what it leaves unsettled.`
           : shelfRef
-            ? `I want to return to the passage where the book's central tension becomes clearest. ${shelfRef} asks a related question on my shelf, but I would rather hear the user's chosen moment before making a comparison.`
-            : "I want to return to the passage where the book's central tension becomes clearest. I will not invent a scene here; I would rather hear the moment the user actually remembers and respond to that evidence.",
-        REACT_TO_USER_SCENE: `The user's choice—${userMoment}—makes the earlier question more concrete for ${name}. Through ${categoryLens.en[persona.category]}, I want to examine both what that moment shows and what it leaves unexplained.`,
-        RESPOND_TO_USER_REPLY: `The user's answer clarifies the distinction I was testing. Some consequences remain unexplained when I focus on ${reason}, so the objection is not fully resolved.`,
-        SUPPORT_USER: `${targetName}, I think the user's distinction can explain different evidence through ${categoryLens.en[persona.category]}. Its limit is that it may erase an important exception if we let it stand in for every consequence.`,
+            ? `I want to return to the passage where the book's central tension becomes clearest. ${shelfRef} asks a related question on my shelf, but I would rather hear which moment stayed with you before making a comparison.`
+            : "I want to return to the passage where the book's central tension becomes clearest. I will not invent a scene here; I would rather hear the moment you actually remember and respond to that evidence.",
+        REACT_TO_USER_SCENE: `Hearing “${userMoment}” makes the earlier question much more concrete. Through ${categoryLens.en[persona.category]}, I want to examine both what that moment shows and what it leaves unexplained.`,
+        RESPOND_TO_USER_REPLY: `That answer clarifies the distinction I was testing. Some consequences remain unexplained when I focus on ${reason}, so the objection is not fully resolved.`,
+        SUPPORT_USER: `${targetName}, I think the distinction just raised can explain different evidence through ${categoryLens.en[persona.category]}. Its limit is that it may erase an important exception if we let it stand in for every consequence.`,
         CLOSING_REFLECTION: closingReflection(persona, input.language),
       };
   const utterance =
@@ -301,7 +318,7 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         DISCUSSION_SUMMARY: `오늘 테이블에서는 질문 “${stripTerminal(topic, "중심 질문")}”를 중심에 두고 서로 다른 판단의 근거를 비교했습니다. 각자의 생각을 솔직하게 들려주신 모든 분께 고맙습니다. 이제 무엇이 움직였고 무엇이 끝내 남았는지 모임 기록으로 확인하겠습니다.`,
       }
     : {
-        WELCOME: `Welcome to The Reading Table. We will discuss ${input.book.title} by ${input.book.author}, but first let us meet the people sitting with us tonight.`,
+        WELCOME: `Welcome to Open Reading Club. We will discuss ${input.book.title} by ${input.book.author}, but first let us meet the people sitting with us tonight.`,
         INVITE_USER: "Now it is your turn. Tell us a little about your work, everyday life, or what reading has looked like for you lately.",
         FIRST_IMPRESSIONS_OPEN: "Thank you for introducing yourself. Let us open the book, save the specific scenes for the next round, and begin with the overall feeling or question it left behind.",
         DEVILS_ADVOCATE: "Let me push from the other side for a moment. If everyone accepts this reading, what evidence are we choosing not to test?",
@@ -382,10 +399,10 @@ export class MockGenerationClient implements GenerationClient {
         evidence:
           input.language === "ko"
             ? topic === selected.topic
-              ? "사용자의 첫인상과 직접 고른 대목"
+              ? "함께 나눈 첫인상과 직접 고른 대목"
               : "앞선 대화와 간접적으로 연결된 질문"
             : topic === selected.topic
-              ? "the user's first impression and chosen moment"
+              ? "the first impression and chosen moment shared at the table"
               : "a question indirectly connected to the earlier conversation",
       })),
       emergent_question: null,

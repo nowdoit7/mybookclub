@@ -70,7 +70,7 @@ export function clearGenerationDiagnostics(): void {
 
 export function formatGenerationDiagnostics(): string {
   return [
-    "The Reading Table diagnostics",
+    "Open Reading Club diagnostics",
     `Generated: ${new Date().toISOString()}`,
     "Contains operational metadata only; request bodies, prompts, messages, and API keys are excluded.",
     "",

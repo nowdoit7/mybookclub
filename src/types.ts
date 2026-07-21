@@ -28,6 +28,15 @@ export interface ShelfBook {
   takeaway: string;
 }
 
+export type ImaginedGuestKind = "historical" | "legendary" | "literary";
+
+export interface ImaginedGuestProfile {
+  kind: ImaginedGuestKind;
+  documentedAchievement: Record<AppLanguage, string>;
+  signatureReadingMove: Record<AppLanguage, string>;
+  sourceUrls: string[];
+}
+
 export interface PersonaCard {
   id: string;
   name: string;
@@ -42,6 +51,7 @@ export interface PersonaCard {
   forbidden: string[];
   avatarColor: string;
   socialTemperament: SocialTemperament;
+  imaginedGuest?: ImaginedGuestProfile;
 }
 
 export interface ReadingNotes {

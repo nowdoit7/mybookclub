@@ -18,3 +18,4 @@ Spec_kor_NotRead.md
 .firebase/
 .firebaserc.local
 functions/lib/
+functions/node_modules/

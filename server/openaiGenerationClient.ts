@@ -30,6 +30,9 @@ import type {
   UtteranceRequest,
 } from "../src/api/generationClient";
 import { validateBookIdentificationQuality } from "../src/engine/qualityValidation";
+import { localizedSpeakerName } from "../src/localization";
+import { isImaginedGuestId } from "../src/personas";
+import type { PersonaCard } from "../src/types";
 
 const COPYRIGHT_RULE =
   "Discuss themes, scenes, and interpretations. Quote at most a short phrase and never reproduce passages.";
@@ -38,6 +41,40 @@ const languageRule = (language: "en" | "ko" | undefined) =>
   language === "ko"
     ? "Write all reader-facing content in natural Korean. Keep book and author names in the form most familiar to Korean readers."
     : "Write all reader-facing content in natural English.";
+
+const imaginedGuestRule = (persona: PersonaCard | undefined) => {
+  if (!persona?.imaginedGuest) return "";
+  const grounding =
+    persona.imaginedGuest.kind === "literary"
+      ? "an imagined adaptation of a literary character grounded in the supplied canonical traits, not any screen portrayal"
+      : persona.imaginedGuest.kind === "legendary"
+        ? "an imagined reader grounded in an attributed literary tradition whose biography and singular authorship may be uncertain"
+        : "an explicitly imagined reconstruction grounded in documented ideas";
+  return `This speaker is ${grounding}. Never present generated dialogue as a real quotation, claim this figure literally read or experienced the modern book, imitate archaic diction, or invoke fame as authority. The UI and social introduction already disclose that this is an imagined guest, so never break immersion by announcing that status again. Reason by analogy, remain a fallible reader, and allow other participants to challenge the guest.`;
+};
+
+export function guestSignatureMomentRule(input: UtteranceRequest): string {
+  if (input.speaker === "moderator" || !input.speaker.imaginedGuest) return "";
+  if (input.task === "FIRST_IMPRESSION") {
+    return "This is the guest's single signature moment for the entire session. In exactly one compact clause, embody one concrete element from documentedAchievement or signatureReadingMove as a distinction, image, question, or inference that sharpens the present interpretation. Perform the characteristic move instead of explaining it: never say 'my reading method', 'from my perspective', 'as someone who...', or an equivalent self-description. A named work or achievement is optional and should appear only when grammatically inseparable from the current claim. Do not recite a résumé, imitate a quotation, use fame as proof, become a history lecture, or announce that the guest is imaginary. Do not repeat this biographical or achievement link on later turns.";
+  }
+  return "The guest's signature achievement belongs only to the first-impression turn. Do not mention biography, famous works, achievements, or signature touchstones again on this turn; keep only the resulting habit of thought.";
+}
+
+export function personaPromptData(persona: PersonaCard, includeSignature: boolean) {
+  const { imaginedGuest, ...base } = persona;
+  if (!imaginedGuest) return base;
+  return {
+    ...base,
+    imaginedGuest: includeSignature
+      ? {
+          kind: imaginedGuest.kind,
+          documentedAchievement: imaginedGuest.documentedAchievement,
+          signatureReadingMove: imaginedGuest.signatureReadingMove,
+        }
+      : { kind: imaginedGuest.kind },
+  };
+}
 
 function roomAtmosphereRule(atmosphere: UtteranceRequest["roomAtmosphere"]): string {
   const warmth = atmosphere.warmth >= 0.65 ? "open and generous" : atmosphere.warmth < 0.4 ? "reserved" : "attentive";
@@ -67,7 +104,9 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "WELCOME":
       return "Welcome everyone, say that book discussion will begin after introductions, and invite the readers to meet one another. Do not preview interpretations.";
     case "PERSONA_INTRODUCTION":
-      return "Give a social introduction only. Say the name and broad life context, then weave in the persona card's socialIntroSeed as casual small talk rather than a résumé. Do not force a reading-habit formula, explain the persona lens, analyze the current book, or say why this particular book was chosen.";
+      return input.speaker !== "moderator" && isImaginedGuestId(input.speaker.id)
+        ? "Give a warm, natural social introduction. In one brief clause, identify the speaker as an imagined reader shaped by documented ideas, then naturally state the conversational question or habit in socialIntroSeed. Do not recite a disclaimer, claim literal presence, modern employment, memory of the book, or historical endorsement. Keep this social and do not analyze the current book."
+        : "Give a social introduction only. Say the name and broad life context, then weave in the persona card's socialIntroSeed as casual small talk rather than a résumé. Do not force a reading-habit formula, explain the persona lens, analyze the current book, or say why this particular book was chosen.";
     case "INVITE_USER":
       return "Invite the user to share who they are through work, everyday life, or their current relationship with reading. Keep this purely social: do not ask why they chose the current book, what they thought of it, or which scene stayed with them.";
     case "FIRST_IMPRESSIONS_OPEN":
@@ -169,12 +208,19 @@ export function extractWebSearchSources(response: unknown): Array<{ url: string 
   return urls.slice(0, 3).map((url) => ({ url }));
 }
 
+export function localizedRecapParticipants(
+  personas: RecapRequest["personas"],
+  language: RecapRequest["language"],
+): Array<{ id: string; name: string }> {
+  return personas.map(({ id }) => ({ id, name: localizedSpeakerName(id, language) }));
+}
+
 export class OpenAIGenerationClient implements GenerationClient {
   private readonly client: OpenAI;
 
   constructor(
     apiKey: string | undefined,
-    private readonly model = "gpt-5.6",
+    private readonly model = "gpt-5.6-terra",
   ) {
     if (!apiKey) {
       throw new MissingConfigurationError("OPENAI_API_KEY is not configured.");
@@ -278,10 +324,10 @@ export class OpenAIGenerationClient implements GenerationClient {
     return this.parse(
       readingNotesSchema,
       "private_reading_notes",
-      `You are ${input.persona.name}. Stay committed to the supplied persona card. These are private anchor notes, not dialogue. Build one contestable thesis from this persona's specific lens; do not collapse into a generic balanced verdict. Preserve every candidate topic verbatim and in order. overall_take must be 2-3 sentences. Include a genuine personal reaction, an unresolved doubt, evidence that could change your mind, and a question you actually want to ask another reader. These must differ from the thesis instead of restating it. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
+      `You are ${input.persona.name}. Stay committed to the supplied persona card. ${imaginedGuestRule(input.persona)} These are private anchor notes, not dialogue. Build one contestable thesis from this persona's specific lens; do not collapse into a generic balanced verdict. Preserve every candidate topic verbatim and in order. overall_take must be 2-3 sentences. Use any guest achievement metadata only to derive a distinctive way of thinking; do not put biography, fame, or a résumé into the notes. Include a genuine personal reaction, an unresolved doubt, evidence that could change your mind, and a question you actually want to ask another reader. These must differ from the thesis instead of restating it. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
       JSON.stringify({
         book: input.book,
-        persona: input.persona,
+        persona: personaPromptData(input.persona, true),
         repair: input.validationError ?? null,
       }),
       { reasoningEffort: "medium", maxOutputTokens: 2_800 },
@@ -304,6 +350,7 @@ export class OpenAIGenerationClient implements GenerationClient {
 
   async generateUtterance(input: UtteranceRequest) {
     const isModerator = input.speaker === "moderator";
+    const persona = input.speaker === "moderator" ? undefined : input.speaker;
     const lengthRule = isModerator
       ? "Use 1-3 sentences."
       : input.task === "PERSONA_INTRODUCTION"
@@ -312,6 +359,9 @@ export class OpenAIGenerationClient implements GenerationClient {
           ? "Use exactly 2 short sentences."
         : "Use 2-4 sentences.";
     const taskDirective = utteranceTaskDirective(input);
+    const referenceRule = input.targetSpeaker
+      ? `Set refers_to exactly to ${JSON.stringify(input.targetSpeaker)}.`
+      : "Set refers_to to null.";
     const testimonyRule =
       input.task === "FIRST_IMPRESSION" || input.task === "MEMORABLE_SCENE"
         ? "This is independent testimony. Do not react to recent participants or use their remarks as your opening."
@@ -325,12 +375,14 @@ export class OpenAIGenerationClient implements GenerationClient {
           : `You are ${
               input.speaker === "moderator" ? "Alex" : input.speaker.name
             }. Stay in character and anchored to your private notes.`
-      } ${lengthRule} ${taskDirective} ${languageRule(input.language)} ${roomAtmosphereRule(input.roomAtmosphere)} On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
+      } ${lengthRule} ${taskDirective} ${referenceRule} ${imaginedGuestRule(persona)} ${guestSignatureMomentRule(input)} ${languageRule(input.language)} ${roomAtmosphereRule(input.roomAtmosphere)} On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
         input.allowShelfReference ? "allowed once if illuminating" : "not allowed; shelf_ref must be null"
       }. ${COPYRIGHT_RULE}`,
       JSON.stringify({
         book: input.book,
-        persona: isModerator ? null : input.speaker,
+        persona: isModerator
+          ? null
+          : personaPromptData(input.speaker as PersonaCard, input.task === "FIRST_IMPRESSION"),
         private_notes: input.notes ?? null,
         stage: input.stage,
         task: input.task,
@@ -363,7 +415,7 @@ export class OpenAIGenerationClient implements GenerationClient {
         author: input.book.author,
         candidateTopics: input.book.candidateTopics,
       },
-      participants: input.personas.map(({ id, name }) => ({ id, name })),
+      participants: localizedRecapParticipants(input.personas, input.language),
       transcript: input.transcript,
       personaStances: input.personaStances,
       userStances: input.userStances,
@@ -376,7 +428,7 @@ export class OpenAIGenerationClient implements GenerationClient {
     return this.parse(
       recapSchema,
       "meeting_recap",
-      `${recapStructure} Keep the discussion summary to 3-5 sentences, the sparks section to at most 2 bullets, and the scenes section to at most 3 bullets. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, or private notes. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
+      `${recapStructure} Keep the discussion summary to 3-5 sentences, the sparks section to at most 2 bullets, and the scenes section to at most 3 bullets. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section and use the supplied participant names exactly in both the table and prose. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, or private notes. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
       JSON.stringify(safeInput),
       { reasoningEffort: "low", maxOutputTokens: 1_400 },
     );

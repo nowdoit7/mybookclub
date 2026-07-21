@@ -12,9 +12,13 @@
     "session:mock": "tsx scripts/session.mock.ts",
     "session:mock:ko": "tsx scripts/session.mock.ts --ko",
     "evaluate:mock": "tsx scripts/evaluate.mock.ts",
+    "evaluate:guests:live": "tsx scripts/evaluate.guests.live.ts",
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
     "build": "npm run typecheck && vite build",
+    "build:functions": "npm --prefix functions run build",
+    "typecheck:functions": "npm --prefix functions run typecheck",
+    "deploy:firebase": "npm run build && firebase deploy --only \"hosting:reading-table,functions:reading-table:readingTableApi\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview"

@@ -13,6 +13,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  window.history.replaceState({}, "", "/?mock=1");
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(
       JSON.stringify({
@@ -26,6 +27,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  window.history.replaceState({}, "", "/");
   cleanup();
   vi.restoreAllMocks();
 });
@@ -52,19 +54,18 @@ async function startMockBook(language: "ko" | "en", title: string, author: strin
 }
 
 describe("text prototype", () => {
-  it("offers live mode only after the server reports that it is ready", async () => {
+  it("uses live GPT generation publicly without exposing a mode selector", async () => {
+    window.history.replaceState({}, "", "/?live=1");
     render(<App />);
 
-    const liveMode = screen.getByRole("button", { name: /실제 GPT-5.6/u });
-    await waitFor(() => expect(liveMode).toBeEnabled());
-    expect(screen.getByText("서버의 gpt-5.6 연결 준비가 완료되었습니다.")).toBeVisible();
-
-    fireEvent.click(liveMode);
-    expect(screen.getByRole("button", { name: "실제 GPT-5.6 세션 시작" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /실제 GPT-5.6/u })).not.toBeInTheDocument();
+    expect(await screen.findByText("서버의 gpt-5.6 연결 준비가 완료되었습니다.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "도서 검증을 완료해야 시작할 수 있습니다" })).toBeDisabled();
     expect(screen.getByRole("textbox", { name: "책 제목" })).toBeVisible();
   });
 
   it("blocks an ambiguous live book and enables the session after sourced verification", async () => {
+    window.history.replaceState({}, "", "/?live=1");
     const fetchMock = vi.mocked(globalThis.fetch);
     fetchMock.mockReset();
     fetchMock
@@ -127,9 +128,7 @@ describe("text prototype", () => {
       );
 
     render(<App />);
-    const liveMode = screen.getByRole("button", { name: /실제 GPT-5.6/u });
-    await waitFor(() => expect(liveMode).toBeEnabled());
-    fireEvent.click(liveMode);
+    await screen.findByText("서버의 gpt-5.6 연결 준비가 완료되었습니다.");
     fireEvent.change(screen.getByRole("textbox", { name: "책 제목" }), {
       target: { value: "동일 제목의 책" },
     });
@@ -138,7 +137,7 @@ describe("text prototype", () => {
     expect(
       await screen.findByText(/동일하거나 유사한 책이 여러 권 발견됨/u),
     ).toBeVisible();
-    expect(screen.getByRole("button", { name: "네, 이 책이 맞습니다 — 모임 시작" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "도서 검증을 완료해야 시작할 수 있습니다" })).toBeDisabled();
 
     fireEvent.change(screen.getByRole("textbox", { name: "저자 (선택)" }), {
       target: { value: "확정 저자" },
@@ -155,6 +154,7 @@ describe("text prototype", () => {
   });
 
   it("verifies and displays every component title for a full series", async () => {
+    window.history.replaceState({}, "", "/?live=1");
     const fetchMock = vi.mocked(globalThis.fetch);
     fetchMock.mockReset();
     fetchMock
@@ -195,9 +195,7 @@ describe("text prototype", () => {
       );
 
     render(<App />);
-    const liveMode = screen.getByRole("button", { name: /실제 GPT-5.6/u });
-    await waitFor(() => expect(liveMode).toBeEnabled());
-    fireEvent.click(liveMode);
+    await screen.findByText("서버의 gpt-5.6 연결 준비가 완료되었습니다.");
     fireEvent.click(screen.getByRole("button", { name: /시리즈 전체/u }));
     fireEvent.change(screen.getByRole("textbox", { name: "시리즈 제목" }), {
       target: { value: "삼체" },
@@ -220,6 +218,140 @@ describe("text prototype", () => {
     );
   });
 
+  it("shows a visible verification status and locks the book fields while sources are checked", async () => {
+    window.history.replaceState({}, "", "/?live=1");
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockReset();
+    let finishVerification: ((response: Response) => void) | undefined;
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            liveGenerationAvailable: true,
+            model: "gpt-5.6",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockImplementationOnce(
+        () => new Promise<Response>((resolve) => {
+          finishVerification = resolve;
+        }),
+      );
+
+    render(<App />);
+    await screen.findByText("서버의 gpt-5.6 연결 준비가 완료되었습니다.");
+    const titleInput = screen.getByRole("textbox", { name: "책 제목" });
+    fireEvent.change(titleInput, { target: { value: "느린 검증" } });
+    fireEvent.click(screen.getByRole("button", { name: "웹에서 도서 검증하기" }));
+
+    const verificationStatus = screen.getByText(/보통 10~30초/u).closest('[role="status"]');
+    expect(verificationStatus).toHaveTextContent("웹에서 도서 정보를 검색하고 검증하고 있습니다");
+    expect(verificationStatus).toHaveTextContent("보통 10~30초");
+    expect(titleInput).toBeDisabled();
+    expect(screen.getByRole("button", { name: /한 권/u })).toBeDisabled();
+
+    finishVerification?.(
+      new Response(
+        JSON.stringify({
+          canonical_title: "느린 검증",
+          author: "검증 저자",
+          work_scope: "single_book",
+          included_titles: ["느린 검증"],
+          summary: "검증된 책의 충분히 긴 요약입니다. 작품은 한 인물의 선택을 중심에 둡니다. 관계의 변화가 갈등을 키웁니다. 독자는 서로 다른 증언을 비교하게 됩니다. 결말은 쉬운 답을 주지 않습니다.",
+          main_characters: ["주인공"],
+          candidate_topics: ["질문 하나", "질문 둘", "질문 셋"],
+          verification_status: "verified",
+          verification_note: "두 출처에서 확인했습니다.",
+          sources: [{ url: "https://one.example/book" }, { url: "https://two.example/book" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    expect(await screen.findByText(/도서 확인 완료/u)).toBeVisible();
+  });
+
+  it("offers a one-click scope correction when a series search finds only one book", async () => {
+    window.history.replaceState({}, "", "/?live=1");
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "ok", liveGenerationAvailable: true, model: "gpt-5.6" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            canonical_title: "코스모스",
+            author: "칼 세이건",
+            work_scope: "series",
+            included_titles: ["코스모스"],
+            summary: "검색 결과 한 권의 책만 확인되었습니다. 요청한 시리즈 구성은 확인되지 않았습니다. 책의 정보는 단권으로 다시 확인해야 합니다. 현재 결과로는 세션을 시작하지 않습니다.",
+            main_characters: ["독자"],
+            candidate_topics: ["질문 하나", "질문 둘", "질문 셋"],
+            verification_status: "ambiguous",
+            verification_note: "한 권만 발견되었습니다.",
+            sources: [{ url: "https://one.example/cosmos" }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            canonical_title: "코스모스",
+            author: "칼 세이건",
+            work_scope: "single_book",
+            included_titles: ["코스모스"],
+            summary: "검증된 단권은 우주 과학의 발견을 인간의 역사와 연결합니다. 여러 과학자의 탐구를 소개합니다. 독자에게 증거와 회의의 가치를 강조합니다. 우주적 관점에서 인간의 위치를 다시 묻습니다.",
+            main_characters: ["칼 세이건"],
+            candidate_topics: ["질문 하나", "질문 둘", "질문 셋"],
+            verification_status: "verified",
+            verification_note: "단권 도서로 확인했습니다.",
+            sources: [{ url: "https://one.example/cosmos" }, { url: "https://two.example/cosmos" }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+
+    render(<App />);
+    await screen.findByText("서버의 gpt-5.6 연결 준비가 완료되었습니다.");
+    fireEvent.click(screen.getByRole("button", { name: /시리즈 전체/u }));
+    fireEvent.change(screen.getByRole("textbox", { name: "시리즈 제목" }), {
+      target: { value: "코스모스" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "웹에서 시리즈 검증하기" }));
+
+    const retryButton = await screen.findByRole("button", { name: "이 제목을 한 권으로 다시 검증" });
+    fireEvent.click(retryButton);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(await screen.findByText(/도서 확인 완료/u)).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "책 제목" })).toHaveValue("코스모스");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/generate/book-identification",
+      expect.objectContaining({ body: expect.stringContaining('"scope":"single_book"') }),
+    );
+  });
+
+  it("shows regular and imagined-guest choices only after a book is identified", async () => {
+    render(<App />);
+    expect(screen.queryByRole("tab", { name: "일반 대화하기" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "책 제목" }), {
+      target: { value: "테스트 책" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "이 책 확인하기" }));
+
+    expect(await screen.findByRole("tab", { name: "일반 대화하기" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "상상 속 게스트 초대하기" }));
+    expect(screen.getAllByText("모임을 시작하기 전에 초대할 게스트 한 명을 선택해주세요.")[0]).toBeVisible();
+    expect(screen.getByRole("button", { name: "모임을 시작하기 전에 초대할 게스트 한 명을 선택해주세요." })).toBeDisabled();
+  });
+
   it("waits for the reader before opening the first line", async () => {
     const generateUtterance = MockGenerationClient.prototype.generateUtterance;
     let releaseWelcome: () => void = () => undefined;
@@ -239,7 +371,7 @@ describe("text prototype", () => {
     const dialogue = screen.getByRole("region", { name: "현재 대화" });
     expect(
       within(dialogue).getAllByText(
-        "알렉스의 다음 발언이 준비되어 있습니다. 준비되면 다음 사람을 눌러주세요.",
+        "알렉스의 다음 발언이 준비되었습니다.",
       ).length,
     ).toBeGreaterThan(0);
     expect(within(dialogue).getAllByRole("listitem")).toHaveLength(5);
@@ -248,7 +380,7 @@ describe("text prototype", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /테이블 입장/u }));
     expect(within(dialogue).getAllByText("알렉스의 발언을 준비하고 있습니다…").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /생각 중/u })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /준비 중/u })).toBeDisabled();
     releaseWelcome();
     expect(
       (await within(dialogue).findAllByText(/리딩 테이블에 오신 것을 환영합니다/u)).length,
@@ -273,7 +405,7 @@ describe("text prototype", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Enter the table/u }));
     const dialogue = screen.getByRole("region", { name: "Current dialogue" });
     await waitFor(() =>
-      expect(within(dialogue).getAllByText(/Welcome to The Reading Table/u).length).toBeGreaterThan(0),
+      expect(within(dialogue).getAllByText(/Welcome to Open Reading Club/u).length).toBeGreaterThan(0),
     );
     expect(screen.queryAllByRole("article")).toHaveLength(0);
     expect(within(dialogue).getAllByText("Alex").length).toBeGreaterThan(0);
@@ -281,7 +413,11 @@ describe("text prototype", () => {
     expect(screen.getByRole("region", { name: "Reading table" })).toBeVisible();
     expect(screen.getByText(/^Speaking$/u)).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: /Next speaker/u }));
+    fireEvent.click(within(dialogue).getByTestId("dialogue-box"));
+    expect(screen.getByRole("button", { name: "View transcript 1" })).toBeEnabled();
+    expect(within(dialogue).queryAllByText(/Hi, I'm/u)).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /Next line/u }));
     await waitFor(() =>
       expect(within(dialogue).getAllByText(/Hi, I'm/u).length).toBeGreaterThan(0),
     );
@@ -324,7 +460,9 @@ describe("text prototype", () => {
           screen.queryByRole("textbox") ??
           screen.queryByRole("button", { name: "내 의견 보태기" }) ??
           screen.queryByRole("button", { name: "토론 조금 더 이어보기" }) ??
-          screen.queryByRole("button", { name: /(?:테이블 입장|다음 페이지|다음 사람)/u });
+          screen.queryByRole("button", {
+            name: /(?:테이블 입장|다음 페이지|다음 발언|내 차례로|시작|모임 기록 보기)/u,
+          });
         expect(readyControl).not.toBeNull();
       });
       if (screen.queryByRole("heading", { name: "모임이 끝났습니다" })) break;
@@ -349,7 +487,7 @@ describe("text prototype", () => {
         fireEvent.click(screen.getByRole("button", { name: "이쯤에서 마무리" }));
       } else {
         const next = screen.getByRole("button", {
-          name: /(?:테이블 입장|다음 페이지|다음 사람)/u,
+          name: /(?:테이블 입장|다음 페이지|다음 발언|내 차례로|시작|모임 기록 보기)/u,
         });
         await waitFor(() => expect(next).toBeEnabled());
         fireEvent.click(next);

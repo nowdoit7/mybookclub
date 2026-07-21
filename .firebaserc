@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "fir-test-f3fef"
+  },
+  "targets": {
+    "fir-test-f3fef": {
+      "hosting": {
+        "reading-table": [
+          "reading-table-buildweek"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

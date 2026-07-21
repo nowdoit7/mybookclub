@@ -19,13 +19,24 @@ function testApp(sessionCallLimit = 60) {
 }
 
 describe("server boundary", () => {
+  it("accepts an explicit proxy trust setting for managed deployments", () => {
+    const app = createApp({
+      generationClient: new MockGenerationClient(),
+      allowedOrigins: ["https://reading-table-buildweek.web.app"],
+      trustProxy: 1,
+      logger: { info() {}, error() {} },
+    });
+
+    expect(app.get("trust proxy")).toBe(1);
+  });
+
   it("reports health without a model call", async () => {
     const response = await request(testApp()).get("/api/health");
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
       status: "ok",
       liveGenerationAvailable: true,
-      model: "gpt-5.6",
+      model: "gpt-5.6-terra",
     });
     expect(response.headers["x-request-id"]).toMatch(/^[0-9a-f-]{36}$/);
   });
@@ -67,13 +78,15 @@ describe("server boundary", () => {
       verificationNote: identified.verification_note,
       sources: identified.sources,
     };
-    const personas = selectPersonas("demo");
+    const personas = selectPersonas("demo", "charles-darwin");
+    const imaginedGuest = personas.find(({ id }) => id === "charles-darwin");
+    expect(imaginedGuest?.imaginedGuest).toBeDefined();
     const sessionHeaders = { "x-session-id": "browser-session" };
 
     const notesResponse = await request(app)
       .post("/api/generate/reading-notes")
       .set(sessionHeaders)
-      .send({ language: "en", book, persona: personas[0] });
+      .send({ language: "en", book, persona: imaginedGuest });
     expect(notesResponse.status).toBe(200);
     expect(notesResponse.body.overall_take).toBeTruthy();
 
@@ -97,6 +110,27 @@ describe("server boundary", () => {
       });
     expect(utteranceResponse.status).toBe(200);
     expect(utteranceResponse.body.utterance).toBeTruthy();
+
+    const guestUtteranceResponse = await request(app)
+      .post("/api/generate/utterance")
+      .set(sessionHeaders)
+      .send({
+        language: "en",
+        roomAtmosphere: {
+          warmth: 0.7,
+          playfulness: 0.35,
+          tension: 0.25,
+          energy: 0.55,
+        },
+        book,
+        speaker: imaginedGuest,
+        stage: "FIRST_IMPRESSIONS",
+        task: "FIRST_IMPRESSION",
+        recentTranscript: [],
+        allowShelfReference: false,
+      });
+    expect(guestUtteranceResponse.status).toBe(200);
+    expect(guestUtteranceResponse.body.utterance).toBeTruthy();
 
     const stanceResponse = await request(app)
       .post("/api/generate/user-stance")
