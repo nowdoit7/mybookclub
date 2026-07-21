@@ -7,6 +7,7 @@ import {
 } from "../src/api/errors";
 import {
   extractWebSearchSources,
+  guestReadingNotesRule,
   guestSignatureMomentRule,
   localizedRecapParticipants,
   personaPromptData,
@@ -14,6 +15,7 @@ import {
 } from "./openaiGenerationClient";
 import { GUEST_PERSONAS, selectPersonas } from "../src/personas";
 import type { UtteranceRequest } from "../src/api/generationClient";
+import type { ConfirmedBook } from "../src/types";
 
 describe("OpenAI structured response handling", () => {
   it("recognizes an explicit safety refusal", () => {
@@ -125,8 +127,10 @@ describe("imagined guest signature moment", () => {
   const requestFor = (
     speaker: UtteranceRequest["speaker"],
     task: UtteranceRequest["task"],
+    bookOverrides: Partial<ConfirmedBook> = {},
+    language: UtteranceRequest["language"] = "en",
   ): UtteranceRequest => ({
-    language: "en",
+    language,
     roomAtmosphere: { warmth: 0.5, playfulness: 0.5, tension: 0.4, energy: 0.5 },
     book: {
       title: "A Neutral Reader-Selected Work",
@@ -139,6 +143,7 @@ describe("imagined guest signature moment", () => {
       verificationStatus: "mock",
       verificationNote: "Test fixture",
       sources: [],
+      ...bookOverrides,
     },
     speaker,
     stage: "FIRST_IMPRESSIONS",
@@ -175,5 +180,84 @@ describe("imagined guest signature moment", () => {
     expect(JSON.stringify(personaPromptData(guest, false))).not.toContain(
       guest.imaginedGuest?.documentedAchievement.en,
     );
+  });
+
+  it("gives Machiavelli one author-perspective moment for a verified edition of The Prince", () => {
+    const machiavelli = GUEST_PERSONAS.find(({ id }) => id === "machiavelli")!;
+    const firstImpressionRule = guestSignatureMomentRule(
+      requestFor(machiavelli, "FIRST_IMPRESSION", {
+        title: "군주론",
+        author: "니콜로 마키아벨리",
+        includedTitles: ["군주론"],
+        verificationStatus: "verified",
+      }, "ko"),
+    );
+
+    expect(firstImpressionRule).toContain("only author-perspective moment");
+    expect(firstImpressionRule).toContain("내가 이 책을 쓸 때");
+    expect(firstImpressionRule).toContain("first sentence must begin with the exact words");
+    expect(firstImpressionRule).toContain("contestable interpretive claim");
+    expect(firstImpressionRule).toContain("authorship does not make their interpretation final");
+    expect(firstImpressionRule).toContain("undocumented hidden intention");
+
+    const laterRule = guestSignatureMomentRule(
+      requestFor(machiavelli, "OPEN_PERSONA_POSITION", {
+        title: "군주론",
+        author: "니콜로 마키아벨리",
+        includedTitles: ["군주론"],
+        verificationStatus: "verified",
+      }, "ko"),
+    );
+    expect(laterRule).toContain("Do not repeat");
+    expect(laterRule).toContain("without using authorship as proof");
+  });
+
+  it("keeps posthumous compilations historically constrained", () => {
+    const pascal = GUEST_PERSONAS.find(({ id }) => id === "blaise-pascal")!;
+    const request = requestFor(pascal, "FIRST_IMPRESSION", {
+      title: "팡세",
+      author: "블레즈 파스칼",
+      includedTitles: ["팡세"],
+      verificationStatus: "verified",
+    }, "ko");
+
+    const utteranceRule = guestSignatureMomentRule(request);
+    expect(utteranceRule).toContain("남긴 단상");
+    expect(utteranceRule).toContain("assembled or published after");
+    expect(utteranceRule).toContain("Never claim the guest completed");
+    expect(guestReadingNotesRule(pascal, request.book, "ko")).toContain(
+      "present-day readers may reasonably resist",
+    );
+  });
+
+  it("keeps traditionally attributed works distinct from certain singular authorship", () => {
+    const homer = GUEST_PERSONAS.find(({ id }) => id === "homer")!;
+    const rule = guestSignatureMomentRule(
+      requestFor(homer, "FIRST_IMPRESSION", {
+        title: "오디세이아",
+        author: "호메로스",
+        includedTitles: ["오디세이아"],
+        verificationStatus: "verified",
+      }, "ko"),
+    );
+
+    expect(rule).toContain("내 이름으로 전해진");
+    expect(rule).toContain("traditionally attributed");
+    expect(rule).toContain("Never claim certain singular authorship");
+  });
+
+  it("does not mistake a depicted figure for the book's author", () => {
+    const socrates = GUEST_PERSONAS.find(({ id }) => id === "socrates")!;
+    const request = requestFor(socrates, "FIRST_IMPRESSION", {
+        title: "소크라테스의 변명",
+        author: "플라톤",
+        includedTitles: ["소크라테스의 변명"],
+        verificationStatus: "verified",
+      }, "ko");
+    const rule = guestSignatureMomentRule(request);
+
+    expect(rule).toContain("single signature moment");
+    expect(rule).not.toContain("author-perspective");
+    expect(guestReadingNotesRule(socrates, request.book, "ko")).toBe("");
   });
 });

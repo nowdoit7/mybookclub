@@ -249,6 +249,41 @@ interface PersonaCard {
   };
 }
 
+// Audited separately from PersonaCard so a guest's core voice never embeds a
+// tested book or genre answer. Code may use this only after book verification.
+interface GuestWorkProfile {
+  personaId: string;
+  creatorAliases: string[];
+  defaultAuthorship?: {
+    relationship:
+      | "documented_author"
+      | "posthumous_compilation"
+      | "traditional_attribution"
+      | "poetic_corpus"
+      | "collected_works";
+    workForm: string;
+    firstPersonFrame: { en: string; ko: string };
+  };
+  representativeWorks: GuestWorkReference[];
+  sourceUrls: string[];
+}
+
+interface GuestWorkReference {
+  canonicalTitle: string;
+  titleAliases: string[];
+  relationship:
+    | "documented_author"
+    | "posthumous_compilation"
+    | "traditional_attribution"
+    | "poetic_corpus"
+    | "collected_works"
+    | "represented_subject"
+    | "fictional_character";
+  workForm: string;
+  firstPersonFrame?: { en: string; ko: string };
+  verifiedAuthorAliases?: string[];
+}
+
 interface ShelfBook {
   title: string;
   author: string;
@@ -933,6 +968,22 @@ Random rarity and genre/topic affinity remain deferred until cross-book tests sh
 that individual guests improve the discussion without overfitting. No guest card
 may include a tested book's title, characters, scenes, or genre-specific answer.
 
+One narrowly bounded exception applies when the user manually selects a guest and
+verified book metadata matches that guest to the current work through the separate,
+audited `GuestWorkProfile` registry. Code may then replace the ordinary signature
+moment with one **author-perspective moment** on FIRST_IMPRESSION: one natural
+first-person clause such as “When I wrote this work…” followed by a contestable
+interpretive claim. Authorship grants neither final authority nor immunity from
+challenge, and later turns must not repeat the relationship. The registry records
+relationship shape rather than canned interpretations: documented authorship,
+posthumous compilation, traditional attribution, poetic corpus, collected works,
+represented subject, or fictional character. Posthumous and attributed works use
+relationship-specific language; represented subjects and fictional characters
+never receive author mode. Unverified or mismatched books retain the ordinary guest
+signature rule. This exception never selects a guest, changes turn scheduling, or
+adds a routine model call. The engine validates the required opening and uses the
+existing single utterance-repair retry only when the model omits it.
+
 ### 12.1.2 Mock-mode truthfulness
 - Mock mode must accept any title so the entire session flow can be tested
   without credits, but it must not pretend to know that book's plot or context.
@@ -959,6 +1010,11 @@ may include a tested book's title, characters, scenes, or genre-specific answer.
 - For an imagined guest, use the documented achievement bridge only on the single
   FIRST_IMPRESSION signature opportunity. Use one compact clause, never a résumé,
   quotation, authority claim, or repeated biographical reference.
+- When verified book metadata and the audited guest-work registry identify the
+  guest as the current work's creator, replace that bridge with one bounded
+  author-perspective clause on FIRST_IMPRESSION. Preserve posthumous, attributed,
+  corpus, and collection caveats; never fabricate private anecdotes or hidden
+  intentions, and never treat authorship as the final interpretation.
 - On social introductions, say what you do and reveal one casual human detail
   from `socialIntroSeed`; avoid a repeated reading-habit template and save all
   opinions about the current book for FIRST_IMPRESSIONS.

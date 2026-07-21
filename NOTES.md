@@ -75,3 +75,6 @@
 - 2026-07-21: Switched the public and local live default from the GPT-5.6 Sol alias to `gpt-5.6-terra`, preserving the same structured contracts while targeting roughly half the token price; the deployed single-note smoke returned valid structured output in 9.3 seconds.
 - 2026-07-21: Bounded private-note prefetch to two concurrent calls and added one targeted retry for transient connection, rate-limit, or upstream failures after a deployed 136-second `openai_connection_failed` response.
 - 2026-07-21: Matched AI dialogue frames to the user input frame at a centered 70% desktop width while retaining near-full-width mobile layouts.
+- 2026-07-21: Added a separate audited guest-work registry so verified author-book matches can use one bounded author-perspective moment without embedding title-specific answers in persona cards.
+- 2026-07-21: Preserved special attribution boundaries for posthumous compilations, poetic corpora, traditional works, represented subjects, and fictional characters; authorship remains contestable and is never repeated as authority.
+- 2026-07-21: A targeted GPT-5.6 live check made Machiavelli open with “When I wrote this book,” defend the work's diagnostic aim, and leave its moral vulnerability open to challenge.

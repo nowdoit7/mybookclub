@@ -32,7 +32,11 @@ import type {
 import { validateBookIdentificationQuality } from "../src/engine/qualityValidation";
 import { localizedSpeakerName } from "../src/localization";
 import { isImaginedGuestId } from "../src/personas";
-import type { PersonaCard } from "../src/types";
+import {
+  resolveGuestAuthorPerspective,
+  type GuestAuthorPerspective,
+} from "../src/personas/guestWorkRelations";
+import type { AppLanguage, ConfirmedBook, PersonaCard } from "../src/types";
 
 const COPYRIGHT_RULE =
   "Discuss themes, scenes, and interpretations. Quote at most a short phrase and never reproduce passages.";
@@ -42,23 +46,66 @@ const languageRule = (language: "en" | "ko" | undefined) =>
     ? "Write all reader-facing content in natural Korean. Keep book and author names in the form most familiar to Korean readers."
     : "Write all reader-facing content in natural English.";
 
-const imaginedGuestRule = (persona: PersonaCard | undefined) => {
+const authorRelationshipRule = (perspective: GuestAuthorPerspective): string => {
+  switch (perspective.relationship) {
+    case "documented_author":
+      return "The guest may identify themselves as this work's author, but authorship does not make their interpretation final or immune to challenge.";
+    case "posthumous_compilation":
+      return "The current edition was assembled or published after the guest's lifetime from notes or records. Never claim the guest completed, published, or planned the finished edition in its modern form.";
+    case "traditional_attribution":
+      return "The work is traditionally attributed to this guest. Never claim certain singular authorship; describe it only as a work or song handed down under the guest's name.";
+    case "poetic_corpus":
+      return "The current book presents surviving poems, songs, or fragments. Never claim the guest created or arranged the modern collected edition.";
+    case "collected_works":
+      return "The current book collects separately created pieces. Never claim the guest planned or published this exact collected edition as one work.";
+  }
+};
+
+const imaginedGuestRule = (
+  persona: PersonaCard | undefined,
+  book?: ConfirmedBook,
+) => {
   if (!persona?.imaginedGuest) return "";
+  const authorPerspective = book
+    ? resolveGuestAuthorPerspective(persona.id, book)
+    : undefined;
   const grounding =
     persona.imaginedGuest.kind === "literary"
       ? "an imagined adaptation of a literary character grounded in the supplied canonical traits, not any screen portrayal"
       : persona.imaginedGuest.kind === "legendary"
         ? "an imagined reader grounded in an attributed literary tradition whose biography and singular authorship may be uncertain"
         : "an explicitly imagined reconstruction grounded in documented ideas";
-  return `This speaker is ${grounding}. Never present generated dialogue as a real quotation, claim this figure literally read or experienced the modern book, imitate archaic diction, or invoke fame as authority. The UI and social introduction already disclose that this is an imagined guest, so never break immersion by announcing that status again. Reason by analogy, remain a fallible reader, and allow other participants to challenge the guest.`;
+  const ordinaryBookRule = authorPerspective
+    ? `Verified book metadata and the audited guest-work registry match this guest to the current work. ${authorRelationshipRule(authorPerspective)} A task-specific rule controls the one permitted first-person relationship reference.`
+    : "Never claim this figure literally read, wrote, or experienced the current book.";
+  return `This speaker is ${grounding}. ${ordinaryBookRule} Never present generated dialogue as a real quotation, fabricate a private anecdote or undocumented hidden intention, imitate archaic diction, or invoke fame or authorship as authority. The UI and social introduction already disclose that this is an imagined guest, so never break immersion by announcing that status again. Reason by analogy, remain a fallible reader, and allow other participants to challenge the guest.`;
 };
 
 export function guestSignatureMomentRule(input: UtteranceRequest): string {
   if (input.speaker === "moderator" || !input.speaker.imaginedGuest) return "";
+  const authorPerspective = resolveGuestAuthorPerspective(input.speaker.id, input.book);
+  if (authorPerspective && input.task === "FIRST_IMPRESSION") {
+    const frame = authorPerspective.firstPersonFrame[input.language];
+    return `This is the guest's only author-perspective moment for the entire session. The first sentence must begin with the exact words ${JSON.stringify(frame)} and continue naturally from them; use that first-person relationship only once. Make one contestable interpretive claim about what the work attempts, where that attempt is vulnerable, or what modern readers may reasonably challenge. ${authorRelationshipRule(authorPerspective)} Do not invent a quotation, private memory, undocumented hidden intention, or definitive explanation of the work. Do not repeat the authorship relationship on later turns.`;
+  }
+  if (authorPerspective) {
+    return "The guest's single author-perspective reference belongs only to the first-impression turn. Do not repeat that the guest wrote, created, transmitted, or left notes for the work on this turn. Debate as an equal participant from the resulting position, without using authorship as proof.";
+  }
   if (input.task === "FIRST_IMPRESSION") {
     return "This is the guest's single signature moment for the entire session. In exactly one compact clause, embody one concrete element from documentedAchievement or signatureReadingMove as a distinction, image, question, or inference that sharpens the present interpretation. Perform the characteristic move instead of explaining it: never say 'my reading method', 'from my perspective', 'as someone who...', or an equivalent self-description. A named work or achievement is optional and should appear only when grammatically inseparable from the current claim. Do not recite a résumé, imitate a quotation, use fame as proof, become a history lecture, or announce that the guest is imaginary. Do not repeat this biographical or achievement link on later turns.";
   }
   return "The guest's signature achievement belongs only to the first-impression turn. Do not mention biography, famous works, achievements, or signature touchstones again on this turn; keep only the resulting habit of thought.";
+}
+
+export function guestReadingNotesRule(
+  persona: PersonaCard,
+  book: ConfirmedBook,
+  language: AppLanguage,
+): string {
+  const authorPerspective = resolveGuestAuthorPerspective(persona.id, book);
+  if (!authorPerspective) return "";
+  const frame = authorPerspective.firstPersonFrame[language];
+  return `The audited registry matches this guest to the verified current work. Prepare a contestable author-perspective thesis that can later support a first sentence beginning with ${JSON.stringify(frame)}. Separate documented public context from interpretive reconstruction, identify a point where present-day readers may reasonably resist the work, and never invent a quotation, private anecdote, undocumented hidden intention, or final-authority claim. ${authorRelationshipRule(authorPerspective)}`;
 }
 
 export function personaPromptData(persona: PersonaCard, includeSignature: boolean) {
@@ -324,7 +371,7 @@ export class OpenAIGenerationClient implements GenerationClient {
     return this.parse(
       readingNotesSchema,
       "private_reading_notes",
-      `You are ${input.persona.name}. Stay committed to the supplied persona card. ${imaginedGuestRule(input.persona)} These are private anchor notes, not dialogue. Build one contestable thesis from this persona's specific lens; do not collapse into a generic balanced verdict. Preserve every candidate topic verbatim and in order. overall_take must be 2-3 sentences. Use any guest achievement metadata only to derive a distinctive way of thinking; do not put biography, fame, or a résumé into the notes. Include a genuine personal reaction, an unresolved doubt, evidence that could change your mind, and a question you actually want to ask another reader. These must differ from the thesis instead of restating it. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
+      `You are ${input.persona.name}. Stay committed to the supplied persona card. ${imaginedGuestRule(input.persona, input.book)} ${guestReadingNotesRule(input.persona, input.book, input.language)} These are private anchor notes, not dialogue. Build one contestable thesis from this persona's specific lens; do not collapse into a generic balanced verdict. Preserve every candidate topic verbatim and in order. overall_take must be 2-3 sentences. Use any guest achievement metadata only to derive a distinctive way of thinking; do not put biography, fame, or a résumé into the notes. Include a genuine personal reaction, an unresolved doubt, evidence that could change your mind, and a question you actually want to ask another reader. These must differ from the thesis instead of restating it. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
       JSON.stringify({
         book: input.book,
         persona: personaPromptData(input.persona, true),
@@ -375,7 +422,7 @@ export class OpenAIGenerationClient implements GenerationClient {
           : `You are ${
               input.speaker === "moderator" ? "Alex" : input.speaker.name
             }. Stay in character and anchored to your private notes.`
-      } ${lengthRule} ${taskDirective} ${referenceRule} ${imaginedGuestRule(persona)} ${guestSignatureMomentRule(input)} ${languageRule(input.language)} ${roomAtmosphereRule(input.roomAtmosphere)} On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
+      } ${lengthRule} ${taskDirective} ${referenceRule} ${imaginedGuestRule(persona, input.book)} ${guestSignatureMomentRule(input)} ${languageRule(input.language)} ${roomAtmosphereRule(input.roomAtmosphere)} On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
         input.allowShelfReference ? "allowed once if illuminating" : "not allowed; shelf_ref must be null"
       }. ${COPYRIGHT_RULE}`,
       JSON.stringify({

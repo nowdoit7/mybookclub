@@ -16,6 +16,7 @@ import {
   InvalidStructuredOutputError,
 } from "../api/errors";
 import { isImaginedGuestId, selectPersonas } from "../personas";
+import { resolveGuestAuthorPerspective } from "../personas/guestWorkRelations";
 import { localizedSpeakerName } from "../localization";
 import type {
   CompletedSession,
@@ -484,6 +485,18 @@ export class SessionEngine {
         isModerator ? "moderator" : "persona",
         allowShelfReference,
       );
+      if (!isModerator && task === "FIRST_IMPRESSION") {
+        const authorPerspective = resolveGuestAuthorPerspective(
+          speaker.id,
+          this.state.book,
+        );
+        const expectedOpening = authorPerspective?.firstPersonFrame[this.language];
+        if (expectedOpening && !output.utterance.trimStart().startsWith(expectedOpening)) {
+          issues.push(
+            `FIRST_IMPRESSION must begin with the exact author-perspective words ${JSON.stringify(expectedOpening)}`,
+          );
+        }
+      }
       if (
         task === "TOPIC_OPEN" &&
         options.activeTopic &&

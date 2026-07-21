@@ -263,6 +263,57 @@ describe("SessionEngine", () => {
     expect(firstImpressionContexts.every(([speaker]) => speaker === "moderator")).toBe(true);
   });
 
+  it("retries an author guest's first impression when the author opening is omitted", async () => {
+    const client = new MockGenerationClient();
+    const originalIdentifyBook = client.identifyBook.bind(client);
+    const originalGenerateUtterance = client.generateUtterance.bind(client);
+    let machiavelliFirstImpressionCalls = 0;
+    let repairMessage = "";
+
+    client.identifyBook = async (input) => ({
+      ...(await originalIdentifyBook(input)),
+      canonical_title: "군주론",
+      author: "니콜로 마키아벨리",
+      included_titles: ["군주론"],
+      verification_status: "verified" as const,
+      verification_note: "Verified author-mode test fixture",
+      sources: [
+        { url: "https://library.example/the-prince" },
+        { url: "https://publisher.example/the-prince" },
+      ],
+    });
+    client.generateUtterance = async (input) => {
+      const output = await originalGenerateUtterance(input);
+      if (input.task !== "FIRST_IMPRESSION" || input.speaker === "moderator" || input.speaker.id !== "machiavelli") {
+        return output;
+      }
+
+      machiavelliFirstImpressionCalls += 1;
+      repairMessage = input.validationError ?? repairMessage;
+      return {
+        ...output,
+        utterance:
+          machiavelliFirstImpressionCalls === 1
+            ? "이 작품은 권력의 압박을 정직하게 바라봅니다. 그러나 진단이 면죄부가 되어서는 안 됩니다."
+            : "내가 이 책을 쓸 때 권력의 압박을 미화하기보다 드러내고자 했습니다. 그러나 그 진단이 면죄부가 될 수 있다는 반론은 피하지 않겠습니다.",
+      };
+    };
+
+    const { state } = await new SessionEngine(client).run({
+      language: "ko",
+      title: "군주론",
+      author: "니콜로 마키아벨리",
+      personas: selectPersonas("demo", "machiavelli"),
+    });
+    const authorTurn = state.transcript.find(
+      ({ speaker, stage }) => speaker === "machiavelli" && stage === "FIRST_IMPRESSIONS",
+    );
+
+    expect(machiavelliFirstImpressionCalls).toBe(2);
+    expect(repairMessage).toContain("exact author-perspective words");
+    expect(authorTurn?.text).toMatch(/^내가 이 책을 쓸 때/u);
+  });
+
   it("prepares both memorable scenes as independent testimony", async () => {
     const client = new MockGenerationClient();
     const originalGenerateNotes = client.generateReadingNotes.bind(client);
