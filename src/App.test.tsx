@@ -5,8 +5,58 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { App } from "./App";
+import { App, relevantInputContext, resolveSessionSeed } from "./App";
+import type {
+  GenerationClient,
+  UtteranceRequest,
+} from "./api/generationClient";
 import { MockGenerationClient } from "./api/mockGenerationClient";
+import { APP_BUILD_INFO, buildIdentifier } from "./buildInfo";
+import { resolveCharacterCoreExperiment } from "./characterCore/runtime";
+import { SessionEngine } from "./engine/sessionEngine";
+import { selectPersonas } from "./personas";
+import type { Utterance } from "./types";
+
+const verifiedLiveBookResponse = {
+  canonical_title: "실험용 독서 기록",
+  author: "테스트 작가",
+  work_scope: "single_book",
+  included_titles: ["실험용 독서 기록"],
+  summary:
+    "검증된 책은 한 독자가 익숙한 판단을 다시 살피는 과정을 다룹니다. 서로 다른 행동의 결과가 처음의 해석을 흔듭니다. 관계의 변화는 세 가지 토론 질문을 뒷받침합니다. 결말은 핵심 긴장을 단정하지 않고 남겨 둡니다.",
+  main_characters: ["독자"],
+  candidate_topics: [
+    "무엇을 가장 중요한 근거로 볼 것인가?",
+    "행동의 결과가 처음 판단을 어떻게 바꾸는가?",
+    "남은 불확실성을 어디까지 인정해야 하는가?",
+  ],
+  verification_status: "verified",
+  verification_note: "두 개의 독립된 출처에서 제목과 저자를 확인했습니다.",
+  sources: [
+    { url: "https://publisher.example/experiment" },
+    { url: "https://library.example/experiment" },
+  ],
+};
+
+function liveHealthResponse(characterCoreExperiment = false): Response {
+  return new Response(
+    JSON.stringify({
+      status: "ok",
+      liveGenerationAvailable: true,
+      model: "gpt-5.6",
+      ...(characterCoreExperiment
+        ? {
+            characterCoreExperiment: {
+              version: "v2",
+              localOnly: true,
+              sessionCallLimit: 45,
+            },
+          }
+        : {}),
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -32,7 +82,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function startMockBook(language: "ko" | "en", title: string, author: string): Promise<void> {
+describe("local build identity", () => {
+  it("shows the exact build identity on the local setup screen", () => {
+    render(<App />);
+
+    const badge = screen.getByTestId("local-build-badge");
+    expect(badge).toHaveAccessibleName("Local development build");
+    expect(badge).toHaveTextContent(`LOCAL DEV · ${buildIdentifier(APP_BUILD_INFO)}`);
+    expect(badge).toHaveTextContent(APP_BUILD_INFO.branch);
+    expect(badge).toHaveTextContent("CHARACTER CORE v2 · CHECKING");
+  });
+});
+
+async function startMockBook(
+  language: "ko" | "en",
+  title: string,
+  author: string,
+  displayName = "",
+): Promise<void> {
   fireEvent.change(
     screen.getByRole("textbox", { name: language === "ko" ? "책 제목" : "Book title" }),
     { target: { value: title } },
@@ -50,8 +117,239 @@ async function startMockBook(language: "ko" | "en", title: string, author: strin
         ? "네, 이 책이 맞습니다 — 모임 시작"
         : "Yes, this is my book — start the session",
   });
+  if (displayName) {
+    fireEvent.change(
+      screen.getByRole("textbox", {
+        name: language === "ko" ? "표시 이름 (선택)" : "Display name (optional)",
+      }),
+      { target: { value: displayName } },
+    );
+  }
   fireEvent.click(confirm);
 }
+
+describe("user input context", () => {
+  it("shows the two replies since the user's last discussion turn", () => {
+    const transcript: Utterance[] = [
+      { speaker: "marcus", text: "Opening position.", stage: "DISCUSSION" },
+      { speaker: "user", text: "My distinction.", stage: "DISCUSSION" },
+      { speaker: "marcus", text: "Challenge response.", stage: "DISCUSSION" },
+      { speaker: "dev", text: "Bridge response.", stage: "DISCUSSION" },
+    ];
+
+    expect(
+      relevantInputContext(transcript, {
+        stage: "DISCUSSION",
+        kind: "discussion_followup",
+      }).map(({ speaker }) => speaker),
+    ).toEqual(["marcus", "dev"]);
+  });
+});
+
+describe("local Character Core experiment", () => {
+  it("uses the demo roster only for a local default experiment", () => {
+    const defaultSeed = resolveSessionSeed("?characterCore=1", true, false, "random-seed");
+    expect(defaultSeed).toBe("demo");
+    expect(selectPersonas(defaultSeed).map(({ id }) => id)).toContain("marcus");
+
+    const explicitSeed = resolveSessionSeed(
+      "?characterCore=1&seed=reader-choice",
+      true,
+      false,
+      "random-seed",
+    );
+    expect(selectPersonas(explicitSeed).map(({ id }) => id)).toEqual(
+      selectPersonas("reader-choice").map(({ id }) => id),
+    );
+    expect(resolveSessionSeed("?characterCore=1", true, true, "guest-seed")).toBe(
+      "guest-seed",
+    );
+    expect(resolveSessionSeed("", false, false, "normal-seed")).toBe("normal-seed");
+  });
+
+  it("accepts the query only on loopback and only presents an available Korean live setup", async () => {
+    expect(resolveCharacterCoreExperiment("?characterCore=1", "localhost")).toEqual({
+      version: "v2",
+    });
+    expect(
+      resolveCharacterCoreExperiment("?characterCore=1", "reading-table-buildweek.web.app"),
+    ).toBeUndefined();
+
+    window.history.replaceState({}, "", "/?live=1&characterCore=1");
+    vi.mocked(globalThis.fetch).mockResolvedValue(liveHealthResponse(true));
+    render(<App />);
+    expect(await screen.findByTestId("character-core-experiment")).toHaveTextContent(
+      "LOCAL EXPERIMENT · Character Core v2",
+    );
+    expect(screen.getByTestId("character-core-experiment")).toHaveTextContent(
+      "45 generation requests max",
+    );
+    expect(screen.getByTestId("local-build-badge")).toHaveTextContent(
+      "CHARACTER CORE v2 · READY",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+    expect(screen.queryByTestId("character-core-experiment")).not.toBeInTheDocument();
+  });
+
+  it("freezes active experiment metadata and the marked client after the URL changes", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/api/health") return liveHealthResponse(true);
+      if (url.endsWith("/book-identification")) {
+        return new Response(JSON.stringify(verifiedLiveBookResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/utterance")) {
+        return new Response(
+          JSON.stringify({
+            utterance: "근거를 먼저 확인하고 해석의 범위를 정하겠습니다.",
+            stance: 0,
+            refers_to: null,
+            shelf_ref: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    let sessionClient: GenerationClient | undefined;
+    vi.spyOn(SessionEngine.prototype, "run").mockImplementation(function (
+      this: SessionEngine,
+    ) {
+      sessionClient = Reflect.get(this, "client") as GenerationClient;
+      const onUtterance = Reflect.get(this, "onUtterance") as
+        | ((utterance: Utterance) => void)
+        | undefined;
+      onUtterance?.({
+        speaker: "marcus",
+        text: "이 판단의 근거부터 확인하겠습니다.",
+        stage: "INTRO",
+      });
+      return new Promise<never>(() => undefined);
+    });
+
+    window.history.replaceState({}, "", "/?live=1&characterCore=1");
+    render(<App />);
+    await screen.findByTestId("character-core-experiment");
+    fireEvent.change(screen.getByRole("textbox", { name: "책 제목" }), {
+      target: { value: "실험용 독서 기록" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "웹에서 도서 검증하기" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "네, 이 책이 맞습니다 — 모임 시작",
+      }),
+    );
+
+    await waitFor(() => expect(sessionClient).toBeDefined());
+    expect(
+      screen.getAllByTestId("character-core-experiment").some((notice) =>
+        notice.textContent?.includes("마커스"),
+      ),
+    ).toBe(true);
+
+    window.history.replaceState({}, "", "/?live=1");
+    fireEvent.click(screen.getByText(/^SFX /u));
+    expect(
+      screen.getAllByTestId("character-core-experiment").some((notice) =>
+        notice.textContent?.includes("마커스"),
+      ),
+    ).toBe(true);
+
+    await sessionClient!.generateUtterance({ language: "ko" } as UtteranceRequest);
+    const utteranceCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith("/utterance"),
+    );
+    expect(utteranceCall?.[1]?.headers).toMatchObject({
+      "x-character-core-experiment": "v2",
+    });
+    expect(JSON.parse(String(utteranceCall?.[1]?.body))).toMatchObject({
+      characterCoreExperiment: { version: "v2" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "대화 기록 보기 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "전체 대화 복사" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("# LOCAL EXPERIMENT · Character Core v2"),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("- Enabled readers: 마커스"),
+    );
+  });
+
+  it("keeps the experiment inactive when local health omits the capability", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/api/health") return liveHealthResponse(false);
+      if (url.endsWith("/book-identification")) {
+        return new Response(JSON.stringify(verifiedLiveBookResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.endsWith("/utterance")) {
+        return new Response(
+          JSON.stringify({
+            utterance: "표준 대화 정책으로 이 장면을 살펴보겠습니다.",
+            stance: 0,
+            refers_to: null,
+            shelf_ref: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    let sessionClient: GenerationClient | undefined;
+    vi.spyOn(SessionEngine.prototype, "run").mockImplementation(function (
+      this: SessionEngine,
+    ) {
+      sessionClient = Reflect.get(this, "client") as GenerationClient;
+      return new Promise<never>(() => undefined);
+    });
+
+    window.history.replaceState({}, "", "/?live=1&characterCore=1");
+    render(<App />);
+    expect(
+      await screen.findByTestId("character-core-experiment-availability"),
+    ).toHaveTextContent("Unavailable on this server");
+    expect(screen.queryByTestId("character-core-experiment")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "책 제목" }), {
+      target: { value: "실험용 독서 기록" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "웹에서 도서 검증하기" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "네, 이 책이 맞습니다 — 모임 시작",
+      }),
+    );
+    await waitFor(() => expect(sessionClient).toBeDefined());
+    expect(screen.queryByTestId("character-core-experiment")).not.toBeInTheDocument();
+
+    await sessionClient!.generateUtterance({ language: "ko" } as UtteranceRequest);
+    const experimentCandidateCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes("/api/generate/"),
+    );
+    for (const [, request] of experimentCandidateCalls) {
+      expect(request?.headers).not.toHaveProperty("x-character-core-experiment");
+      expect(JSON.parse(String(request?.body))).not.toHaveProperty(
+        "characterCoreExperiment",
+      );
+    }
+  });
+});
 
 describe("text prototype", () => {
   it("uses live GPT generation publicly without exposing a mode selector", async () => {
@@ -439,7 +737,7 @@ describe("text prototype", () => {
     const inputs = [
       "혼자 읽을 때 놓친 관점을 듣고 싶어 참여했습니다.",
       "중심 질문은 흥미로웠지만 제시 방식에는 거리감이 있었습니다.",
-      "앞에서 이해한 내용을 뒤집어 보게 한 대목이 가장 오래 남았습니다.",
+      "앞에서 이해한 내용을 뒤집어 보게 한 대목이 가장 기억에 남았습니다.",
       "형식과 그 결과를 함께 설명하는 해석이 더 설득력 있다고 봅니다.",
       "그 반론은 중요하지만 의도와 결과를 구분하면 제 해석은 여전히 성립합니다.",
       "다른 독자들의 근거를 들으며 처음 판단을 더 세밀하게 다듬었습니다.",
@@ -451,7 +749,7 @@ describe("text prototype", () => {
       "aria-pressed",
       "true",
     );
-    await startMockBook("ko", "천천히 읽는 기술", "김독자");
+    await startMockBook("ko", "천천히 읽는 기술", "김독자", "David");
 
     for (let guard = 0; guard < 100; guard += 1) {
       await waitFor(() => {
@@ -461,7 +759,7 @@ describe("text prototype", () => {
           screen.queryByRole("button", { name: "내 의견 보태기" }) ??
           screen.queryByRole("button", { name: "토론 조금 더 이어보기" }) ??
           screen.queryByRole("button", {
-            name: /(?:테이블 입장|다음|시작|모임 기록 보기)/u,
+            name: /(?:테이블 입장|다음|시작|마지막 생각 남기기|모임 기록 보기)/u,
           });
         expect(readyControl).not.toBeNull();
       });
@@ -469,7 +767,7 @@ describe("text prototype", () => {
 
       const textbox = screen.queryByRole("textbox");
       if (textbox) {
-        expect(screen.getByRole("listitem", { name: "나 · 모임 참여자" })).toHaveAttribute(
+        expect(screen.getByRole("listitem", { name: "David · 모임 참여자" })).toHaveAttribute(
           "aria-current",
           "true",
         );
@@ -484,10 +782,10 @@ describe("text prototype", () => {
       } else if (screen.queryByRole("button", { name: "내 의견 보태기" })) {
         fireEvent.click(screen.getByRole("button", { name: "내 의견 보태기" }));
       } else if (screen.queryByRole("button", { name: "토론 조금 더 이어보기" })) {
-        fireEvent.click(screen.getByRole("button", { name: "이쯤에서 마무리" }));
+        fireEvent.click(screen.getByRole("button", { name: "마무리 순서로 이동" }));
       } else {
         const next = screen.getByRole("button", {
-          name: /(?:테이블 입장|다음|시작|모임 기록 보기)/u,
+          name: /(?:테이블 입장|다음|시작|마지막 생각 남기기|모임 기록 보기)/u,
         });
         await waitFor(() => expect(next).toBeEnabled());
         fireEvent.click(next);
@@ -504,8 +802,13 @@ describe("text prototype", () => {
     expect(screen.queryByText("## 토론 요약")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Markdown 다운로드" })).toBeVisible();
 
-    fireEvent.click(screen.getByRole("tab", { name: "전체 대화 31" }));
-    expect(screen.getAllByRole("article")).toHaveLength(31);
+    fireEvent.click(screen.getByRole("tab", { name: "전체 대화 30" }));
+    expect(screen.getAllByRole("article")).toHaveLength(30);
+    expect(
+      screen
+        .getAllByRole("article")
+        .some((article) => within(article).queryByText("David") !== null),
+    ).toBe(true);
     expect(screen.getByRole("button", { name: "전체 대화 복사" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("tab", { name: "모임 기록" }));

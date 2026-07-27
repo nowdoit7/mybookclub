@@ -37,14 +37,80 @@ import {
   type GuestAuthorPerspective,
 } from "../src/personas/guestWorkRelations";
 import type { AppLanguage, ConfirmedBook, PersonaCard } from "../src/types";
+import {
+  buildCharacterCoreReadingNotesPromptSlice as buildRuntimeCharacterCoreReadingNotesPromptSlice,
+  buildCharacterCoreUtterancePromptSlice as buildRuntimeCharacterCoreUtterancePromptSlice,
+} from "../src/characterCore/runtime";
+import type {
+  CharacterCoreReadingNotesPromptSlice,
+  CharacterCoreUtterancePromptSlice,
+} from "../src/characterCore/runtime";
 
 const COPYRIGHT_RULE =
   "Discuss themes, scenes, and interpretations. Quote at most a short phrase and never reproduce passages.";
+
+type RuntimeCharacterCorePromptSlice =
+  | CharacterCoreReadingNotesPromptSlice
+  | CharacterCoreUtterancePromptSlice;
+
+export function appendCharacterCorePrompt(
+  basePrompt: string,
+  slice: RuntimeCharacterCorePromptSlice | undefined,
+): string {
+  if (!slice) return basePrompt;
+  const runtimeState =
+    "state" in slice ? `\nRuntime state: ${slice.state}` : "";
+  return `${basePrompt}\n\n[LOCAL CHARACTER CORE EXPERIMENT ${slice.version}]${runtimeState}\n${slice.prompt}`;
+}
+
+export function resolveReadingNotesCharacterCorePromptSlice(
+  input: ReadingNotesRequest,
+): CharacterCoreReadingNotesPromptSlice | undefined {
+  if (!input.characterCoreExperiment) return undefined;
+  return buildRuntimeCharacterCoreReadingNotesPromptSlice(
+    input.persona.id,
+    input.language,
+  );
+}
+
+export function resolveUtteranceCharacterCorePromptSlice(
+  input: UtteranceRequest,
+): CharacterCoreUtterancePromptSlice | undefined {
+  if (!input.characterCoreExperiment || input.speaker === "moderator") {
+    return undefined;
+  }
+  return buildRuntimeCharacterCoreUtterancePromptSlice(
+    input.speaker.id,
+    input.language,
+    input.task,
+  );
+}
 
 const languageRule = (language: "en" | "ko" | undefined) =>
   language === "ko"
     ? "Write all reader-facing content in natural Korean. Keep book and author names in the form most familiar to Korean readers."
     : "Write all reader-facing content in natural English.";
+
+export function localizedSpokenConversationRule(
+  language: "en" | "ko" | undefined,
+): string {
+  if (language !== "ko") {
+    return "Realize the supplied meaning as idiomatic spoken English for a small book club. Preserve the exact claim, evidence, strength, and addressee, but do not translate Korean honorifics, omissions, or word order into English.";
+  }
+
+  return [
+    "Realize the supplied meaning as idiomatic spoken Korean for a small book club.",
+    "Before writing, keep the exact scene facts, claim strength, addressee, and one conversational action fixed; natural wording must never change them.",
+    "Prefer a concrete subject and action over stacked abstract nouns or compressed literary metaphors.",
+    "Use one main conversational action per sentence. If agreement, qualification, and a question are all needed, separate them into short sentences instead of nesting clauses.",
+    "React to the prior speaker's actual point. Do not add ritual thanks, a recap, or a polished transition when a Korean speaker would normally answer the content directly.",
+    "Turn an academic written prompt into a question someone would naturally ask aloud; do not recite phrases equivalent to 'what does this reveal?' or 'what does this process show?' as an essay prompt.",
+    "Use complete, idiomatic Korean collocations. A formal or literary persona may choose respectful endings and measured rhythm, but may not use translation-like combinations or unclear omitted referents.",
+    "Do not say that a scene, passage, problem, gap, or person simply '남는다' or '오래 남는다'. Say '기억에 남는다', '마음에 걸린다', or state the exact effect instead.",
+    "Do not translate agreement as '같은 자리에 있다'. Say plainly that the speakers agree on that point or reached the same conclusion.",
+    "Character voice comes from judgment, focus, degree of formality, and rhythm after natural Korean is secured; obscurity is never evidence of character.",
+  ].join(" ");
+}
 
 const authorRelationshipRule = (perspective: GuestAuthorPerspective): string => {
   switch (perspective.relationship) {
@@ -157,15 +223,15 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "INVITE_USER":
       return "Invite the user to share who they are through work, everyday life, or their current relationship with reading. Keep this purely social: do not ask why they chose the current book, what they thought of it, or which scene stayed with them.";
     case "FIRST_IMPRESSIONS_OPEN":
-      return "Briefly thank the user for the introduction, make a natural transition into the book, and invite an overall first feeling, judgment, or question. Explicitly save concrete scenes and passages for the next stage.";
+      return "React briefly to one concrete detail from the user's introduction without thanking them or summarizing the introduction. Then move naturally into the book and invite an overall first feeling, judgment, or question. Explicitly save concrete scenes and passages for the next stage.";
     case "FIRST_IMPRESSION":
       return "Give a personal overall reaction anchored in private notes. This is independent testimony, not debate: do not agree with, quote, praise, rebut, correct, or cross-examine another participant. Do not lead with a specific memorable scene because the next stage is reserved for scenes.";
     case "OPEN_PERSONA_POSITION":
-      return `${input.discussionFocus?.trim() ? `Continue directly from Alex's supplied conversation thread, ${JSON.stringify(input.discussionFocus.trim())}, without substituting a different issue. ` : ""}State one committed answer to the active topic from your private notes. Address the supplied reader directly and give one piece of scene-level evidence; do not summarize the room.`;
+      return `${input.discussionFocus?.trim() ? `Continue directly from Alex's supplied conversation thread, ${JSON.stringify(input.discussionFocus.trim())}, without substituting a different issue. ` : ""}State one committed answer to the active topic from your private notes. Address the supplied participant directly and give one piece of scene-level evidence; do not summarize the room.`;
     case "CHALLENGE_PERSONA":
-      return "Use exactly 2 short spoken sentences. Challenge the supplied reader's most recent claim directly: name the exact point you reject, then ask that reader one genuine pointed question grounded in conflicting scene-level evidence. Do not turn toward the user.";
+      return "Use 2-3 short spoken sentences. Test the supplied reader's most recent claim directly. If the evidence or conclusion genuinely conflicts with yours, name the exact point of disagreement; if the positions are compatible, acknowledge that and test one boundary, assumption, or missing piece of evidence instead of inventing opposition. Ask that reader exactly one genuine pointed question and do not turn toward the user.";
     case "RESPOND_TO_PERSONA":
-      return "Use exactly 2 short spoken sentences. Answer the supplied reader's latest argument directly, then defend, refine, or explicitly concede one point while keeping a real disagreement alive. Do not turn toward the user or summarize the room.";
+      return "Use 2-3 short spoken sentences. Answer the supplied reader's exact question or argument first, then defend, refine, or concede one point. Preserve a disagreement only when the positions actually conflict; otherwise state the shared ground and clarify the remaining difference in scope or evidence. Do not turn toward the user or summarize the room.";
     case "MEMORABLE_SCENE":
       return input.discussionFocus?.trim()
         ? `The code-selected scene anchor is ${JSON.stringify(input.discussionFocus.trim())}. Discuss that exact scene and explain the personal reason it stayed with you; do not choose or substitute another scene. Do not begin by agreeing with, quoting, praising, or answering another participant. Sound like a reader remembering a book, not a lecturer presenting a theme.`
@@ -173,29 +239,31 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "SCENES_OPEN":
       return "In the first sentence, briefly acknowledge the range or tension in the user's just-stated first impression without evaluating it. In the second sentence, transition to the memorable-scenes round and ask for one concrete scene, passage, image, or example that produced that impression.";
     case "TOPIC_OPEN":
-      return `Briefly name the supplied thread from the earlier conversation, then state this exact code-selected question verbatim without substituting another topic: ${input.activeTopic}`;
+      return input.discussionOrigin === "user"
+        ? `In one short sentence, attribute only the supplied user thread to the user without adding another reader's interpretation. Then restate the meaning of this code-selected topic as one short question that sounds natural when spoken aloud: ${input.activeTopic}. Preserve the issue but do not recite academic wording verbatim.`
+        : `Briefly name the supplied table thread without attributing it to the user. Then restate the meaning of this code-selected topic as one short question that sounds natural when spoken aloud: ${input.activeTopic}. Preserve the issue but do not recite academic wording verbatim.`;
     case "ASK_USER_POSITION":
       return "After the two readers' disagreement, invite the user to enter with their own position on the active topic. Do not presume which side they support.";
     case "CHALLENGE_USER":
-      return "Address the user's paraphrased claim directly, state the private-note reason that conflicts with it, and ask one pointed question. Respectfully but firmly challenge; do not concede.";
+      return "Use the user's latest verbatim transcript turn as the source of truth; the supplied paraphrase is only a stance index and must not strengthen or broaden the claim. Compare it with the reader's private position. If they genuinely conflict, state the exact conflict; if they are compatible, say where they agree and test one boundary, assumption, or missing piece of evidence instead of pretending to oppose the user. Ask exactly one pointed question.";
     case "DEVILS_ADVOCATE":
       return "Challenge the user's paraphrased claim with the strongest plausible counterreading and one pointed question. Do not merely summarize the existing consensus.";
     case "REACT_TO_USER_SCENE":
       return "Use the persona's lens to add a consequence or contradiction the user's scene reading missed. Do not simply praise or paraphrase the user.";
     case "RESPOND_TO_USER_REPLY":
-      return "Use exactly 2 short spoken sentences. Answer the user's reply to your pointed question directly, say what it resolves, and name one precise disagreement that remains. Do not ask another question, reset the topic, or pretend to agree.";
+      return "Use 2-3 short spoken sentences. Treat the user's latest verbatim transcript turn as the source of truth and do not strengthen it through the supplied paraphrase. Answer that reply directly and say what it clarifies. Name a remaining disagreement only if one genuinely remains; otherwise state the shared ground and one implication without manufacturing tension. Do not ask another question or reset the topic.";
     case "RESPOND_TO_USER_FOLLOWUP":
-      return "Use exactly 2 short spoken sentences. Respond directly to the user's added thought, identify the implication it clarifies, and press one still-unresolved consequence. Do not ask another question or restart the debate.";
+      return "Use 2-3 short spoken sentences. Treat the user's latest verbatim transcript turn as the source of truth and do not strengthen it through the supplied paraphrase. Respond directly to that added thought and identify the implication it clarifies. Press an unresolved consequence only when the conversation actually contains one; otherwise extend the agreed point with a distinct consequence. Do not ask another question or restart the debate.";
     case "BRIDGE_EXCHANGE":
-      return "Use exactly 2 short spoken sentences. Pick up the exact unresolved difference from the user's reply and the challenger's response, then add one genuinely different scene-level consideration from your private notes. Address the supplied target, but do not merely support one side, praise the user, summarize the exchange, or open an unrelated topic.";
+      return "Use 2-3 short spoken sentences. Pick up the exact point tested in the user's reply and the reader's response, then add one genuinely different scene-level consideration from your private notes. If the exchange reached agreement, build from that agreement rather than calling it unresolved. Address the supplied target, but do not merely support one side, praise the user, summarize the exchange, or open an unrelated topic.";
     case "TOPIC_CLOSE":
       return "Name the precise disagreement that remains open and close this topic without declaring a winner or inventing consensus. Bridge naturally toward the closing round.";
     case "WRAP_OPEN":
       return "In 2 warm spoken sentences, name only the unresolved tension being carried forward and invite the user to leave a closing thought. Do not repeat the full topic summary.";
     case "CLOSING_REFLECTION":
-      return "Use exactly 2 short sentences total. Give this reader's independent takeaway from what genuinely happened, then naturally include either a persona-specific farewell or their pleasure at sharing the table. The ending must sound recognizably like this reader, not an interchangeable group sign-off. Do not introduce a new argument, evidence, question, or advice; do not address the user by default, copy the user's analogy, occupation, or phrasing, turn their personal plan into group advice, recite a before-and-after formula, or summarize the whole meeting.";
+      return "Use exactly 2 short sentences total. Give this reader's independent takeaway from what genuinely happened, then naturally include either a farewell or their pleasure at sharing the table. Let voice come from the reader's judgment, warmth, formality, and rhythm, not an occupation catchphrase, city-based joke, résumé reminder, or forced metaphor. Do not introduce a new argument, evidence, question, or advice; do not address the user by default, copy the user's analogy, occupation, or phrasing, turn their personal plan into group advice, recite a before-and-after formula, or summarize the whole meeting.";
     case "DISCUSSION_SUMMARY":
-      return "Use exactly 4 spoken sentences. Name the central disagreement, identify one precise contribution from the user, explain one genuine movement and the strongest unresolved counterclaim, then warmly thank the table and say in the selected language that the meeting recap comes next. Base it only on the supplied conversation; do not introduce a new opinion, reopen the debate, repeat a previous transition summary, or end with English words in a Korean session.";
+      return "Use exactly 4 short spoken sentences. Keep every Korean sentence under 95 characters and give each sentence only one main action. Name the central question and only the disagreement or convergence that actually occurred, identify one precise contribution from the user, explain one genuine movement or clarified boundary, then warmly thank the table and say in the selected language that the meeting recap comes next. Base it only on the supplied conversation; do not introduce a new opinion, manufacture an unresolved counterclaim, reopen the debate, repeat a previous transition summary, or end with English words in a Korean session.";
     default:
       return "Perform the named task directly.";
   }
@@ -376,10 +444,16 @@ export class OpenAIGenerationClient implements GenerationClient {
   }
 
   async generateReadingNotes(input: ReadingNotesRequest) {
+    const characterCoreSlice =
+      resolveReadingNotesCharacterCorePromptSlice(input);
+    const systemPrompt = appendCharacterCorePrompt(
+      `You are ${input.persona.name}. Stay committed to the supplied persona card. ${imaginedGuestRule(input.persona, input.book)} ${guestReadingNotesRule(input.persona, input.book, input.language)} These are private anchor notes, not dialogue. Build one contestable thesis from this persona's specific lens; do not collapse into a generic balanced verdict. Preserve every candidate topic verbatim and in order. overall_take must be 2-3 sentences. Use any guest achievement metadata only to derive a distinctive way of thinking; do not put biography, fame, or a résumé into the notes. Include a genuine personal reaction, an unresolved doubt, evidence that could change your mind, and a question you actually want to ask another reader. These must differ from the thesis instead of restating it. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
+      characterCoreSlice,
+    );
     return this.parse(
       readingNotesSchema,
       "private_reading_notes",
-      `You are ${input.persona.name}. Stay committed to the supplied persona card. ${imaginedGuestRule(input.persona, input.book)} ${guestReadingNotesRule(input.persona, input.book, input.language)} These are private anchor notes, not dialogue. Build one contestable thesis from this persona's specific lens; do not collapse into a generic balanced verdict. Preserve every candidate topic verbatim and in order. overall_take must be 2-3 sentences. Use any guest achievement metadata only to derive a distinctive way of thinking; do not put biography, fame, or a résumé into the notes. Include a genuine personal reaction, an unresolved doubt, evidence that could change your mind, and a question you actually want to ask another reader. These must differ from the thesis instead of restating it. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
+      systemPrompt,
       JSON.stringify({
         book: input.book,
         persona: personaPromptData(input.persona, true),
@@ -393,7 +467,7 @@ export class OpenAIGenerationClient implements GenerationClient {
     return this.parse(
       discussionFocusSchema,
       "discussion_focus",
-      `Extract discussion pressure from the supplied first-impression and memorable-scene conversation. Score each supplied candidate topic from 0 to 2 for how strongly the whole conversation supports it, preserving every candidate topic verbatim and in order. Separately score user_relevance from 0 to 2 using only the user's actual remarks and provide a short user_evidence phrase when present. General evidence must describe a concrete repeated remark, disagreement, question, or user request; user evidence must explain how that exact remark opens the candidate topic instead of attaching an unrelated quote. Propose an emergent question only when the conversation clearly raises an important issue not covered by the candidates, and separately score its user relevance; otherwise return null fields and relevance 0. You extract evidence only; code makes the final topic choice. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
+      `Extract discussion pressure from the supplied first-impression and memorable-scene conversation. Score each supplied candidate topic from 0 to 2 for how strongly the whole conversation supports it, preserving every candidate topic verbatim and in order. Separately score user_relevance from 0 to 2 using only the user's actual remarks and provide a short user_evidence phrase when present. General evidence must describe a concrete repeated remark, disagreement, question, or user request; user evidence must explain how that exact remark opens the candidate topic instead of attaching an unrelated quote. Propose an emergent question only when the conversation clearly raises one important issue not covered by the candidates. An emergent question must test one interpretive tension, contain one question mark, and must not combine motive, ethics, form, and context into a compound prompt. Separately score its user relevance; otherwise return null fields and relevance 0. You extract evidence only; code makes the final topic choice. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
       JSON.stringify({
         book: input.book,
         candidate_topics: input.book.candidateTopics,
@@ -411,30 +485,45 @@ export class OpenAIGenerationClient implements GenerationClient {
         ? "Use exactly 4 sentences."
         : "Use 1-3 sentences."
       : input.task === "PERSONA_INTRODUCTION"
-        ? "Use exactly 2 short sentences."
+        ? "Use 2-3 short sentences."
         : input.task === "CLOSING_REFLECTION"
           ? "Use exactly 2 short sentences."
         : "Use 2-4 sentences.";
     const taskDirective = utteranceTaskDirective(input);
-    const referenceRule = input.targetSpeaker
-      ? `Set refers_to exactly to ${JSON.stringify(input.targetSpeaker)}.`
+    const participantName = (speakerId: string): string =>
+      input.participants.find(({ id }) => id === speakerId)?.displayName ?? speakerId;
+    const targetDisplayName = input.targetSpeaker
+      ? participantName(input.targetSpeaker)
+      : undefined;
+    const usesDefaultUserLabel =
+      input.targetSpeaker === "user" &&
+      targetDisplayName === localizedSpeakerName("user", input.language);
+    const referenceRule = usesDefaultUserLabel
+      ? `The code-selected response target is the user. Address the user naturally without speaking the placeholder label ${JSON.stringify(targetDisplayName)}. Set refers_to exactly to "user".`
+      : input.targetSpeaker
+      ? `The code-selected response target is ${JSON.stringify(targetDisplayName)}. Address that participant with this exact display name in the spoken utterance; never substitute, translate, or infer another name. Set refers_to exactly to ${JSON.stringify(input.targetSpeaker)}.`
       : "Set refers_to to null.";
     const testimonyRule =
       input.task === "FIRST_IMPRESSION" || input.task === "MEMORABLE_SCENE"
         ? "This is independent testimony. Do not react to recent participants or use their remarks as your opening."
         : "React to one precise idea from the recent conversation when it is relevant.";
+    const characterCoreSlice =
+      resolveUtteranceCharacterCorePromptSlice(input);
     return this.parse(
       utteranceSchema,
       "table_utterance",
-      `${
-        isModerator
-          ? "You are Alex, a warm, crisp, unflappable book-club moderator. Do not offer your own opinion unless the task is DEVILS_ADVOCATE."
-          : `You are ${
-              input.speaker === "moderator" ? "Alex" : input.speaker.name
-            }. Stay in character and anchored to your private notes.`
-      } ${lengthRule} ${taskDirective} ${referenceRule} ${imaginedGuestRule(persona, input.book)} ${guestSignatureMomentRule(input)} ${languageRule(input.language)} ${roomAtmosphereRule(input.roomAtmosphere)} Write spoken conversation, not literary criticism: make one conversational move per turn, prefer short clauses, and never package a thesis, evidence, counterargument, and conclusion into one miniature essay. In Korean dialogue, avoid semicolons and vary natural spoken endings; in English dialogue, use contractions when natural. On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Use a persona's signature metaphor sparingly and speak plainly if a similar flourish appeared in the recent turns. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
-        input.allowShelfReference ? "allowed once if illuminating" : "not allowed; shelf_ref must be null"
-      }. ${COPYRIGHT_RULE}`,
+      appendCharacterCorePrompt(
+        `${
+          isModerator
+            ? "You are Alex, a warm, crisp, unflappable book-club moderator. Do not offer your own opinion unless the task is DEVILS_ADVOCATE."
+            : `You are ${
+                input.speaker === "moderator" ? "Alex" : input.speaker.name
+              }. Stay in character and anchored to your private notes.`
+        } ${lengthRule} ${taskDirective} ${referenceRule} ${imaginedGuestRule(persona, input.book)} ${guestSignatureMomentRule(input)} ${languageRule(input.language)} ${localizedSpokenConversationRule(input.language)} ${roomAtmosphereRule(input.roomAtmosphere)} Write spoken conversation, not literary criticism: make one conversational move per turn, prefer short clauses, and never package a thesis, evidence, counterargument, and conclusion into one miniature essay. In Korean dialogue, avoid semicolons and vary natural spoken endings; in English dialogue, use contractions when natural. On substantive persona turns, preserve the persona's distinct lens and do not repeat an established consensus unless adding new evidence. ${testimonyRule} Let occupation, uncertainty, and speech habits show naturally; do not turn every response into a polished conclusion. Use a persona's signature metaphor sparingly and speak plainly if a similar flourish appeared in the recent turns. Avoid generic praise followed by "but," repeated "both can coexist" constructions, and abstract mini-essays. Mention persuasion only when the speaker's position genuinely changes, and acknowledge any change explicitly. Shelf reference is ${
+          input.allowShelfReference ? "allowed once if illuminating" : "not allowed; shelf_ref must be null"
+        }. ${COPYRIGHT_RULE}`,
+        characterCoreSlice,
+      ),
       JSON.stringify({
         book: input.book,
         persona: isModerator
@@ -444,10 +533,18 @@ export class OpenAIGenerationClient implements GenerationClient {
         stage: input.stage,
         task: input.task,
         topic: input.activeTopic ?? null,
-        target_speaker: input.targetSpeaker ?? null,
+        participants: input.participants,
+        target_speaker: input.targetSpeaker
+          ? { id: input.targetSpeaker, display_name: targetDisplayName }
+          : null,
         user_argument: input.userArgument ?? null,
         discussion_focus: input.discussionFocus ?? null,
-        recent_conversation: input.recentTranscript.slice(-12),
+        discussion_origin: input.discussionOrigin ?? null,
+        recent_conversation: input.recentTranscript.slice(-12).map((utterance) => ({
+          ...utterance,
+          speaker: participantName(utterance.speaker),
+          refersTo: utterance.refersTo ? participantName(utterance.refersTo) : undefined,
+        })),
         repair: input.validationError ?? null,
       }),
       { reasoningEffort: "low", maxOutputTokens: 450 },
@@ -489,7 +586,7 @@ export class OpenAIGenerationClient implements GenerationClient {
     return this.parse(
       recapSchema,
       "meeting_recap",
-      `${recapStructure} Keep the discussion summary to 3-5 sentences, the sparks section to at most 2 bullets, and the scenes section to at most 3 bullets. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section with exactly one row or column for every supplied participant, including the user, and use the supplied participant names exactly in both the table and prose. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, or private notes. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
+      `${recapStructure} Keep the discussion summary to 3-5 sentences, the sparks section to at most 2 bullets, and the scenes section to at most 3 bullets. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section with exactly one row or column for every supplied participant, including the user, and use the supplied participant names exactly in both the table and prose. In the sparks section, include only claims that genuinely reached incompatible conclusions and directly answered one another. A pointed question, named addressee, scope test, or evidence check is not by itself a disagreement; if no real conflict occurred, say so naturally instead of inventing a spark. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, or private notes. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
       JSON.stringify(safeInput),
       { reasoningEffort: "low", maxOutputTokens: 1_400 },
     );

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 2,
+  "lockedAt": "2026-07-24T15:22:25.9560012+09:00",
+  "protocol": "v2 output-unseen locked holdout",
+  "claimBoundary": "Book titles and evidence-pack construction were known before generation. Character Core v2, dialogue policy, question prompts, and evidence packs were frozen before any v2 dialogue output was generated.",
+  "frozenInputs": [
+    {
+      "path": "scripts/character-core/model.ts",
+      "sha256": "43962317a21c61c8af3d8a711cf64f983e80a46746a1ef2ec6cb8291f0878883"
+    },
+    {
+      "path": "scripts/character-core/prototypeCores.ts",
+      "sha256": "4d12c280094aadcdf80cea8c7f76d897992d74bf03e89de482f107874035e6f5"
+    },
+    {
+      "path": "scripts/character-core/realBookModel.ts",
+      "sha256": "a917f10aede830abd6d1a2b3a0fbd21bf56977154e1d2a1f5996463a766a2384"
+    },
+    {
+      "path": "scripts/character-core/realBookEvaluator.ts",
+      "sha256": "32844b9cc539883b42bc69b5f59ac4c6ec3ca28037970d07fdb2f74b187b96df"
+    },
+    {
+      "path": "scripts/character-core/dialoguePolicy.ts",
+      "sha256": "c9f92fb3513fed2379baf2f3d75854ce44f7aee55f67fd8ce6d53210651f8aa2"
+    },
+    {
+      "path": "fixtures/character-core/real-books/evidence-packs.dev.jsonl",
+      "sha256": "45c1f4b79ccf51c034f315924064e92f6269618d611a65315c08550f44eba6c5"
+    },
+    {
+      "path": "fixtures/character-core/real-books/evidence-packs.holdout.jsonl",
+      "sha256": "b84f5e15eddbbf5cea2940c3d6c1f2a2f25ed00a2e05d0c92927335b18739b1f"
+    }
+  ],
+  "frozenEvaluationInputs": [
+    {
+      "path": "fixtures/character-core/real-books/BLIND_JUDGE_RUBRIC.ko.md",
+      "sha256": "5f5a071c00511d7b2103dac092ceb6e9fe378d48cab73399a152539b351e3b0a"
+    },
+    {
+      "path": "scripts/evaluate.real-book-character-core.ts",
+      "sha256": "25ef6e2096f3714e26b3cc803c614ada5920a892a0dc8ac389996507e27f946b"
+    },
+    {
+      "path": "scripts/prepare.real-book-blind.ts",
+      "sha256": "51712639cbf72e6fe769c7c3bfc57811b8348992ef19f350cbccfc7a04b94767"
+    },
+    {
+      "path": "scripts/join.real-book-blind.ts",
+      "sha256": "43aa34cb0db412dcd04b65782e1dfd1ddc311ae6a69e511fd74eafe31d8a830c"
+    }
+  ],
+  "blindRun": {
+    "preparedAt": "2026-07-24T15:48:16.9892972+09:00",
+    "packetsSha256": "81219a7ff7c2729878af2d983553f50a88f7831aeda35225e7fee0dd06ce7591",
+    "batchSha256": {
+      "a": "2e12670d34069385b45699457278bb41774a379e8a3104caecdf23e237b26deb",
+      "b": "9d204727d77968764adb98f0707581406cf8c18bfec4b0eaf34d285cfa12d0b0",
+      "c": "b0bc99b5e3af2c471a529eb9c5327eca961a26eab3d16bb579c4a024dbe253f4"
+    },
+    "privateMapSha256": "7fac94b29ccd3fd829b7384704d6dae6d65cfb951c594ea71d3d472481dfb816"
+  },
+  "holdoutBooks": [
+    "nineteen-eighty-four-george-orwell",
+    "murder-of-roger-ackroyd-agatha-christie",
+    "one-hundred-years-of-solitude-gabriel-garcia-marquez"
+  ],
+  "postLockCorrections": []
+}

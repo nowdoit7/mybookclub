@@ -8,14 +8,19 @@ import type { AppLanguage } from "../types";
 import { countSentences } from "./sentenceValidation";
 
 const EXACT_SENTENCE_COUNTS: Partial<Record<UtteranceTask, number>> = {
-  PERSONA_INTRODUCTION: 2,
-  CHALLENGE_PERSONA: 2,
-  RESPOND_TO_PERSONA: 2,
-  RESPOND_TO_USER_REPLY: 2,
-  RESPOND_TO_USER_FOLLOWUP: 2,
-  BRIDGE_EXCHANGE: 2,
   CLOSING_REFLECTION: 2,
   DISCUSSION_SUMMARY: 4,
+};
+
+const SENTENCE_COUNT_RANGES: Partial<
+  Record<UtteranceTask, { minimum: number; maximum: number }>
+> = {
+  PERSONA_INTRODUCTION: { minimum: 2, maximum: 3 },
+  CHALLENGE_PERSONA: { minimum: 2, maximum: 3 },
+  RESPOND_TO_PERSONA: { minimum: 2, maximum: 3 },
+  RESPOND_TO_USER_REPLY: { minimum: 2, maximum: 3 },
+  RESPOND_TO_USER_FOLLOWUP: { minimum: 2, maximum: 3 },
+  BRIDGE_EXCHANGE: { minimum: 2, maximum: 3 },
 };
 
 function endsWithCompleteSentence(text: string): boolean {
@@ -118,16 +123,34 @@ export function validateUtteranceQuality(
   const minimum = speaker === "persona" ? 2 : 1;
   const maximum = speaker === "persona" ? 4 : 3;
   const exactSentenceCount = context ? EXACT_SENTENCE_COUNTS[context.task] : undefined;
+  const sentenceCountRange = context ? SENTENCE_COUNT_RANGES[context.task] : undefined;
 
   if (exactSentenceCount !== undefined && count !== exactSentenceCount) {
     issues.push(
       `${context!.task} utterance must contain exactly ${exactSentenceCount} sentences; received ${count}`,
     );
-  } else if (exactSentenceCount === undefined && (count < minimum || count > maximum)) {
+  } else if (
+    sentenceCountRange &&
+    (count < sentenceCountRange.minimum || count > sentenceCountRange.maximum)
+  ) {
+    issues.push(
+      `${context!.task} utterance must contain ${sentenceCountRange.minimum}-${sentenceCountRange.maximum} sentences; received ${count}`,
+    );
+  } else if (
+    exactSentenceCount === undefined &&
+    !sentenceCountRange &&
+    (count < minimum || count > maximum)
+  ) {
     issues.push(`${speaker} utterance must contain ${minimum}-${maximum} sentences; received ${count}`);
   }
   if (context && !endsWithCompleteSentence(output.utterance)) {
     issues.push("utterance must end with a complete sentence");
+  }
+  if (
+    context?.task === "TOPIC_OPEN" &&
+    (output.utterance.match(/[?？]/gu)?.length ?? 0) !== 1
+  ) {
+    issues.push("TOPIC_OPEN must ask exactly one spoken question");
   }
   if (!shelfReferenceAllowed && output.shelf_ref !== null) {
     issues.push("shelf_ref must be null because this turn has no shelf-reference budget");
@@ -147,13 +170,14 @@ export function validateUtteranceQuality(
     "RESPOND_TO_USER_REPLY",
     "RESPOND_TO_USER_FOLLOWUP",
     "BRIDGE_EXCHANGE",
+    "DISCUSSION_SUMMARY",
   ]);
   if (context && discussionTasks.has(context.task)) {
     if (/[;；]/u.test(output.utterance)) {
       issues.push("spoken discussion dialogue must not use semicolons");
     }
 
-    const sentenceLengthLimit = context.language === "ko" ? 110 : 200;
+    const sentenceLengthLimit = context.language === "ko" ? 95 : 200;
     const sentenceSegments =
       typeof Intl.Segmenter === "function"
         ? [...new Intl.Segmenter(context.language, { granularity: "sentence" }).segment(output.utterance)]
@@ -166,7 +190,36 @@ export function validateUtteranceQuality(
           `spoken discussion sentence ${index + 1} exceeds ${sentenceLengthLimit} characters`,
         );
       }
+      if (
+        context.language === "ko" &&
+        (sentence.match(/[,，]/gu)?.length ?? 0) >= 3
+      ) {
+        issues.push(
+          `spoken Korean sentence ${index + 1} contains too many nested clauses`,
+        );
+      }
     });
+  }
+
+  if (
+    context?.language === "ko" &&
+    (
+      /오래\s+남/u.test(output.utterance) ||
+      /(?:대목|장면|말|질문|문제|부분|빈틈|사람|피해자)(?:은|는|이|가|도)?\s+(?:(?:가장|제일|특히|더)\s+)?(?:오래\s+)?남/u.test(
+        output.utterance,
+      )
+    )
+  ) {
+    issues.push(
+      "Korean dialogue should use 기억에 남다 or 마음에 걸리다 instead of bare 남다",
+    );
+  }
+  if (
+    context?.language === "ko" &&
+    context.task === "TOPIC_OPEN" &&
+    /무엇을\s+드러내는가/u.test(output.utterance)
+  ) {
+    issues.push("Korean TOPIC_OPEN must sound spoken rather than reciting an essay prompt");
   }
 
   return issues;

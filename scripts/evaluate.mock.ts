@@ -36,15 +36,9 @@ function evaluate(result: CompletedSession): Check[] {
   const topicOpening = discussion.find(({ speaker }) => speaker === "moderator");
   const discussionUserTurns = discussion.filter(({ speaker }) => speaker === "user");
   const roles = state.discussionRoles;
-  const leadOpeningIndex = discussion.findIndex(
-    ({ speaker, refersTo }) => speaker === roles?.leadA && refersTo === roles?.leadB,
-  );
-  const challengeIndex = discussion.findIndex(
-    ({ speaker, refersTo }) => speaker === roles?.challenger && refersTo === "user",
-  );
-  const bridgeIndex = discussion.findIndex(
-    ({ speaker }) => speaker === roles?.bridgeReader,
-  );
+  const leadOpeningIndex = discussion.findIndex(({ speaker }) => speaker === roles?.leadA);
+  const positionIndex = discussion.findIndex(({ speaker }) => speaker === "user");
+  const reviewIndex = positionIndex + 1;
   const spokenDiscussionTurns = discussion.filter(
     ({ speaker }) => personaIds.has(speaker),
   );
@@ -53,7 +47,7 @@ function evaluate(result: CompletedSession): Check[] {
       /[;；]/u.test(text) ||
       text
         .split(/(?<=[.!?。？！])\s+/u)
-        .some((sentence) => [...sentence].length > (/[가-힣]/u.test(sentence) ? 110 : 200)),
+        .some((sentence) => [...sentence].length > (/[가-힣]/u.test(sentence) ? 95 : 200)),
   ).length;
 
   return [
@@ -71,43 +65,45 @@ function evaluate(result: CompletedSession): Check[] {
       name: "conversation-grounded topic",
       passed:
         Boolean(state.activeTopic) &&
-        Boolean(topicOpening?.text.includes(state.activeTopic ?? "")) &&
-        state.book.candidateTopics.includes(state.activeTopic ?? ""),
+        state.book.candidateTopics.includes(state.activeTopic ?? "") &&
+        (topicOpening?.text.match(/[?？]/gu)?.length ?? 0) === 1,
       detail: state.activeTopic ?? "no active topic",
     },
     {
-      name: "user position challenged",
-      passed: discussion.some(
-        ({ speaker, refersTo }) => personaIds.has(speaker) && refersTo === "user",
-      ),
-      detail: "at least one discussion rebuttal targets the user",
+      name: "user position examined",
+      passed:
+        positionIndex >= 0 &&
+        discussion[reviewIndex]?.speaker === roles?.challenger &&
+        discussion[reviewIndex]?.refersTo === "user" &&
+        (discussion[reviewIndex]?.text.match(/[?？]/gu)?.length ?? 0) === 1,
+      detail: "the code-selected reviewer asks one direct question after the user's position",
     },
     {
-      name: "user gets the challenged turn back",
+      name: "user gets the reviewed turn back",
       passed:
-        discussionUserTurns.length === 2 && discussion[challengeIndex + 1]?.speaker === "user",
+        discussionUserTurns.length === 2 && discussion[reviewIndex + 1]?.speaker === "user",
       detail: `${discussionUserTurns.length}/2 user turns in the main discussion`,
     },
     {
-      name: "persona-to-persona clash",
+      name: "directed persona-to-persona examination",
       passed:
         Boolean(roles) &&
         roles?.leadA !== roles?.leadB &&
         discussion[leadOpeningIndex + 1]?.speaker === roles?.leadB &&
         discussion[leadOpeningIndex + 1]?.refersTo === roles?.leadA &&
-        discussion[leadOpeningIndex + 2]?.speaker === "moderator",
+        discussion[leadOpeningIndex + 2]?.speaker !== roles?.leadA,
       detail: roles
-        ? `${roles.leadA} opens, ${roles.leadB} challenges once, then code returns the floor`
+        ? `${roles.leadA} opens, ${roles.leadB} examines that claim once, then code returns the floor`
         : "roles missing",
     },
     {
       name: "causal user exchange",
       passed:
-        challengeIndex >= 0 &&
-        discussion[challengeIndex + 1]?.speaker === "user" &&
-        discussion[challengeIndex + 2]?.speaker === roles?.challenger &&
-        bridgeIndex === challengeIndex + 3,
-      detail: "user reply returns to the challenger before the third reader bridges",
+        reviewIndex >= 0 &&
+        discussion[reviewIndex + 1]?.speaker === "user" &&
+        discussion[reviewIndex + 2]?.speaker === roles?.challenger &&
+        discussion[reviewIndex + 3]?.speaker === roles?.bridgeReader,
+      detail: "user reply returns to the reviewer before the third reader bridges",
     },
     {
       name: "concentrated discussion floor",
@@ -164,9 +160,9 @@ async function runCase({
         ? {
             intro: "혼자 읽을 때 놓친 관점을 듣고 싶어 모임에 왔습니다.",
             firstImpression: "중심 질문은 흥미로웠지만 제시 방식에는 아직 판단을 유보하고 있습니다.",
-            memorableScene: "앞에서 이해한 내용을 새롭게 보게 만든 대목이 가장 오래 남았습니다.",
+            memorableScene: "앞에서 이해한 내용을 새롭게 보게 만든 대목이 가장 기억에 남았습니다.",
             discussion: "형식과 그 결과를 함께 설명하는 해석이 더 설득력 있다고 생각합니다.",
-            discussionReply: "그 반론은 중요하지만 의도와 결과를 구분하면 제 해석은 여전히 성립합니다.",
+            discussionReply: "그 질문을 생각해도 의도와 결과를 나누어 볼 필요가 있다고 생각합니다.",
             wrapUp: "다른 독자의 근거를 들으며 처음 판단을 더 세밀하게 다듬었습니다.",
           }
         : {

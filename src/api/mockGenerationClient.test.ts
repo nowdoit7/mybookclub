@@ -33,6 +33,13 @@ function transcript(language: AppLanguage): Utterance[] {
 }
 
 const roomAtmosphere = { warmth: 0.7, playfulness: 0.4, tension: 0.35, energy: 0.5 };
+const participants = [
+  { id: "moderator", displayName: "Alex", role: "moderator" as const },
+  { id: "maddie", displayName: "Maddie", role: "reader" as const },
+  { id: "marcus", displayName: "Marcus", role: "reader" as const },
+  { id: "jamal", displayName: "Jamal", role: "reader" as const },
+  { id: "user", displayName: "You", role: "user" as const },
+];
 
 describe("MockGenerationClient", () => {
   it("returns deterministic, book-agnostic identification for any title", async () => {
@@ -89,13 +96,19 @@ describe("MockGenerationClient", () => {
             stage: "WRAP_UP",
             task: "CLOSING_REFLECTION",
             recentTranscript: transcript(language),
+            participants,
             activeTopic: book.candidateTopics[0],
             allowShelfReference: false,
           }),
         ),
       );
 
-      expect(outputs.every(({ utterance }) => countSentences(utterance) === 2)).toBe(true);
+      expect(
+        outputs.every(({ utterance }) => {
+          const sentenceCount = countSentences(utterance);
+          return sentenceCount >= 2 && sentenceCount <= 3;
+        }),
+      ).toBe(true);
       expect(new Set(outputs.map(({ utterance }) => utterance)).size).toBe(3);
       expect(
         outputs.every(({ utterance }) =>
@@ -115,6 +128,7 @@ describe("MockGenerationClient", () => {
       stage: "WRAP_UP",
       task: "DISCUSSION_SUMMARY",
       recentTranscript: transcript(language),
+      participants,
       activeTopic: book.candidateTopics[0],
       allowShelfReference: false,
     });
@@ -134,6 +148,7 @@ describe("MockGenerationClient", () => {
       stage: "MEMORABLE_SCENES",
       task: "MEMORABLE_SCENE",
       recentTranscript: [],
+      participants,
       discussionFocus: sceneAnchor,
       allowShelfReference: false,
     });

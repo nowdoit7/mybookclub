@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "lockedAt": "2026-07-24T11:17:07.1023427+09:00",
+  "protocol": "output-unseen locked holdout",
+  "claimBoundary": "Book titles and evidence-pack construction were known before generation. Only the holdout dialogue outputs remained unseen after this lock.",
+  "frozenInputs": [
+    {
+      "path": "scripts/character-core/model.ts",
+      "sha256": "1b05c314abec2dc241d69671527fb2fe2090db390a02dd35409a22bfe8200a95"
+    },
+    {
+      "path": "scripts/character-core/prototypeCores.ts",
+      "sha256": "9ff26c2636ae6f22938c6c260fd9fc48158f5ef7dedad21fc209b852cbd717bc"
+    },
+    {
+      "path": "scripts/character-core/realBookModel.ts",
+      "sha256": "7a16f79ec217ae1135efb16872ff0678634df1c8b0c93ce27e77b5b4a9036b0d"
+    },
+    {
+      "path": "scripts/character-core/realBookEvaluator.ts",
+      "sha256": "e80fd8c6c6bfe3084af817582aa897ee61b102722078d6bd750916f062c4b6b0",
+      "originalSha256": "762ae4adfe874646fbc1eba7dcfe5c2d1dbf9f06a342d1a62cf4abcb67faa412",
+      "postLockCorrection": "Corrected six stability-only question ID prefixes from ATH/HON/PAP to the already-frozen pack IDs ATO/HNM/PNP. This did not change Character Core definitions, prompts, evidence packs, or any base/holdout dialogue."
+    },
+    {
+      "path": "fixtures/character-core/real-books/evidence-packs.dev.jsonl",
+      "sha256": "080333cae8a74a1d733ebebf3e79f7d4df13e978ac637b2d45e44fb7c773567c"
+    },
+    {
+      "path": "fixtures/character-core/real-books/evidence-packs.holdout.jsonl",
+      "sha256": "76fb5c0f70c00d89bfcde26fb6b5e806bdcb37d0e807f5891ababc9e813e3cc9"
+    }
+  ],
+  "holdoutBooks": [
+    "nineteen-eighty-four-george-orwell",
+    "murder-of-roger-ackroyd-agatha-christie",
+    "one-hundred-years-of-solitude-gabriel-garcia-marquez"
+  ],
+  "postLockCorrections": [
+    {
+      "path": "scripts/character-core/realBookEvaluator.ts",
+      "scope": "stability cell references only",
+      "affectsBaseOrHoldoutDialogueGeneration": false,
+      "reason": "Six planned question IDs did not exist because their prefixes differed from the canonical IDs in the already-frozen evidence packs."
+    }
+  ]
+}

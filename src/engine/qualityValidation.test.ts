@@ -175,10 +175,10 @@ describe("utterance quality validation", () => {
         false,
         { language: "ko", task: "CHALLENGE_PERSONA" },
       ),
-    ).toContain("spoken discussion sentence 1 exceeds 110 characters");
+    ).toContain("spoken discussion sentence 1 exceeds 95 characters");
   });
 
-  it("enforces the exact two-sentence contract for a directed reader clash", () => {
+  it("allows two or three short sentences for a directed reader exchange", () => {
     expect(
       validateUtteranceQuality(
         {
@@ -191,7 +191,117 @@ describe("utterance quality validation", () => {
         false,
         { language: "en", task: "CHALLENGE_PERSONA" },
       ),
-    ).toContain("CHALLENGE_PERSONA utterance must contain exactly 2 sentences; received 3");
+    ).toEqual([]);
+  });
+
+  it("rejects a Korean discussion sentence with stacked clauses", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance:
+            "데브님, 그 지적은 맞지만, 책임은 별개이니, 당시 위협을 재판이 제대로 따졌는지 묻고 싶습니다. 어떤 장면을 근거로 보셨나요?",
+          stance: 0,
+          refers_to: "dev",
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+        { language: "ko", task: "CHALLENGE_PERSONA" },
+      ),
+    ).toContain("spoken Korean sentence 1 contains too many nested clauses");
+  });
+
+  it("requires a spoken Korean topic question instead of an essay prompt", () => {
+    const issues = validateUtteranceQuality(
+      {
+        utterance: "재판 과정은 법과 사회의 판단 기준에 대해 무엇을 드러내는가?",
+        stance: null,
+        refers_to: null,
+        shelf_ref: null,
+      },
+      "moderator",
+      false,
+      { language: "ko", task: "TOPIC_OPEN" },
+    );
+
+    expect(issues).toContain(
+      "Korean TOPIC_OPEN must sound spoken rather than reciting an essay prompt",
+    );
+  });
+
+  it("keeps Korean memory collocations explicit", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: "그 장면이 오래 남았습니다. 다음 날의 태도까지 다시 생각하게 됐어요.",
+          stance: 0,
+          refers_to: null,
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+        { language: "ko", task: "MEMORABLE_SCENE" },
+      ),
+    ).toContain(
+      "Korean dialogue should use 기억에 남다 or 마음에 걸리다 instead of bare 남다",
+    );
+  });
+
+  it.each([
+    "그 장면이 제일 남았어요. 그래서 다시 읽어 보고 싶습니다.",
+    "제게는 해변의 총성이 이어지는 장면이 남습니다. 책임의 범위는 별개입니다.",
+    "법정 일을 하는 사람이라 그 빈틈이 특히 오래 남았습니다. 판단은 보류하겠습니다.",
+  ])("rejects another bare Korean remain construction: %s", (utterance) => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance,
+          stance: 0,
+          refers_to: null,
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+        { language: "ko", task: "MEMORABLE_SCENE" },
+      ),
+    ).toContain(
+      "Korean dialogue should use 기억에 남다 or 마음에 걸리다 instead of bare 남다",
+    );
+  });
+
+  it("rejects an overlong Korean moderator summary sentence", () => {
+    const longSentence =
+      "David님이 검사가 커피와 담배와 다음 날의 행적을 반복해 인격의 유죄 근거처럼 썼다고 짚어 주셔서 살인 책임과 감정 규범의 심판을 분리해야 한다는 경계가 훨씬 더 또렷해졌습니다.";
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: `중심 질문을 확인했습니다. 의견이 모였습니다. ${longSentence} 모두 고맙습니다.`,
+          stance: null,
+          refers_to: null,
+          shelf_ref: null,
+        },
+        "moderator",
+        false,
+        { language: "ko", task: "DISCUSSION_SUMMARY" },
+      ),
+    ).toContain("spoken discussion sentence 3 exceeds 95 characters");
+  });
+
+  it("accepts a three-sentence direct response to the user", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance:
+            "David, your distinction clarifies the motive question. It changes how I read the trial. The victim's absence still remains unresolved.",
+          stance: -0.5,
+          refers_to: "user",
+          shelf_ref: null,
+        },
+        "persona",
+        false,
+        { language: "en", task: "RESPOND_TO_USER_FOLLOWUP" },
+      ),
+    ).toEqual([]);
   });
 
   it("rejects dialogue that stops before the final sentence is complete", () => {

@@ -6,6 +6,24 @@ import {
   resolveGenerationApiBaseUrl,
 } from "./httpGenerationClient";
 import { clearGenerationDiagnostics, getGenerationDiagnostics } from "./diagnostics";
+import type { ReadingNotesRequest, UtteranceRequest } from "./generationClient";
+
+const identifiedBookResponse = {
+  canonical_title: "A Reader-Selected Book",
+  author: "A. Reader",
+  work_scope: "single_book",
+  included_titles: ["A Reader-Selected Book"],
+  summary:
+    "The opening establishes a central question for the reader. A later change complicates the first interpretation. The structure makes two readings plausible. The ending leaves their tension unresolved.",
+  main_characters: ["Ari"],
+  candidate_topics: ["Topic one?", "Topic two?", "Topic three?"],
+  verification_status: "verified",
+  verification_note: "Two sources matched this book.",
+  sources: [
+    { url: "https://publisher.example/book" },
+    { url: "https://library.example/record" },
+  ],
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -66,6 +84,136 @@ describe("HttpGenerationClient", () => {
     expect(getGenerationDiagnostics()).toMatchObject([
       { endpoint: "user-stance", outcome: "success", status: 200 },
     ]);
+    const request = fetchMock.mock.calls[0][1];
+    expect(request?.body).toBe(JSON.stringify({
+      language: "en",
+      text: "I sympathize with him without excusing him.",
+      target: "overall_impression",
+      book: {
+        title: "A Reader-Selected Book",
+        author: "A. Reader",
+        workScope: "single_book",
+        includedTitles: ["A Reader-Selected Book"],
+        confirmedSummary: "A sufficiently long confirmed summary used only for this client boundary test and no model call.",
+        mainCharacters: ["Ari"],
+        candidateTopics: ["Topic one?", "Topic two?", "Topic three?"],
+        verificationStatus: "verified",
+        verificationNote: "Two sources matched this book.",
+        sources: [
+          { url: "https://publisher.example/book" },
+          { url: "https://library.example/record" },
+        ],
+      },
+    }));
+    expect(request?.headers).not.toHaveProperty("x-character-core-experiment");
+  });
+
+  it("marks every experimental post and only adds the Korean prompt marker to notes and utterances", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const path = String(url);
+      const body = path.endsWith("/utterance")
+        ? { utterance: "근거와 해석을 구분해 보겠습니다.", stance: 0, refers_to: null, shelf_ref: null }
+        : path.endsWith("/reading-notes")
+          ? {
+              overall_take: "이 작품은 판단을 서두르기보다 드러난 행동과 그 결과를 함께 살펴야 합니다.",
+              overall_stance: 0,
+              stance_by_topic: [
+                { topic: "하나", stance: 0, reason: "첫 번째 근거" },
+                { topic: "둘", stance: 0, reason: "두 번째 근거" },
+                { topic: "셋", stance: 0, reason: "세 번째 근거" },
+              ],
+              key_scenes: ["첫 번째 장면", "두 번째 장면"],
+              shelf_connections: [],
+              personal_reaction: "확신을 미루게 만드는 대목이 오래 남았습니다.",
+              unresolved_question: "다른 조건에서도 같은 판단이 가능한가요?",
+              possible_revision: "반대되는 행동의 결과가 제시된다면 판단을 고치겠습니다.",
+              question_for_table: "여러분은 어느 행동을 가장 중요한 근거로 보셨나요?",
+            }
+        : identifiedBookResponse;
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    const client = new HttpGenerationClient("/api/generate", "core-session", {
+      characterCoreExperiment: { version: "v2" },
+    });
+
+    await client.identifyBook({ title: "A Reader-Selected Book", language: "ko" });
+    await client.generateReadingNotes({ language: "ko" } as ReadingNotesRequest);
+    const utteranceInput = { language: "ko" } as UtteranceRequest;
+    await client.generateUtterance(utteranceInput);
+
+    for (const [, request] of fetchMock.mock.calls) {
+      expect(request?.headers).toMatchObject({
+        "x-session-id": "core-session",
+        "x-character-core-experiment": "v2",
+      });
+    }
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).not.toHaveProperty(
+      "characterCoreExperiment",
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({
+      language: "ko",
+      characterCoreExperiment: { version: "v2" },
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toMatchObject({
+      language: "ko",
+      characterCoreExperiment: { version: "v2" },
+    });
+  });
+
+  it("keeps the body marker out of English requests while retaining the experiment header", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          utterance: "Let us separate the evidence from the inference.",
+          stance: 0,
+          refers_to: null,
+          shelf_ref: null,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const client = new HttpGenerationClient("/api/generate", "core-session", {
+      characterCoreExperiment: { version: "v2" },
+    });
+
+    await client.generateUtterance({ language: "en" } as UtteranceRequest);
+
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
+      "x-character-core-experiment": "v2",
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).not.toHaveProperty(
+      "characterCoreExperiment",
+    );
+  });
+
+  it("blocks a local experiment before request 46 leaves the browser", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify(identifiedBookResponse), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const client = new HttpGenerationClient("/api/generate", "core-session", {
+      characterCoreExperiment: { version: "v2" },
+    });
+
+    for (let request = 0; request < 45; request += 1) {
+      await client.identifyBook({ title: "A Reader-Selected Book", language: "ko" });
+    }
+    const blocked = client.identifyBook({ title: "A Reader-Selected Book", language: "ko" });
+
+    await expect(blocked).rejects.toMatchObject({
+      code: "session_call_limit_reached",
+      status: 429,
+      options: {
+        endpoint: "book-identification",
+        detail: expect.stringContaining("limited to 45 generation requests"),
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(45);
   });
 
   it("turns typed server failures into client errors", async () => {
@@ -127,20 +275,7 @@ describe("HttpGenerationClient", () => {
     resolveFetch(
       new Response(
         JSON.stringify({
-          canonical_title: "A Reader-Selected Book",
-          author: "A. Reader",
-          work_scope: "single_book",
-          included_titles: ["A Reader-Selected Book"],
-          summary:
-            "The opening establishes a central question for the reader. A later change complicates the first interpretation. The structure makes two readings plausible. The ending leaves their tension unresolved.",
-          main_characters: ["Ari"],
-          candidate_topics: ["Topic one?", "Topic two?", "Topic three?"],
-          verification_status: "verified",
-          verification_note: "Two sources matched this book.",
-          sources: [
-            { url: "https://publisher.example/book" },
-            { url: "https://library.example/record" },
-          ],
+          ...identifiedBookResponse,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bookIdentificationRequestSchema,
   bookIdentificationSchema,
+  characterCoreExperimentMarkerSchema,
   discussionFocusSchema,
   readingNotesSchema,
   recapSchema,
@@ -35,6 +37,27 @@ describe("structured output contracts", () => {
   it("rejects undeclared properties", () => {
     expect(() =>
       userStanceSchema.parse({ stance: 1, paraphrase: "Mostly sympathetic", extra: true }),
+    ).toThrow();
+  });
+
+  it("accepts only the strict Character Core v2 request marker", () => {
+    expect(characterCoreExperimentMarkerSchema.parse({ version: "v2" })).toEqual({
+      version: "v2",
+    });
+    expect(() =>
+      characterCoreExperimentMarkerSchema.parse({ version: "v1" }),
+    ).toThrow();
+    expect(() =>
+      characterCoreExperimentMarkerSchema.parse({ version: "v2", mode: "unsafe" }),
+    ).toThrow();
+  });
+
+  it("keeps the Character Core marker off unrelated request contracts", () => {
+    expect(() =>
+      bookIdentificationRequestSchema.parse({
+        title: "A Reader-Selected Book",
+        characterCoreExperiment: { version: "v2" },
+      }),
     ).toThrow();
   });
 

@@ -45,6 +45,7 @@ createApp({
   generationClient,
   allowedOrigins,
   sessionCallLimit,
+  allowLocalCharacterCoreExperiment: process.env.NODE_ENV !== "production",
   liveGenerationAvailable: Boolean(process.env.OPENAI_API_KEY),
   model,
   exposeErrorDetails: process.env.NODE_ENV !== "production",

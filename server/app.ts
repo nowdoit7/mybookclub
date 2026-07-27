@@ -22,6 +22,10 @@ import {
   ModelRefusalError,
 } from "../src/api/errors";
 import type { GenerationClient } from "../src/api/generationClient";
+import {
+  CHARACTER_CORE_EXPERIMENT_VERSION,
+  isLoopbackHostname,
+} from "../src/characterCore/runtime";
 
 interface RequestLogger {
   info(message: string): void;
@@ -33,6 +37,8 @@ interface CreateAppOptions {
   allowedOrigins: string[];
   trustProxy?: boolean | number;
   sessionCallLimit?: number;
+  requestRateLimit?: number;
+  allowLocalCharacterCoreExperiment?: boolean;
   liveGenerationAvailable?: boolean;
   model?: string;
   exposeErrorDetails?: boolean;
@@ -65,6 +71,17 @@ const consoleLogger: RequestLogger = {
   info: (message) => console.info(message),
   error: (message) => console.error(message),
 };
+
+const LOCAL_CHARACTER_CORE_SESSION_CALL_LIMIT = 45;
+
+export function sessionCallLimitForRequest(
+  normalLimit: number,
+  isCharacterCoreExperiment: boolean,
+): number {
+  return isCharacterCoreExperiment
+    ? LOCAL_CHARACTER_CORE_SESSION_CALL_LIMIT
+    : normalLimit;
+}
 
 function requestIdFor(response: express.Response): string {
   return typeof response.locals.requestId === "string" ? response.locals.requestId : "unknown";
@@ -189,12 +206,135 @@ function classifyOpenAIError(error: APIError): { status: number; diagnostic: Dia
   };
 }
 
-function createSessionCallLimiter(limit: number, exposeErrorDetails: boolean) {
-  const callCounts = new Map<string, number>();
+function isLoopbackOrigin(origin: string | undefined): boolean {
+  if (!origin) return false;
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    return isLoopbackHostname(hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {
+  if (!remoteAddress) return false;
+  if (remoteAddress !== remoteAddress.trim()) return false;
+  let normalized = remoteAddress.toLowerCase();
+  if (normalized.startsWith("[")) {
+    if (!normalized.endsWith("]")) return false;
+    normalized = normalized.slice(1, -1);
+  } else if (normalized.includes("[") || normalized.includes("]")) {
+    return false;
+  }
+  const zoneIndex = normalized.indexOf("%");
+  if (zoneIndex >= 0) {
+    const baseAddress = normalized.slice(0, zoneIndex);
+    const zone = normalized.slice(zoneIndex + 1);
+    if (
+      baseAddress !== "::1" ||
+      !/^[a-z0-9_.-]+$/u.test(zone) ||
+      zone.includes("%")
+    ) {
+      return false;
+    }
+    normalized = baseAddress;
+  }
+  return (
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "::ffff:127.0.0.1"
+  );
+}
+
+function bodyHasCharacterCoreMarker(body: unknown): boolean {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    Object.prototype.hasOwnProperty.call(body, "characterCoreExperiment")
+  );
+}
+
+function bodyCharacterCoreVersion(body: unknown): unknown {
+  if (!bodyHasCharacterCoreMarker(body)) return undefined;
+  const marker = (body as { characterCoreExperiment?: unknown }).characterCoreExperiment;
+  if (typeof marker !== "object" || marker === null) return undefined;
+  return (marker as { version?: unknown }).version;
+}
+
+function authorizeCharacterCoreExperiment(
+  allowLocalCharacterCoreExperiment: boolean,
+  exposeErrorDetails: boolean,
+) {
+  return (request: express.Request, response: express.Response, next: express.NextFunction) => {
+    const header = request.header("x-character-core-experiment");
+    const hasHeader = header !== undefined;
+    const hasBodyMarker = bodyHasCharacterCoreMarker(request.body);
+    if (!hasHeader && !hasBodyMarker) {
+      next();
+      return;
+    }
+
+    const supportsBodyMarker =
+      request.path === "/reading-notes" || request.path === "/utterance";
+    const authorized =
+      allowLocalCharacterCoreExperiment &&
+      header === CHARACTER_CORE_EXPERIMENT_VERSION &&
+      isLoopbackOrigin(request.header("origin")) &&
+      isLoopbackRemoteAddress(request.socket.remoteAddress) &&
+      (supportsBodyMarker
+        ? hasBodyMarker &&
+          bodyCharacterCoreVersion(request.body) === CHARACTER_CORE_EXPERIMENT_VERSION
+        : !hasBodyMarker);
+
+    if (!authorized) {
+      sendTypedError(
+        response,
+        403,
+        {
+          code: "character_core_experiment_forbidden",
+          detail:
+            "The Character Core experiment is available only to an explicitly marked loopback session.",
+        },
+        exposeErrorDetails,
+      );
+      return;
+    }
+
+    response.locals.characterCoreExperiment = CHARACTER_CORE_EXPERIMENT_VERSION;
+    next();
+  };
+}
+
+function createSessionCallLimiter(normalLimit: number, exposeErrorDetails: boolean) {
+  const callCounts = new Map<
+    string,
+    { count: number; characterCoreExperiment: boolean }
+  >();
 
   return (request: express.Request, response: express.Response, next: express.NextFunction) => {
     const sessionId = request.header("x-session-id")?.trim() || request.ip || "anonymous";
-    const nextCount = (callCounts.get(sessionId) ?? 0) + 1;
+    const isCharacterCoreExperiment =
+      response.locals.characterCoreExperiment === CHARACTER_CORE_EXPERIMENT_VERSION;
+    const prior = callCounts.get(sessionId);
+
+    if (
+      prior &&
+      prior.characterCoreExperiment !== isCharacterCoreExperiment
+    ) {
+      sendTypedError(
+        response,
+        403,
+        {
+          code: "session_experiment_mismatch",
+          detail: "A session cannot switch Character Core experiment mode after generation begins.",
+        },
+        exposeErrorDetails,
+      );
+      return;
+    }
+
+    const nextCount = (prior?.count ?? 0) + 1;
+    const limit = sessionCallLimitForRequest(normalLimit, isCharacterCoreExperiment);
 
     if (nextCount > limit) {
       sendTypedError(
@@ -209,7 +349,10 @@ function createSessionCallLimiter(limit: number, exposeErrorDetails: boolean) {
       return;
     }
 
-    callCounts.set(sessionId, nextCount);
+    callCounts.set(sessionId, {
+      count: nextCount,
+      characterCoreExperiment: isCharacterCoreExperiment,
+    });
     next();
   };
 }
@@ -219,6 +362,8 @@ export function createApp({
   allowedOrigins,
   trustProxy,
   sessionCallLimit = 60,
+  requestRateLimit = 30,
+  allowLocalCharacterCoreExperiment = false,
   liveGenerationAvailable = true,
   model = "gpt-5.6-terra",
   exposeErrorDetails = false,
@@ -250,7 +395,20 @@ export function createApp({
   app.use(express.json({ limit: "128kb" }));
 
   app.get("/api/health", (_request, response) => {
-    response.json({ status: "ok", liveGenerationAvailable, model });
+    response.json({
+      status: "ok",
+      liveGenerationAvailable,
+      model,
+      ...(allowLocalCharacterCoreExperiment
+        ? {
+            characterCoreExperiment: {
+              version: CHARACTER_CORE_EXPERIMENT_VERSION,
+              localOnly: true,
+              sessionCallLimit: LOCAL_CHARACTER_CORE_SESSION_CALL_LIMIT,
+            },
+          }
+        : {}),
+    });
   });
 
   app.use("/api/generate", (request, response, next) => {
@@ -280,10 +438,17 @@ export function createApp({
     });
     next();
   });
+  app.use(
+    "/api/generate",
+    authorizeCharacterCoreExperiment(
+      allowLocalCharacterCoreExperiment,
+      exposeErrorDetails,
+    ),
+  );
 
   const generationRateLimit = rateLimit({
     windowMs: 60_000,
-    limit: 30,
+    limit: requestRateLimit,
     standardHeaders: "draft-8",
     legacyHeaders: false,
     handler(_request, response) {

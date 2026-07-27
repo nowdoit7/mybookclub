@@ -7,6 +7,7 @@ import type {
 } from "../api/contracts";
 import type {
   GenerationClient,
+  ParticipantLabel,
   RecapRequest,
   UtteranceRequest,
   UtteranceTask,
@@ -148,8 +149,41 @@ function getTopicStance(notes: ReadingNotes, topic: string): number {
   return notes.stanceByTopic.find((item) => item.topic === topic)?.stance ?? notes.overallStance;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+export function resolveDirectlyAddressedPersona(
+  text: string,
+  personas: PersonaCard[],
+  language: AppLanguage,
+): PersonaCard | undefined {
+  const normalized = text.normalize("NFKC");
+  const matches = personas.filter((persona) => {
+    const aliases = new Set([
+      persona.name.trim(),
+      localizedSpeakerName(persona.id, language).trim(),
+    ]);
+    return [...aliases].some((alias) => {
+      if (!alias) return false;
+      if (language === "ko") {
+        return new RegExp(
+          `(?:^|[\\s,，.!?])${escapeRegExp(alias)}(?:님)?(?:에게|한테|께|은|는|이|가|도|와|과|[\\s,:，.!?]|$)`,
+          "iu",
+        ).test(normalized);
+      }
+      return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRegExp(alias)}(?:[^\\p{L}\\p{N}]|$)`, "iu")
+        .test(normalized);
+    });
+  });
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 type GenerationOptions = Partial<
-  Pick<UtteranceRequest, "activeTopic" | "targetSpeaker" | "userArgument" | "discussionFocus">
+  Pick<
+    UtteranceRequest,
+    "activeTopic" | "targetSpeaker" | "userArgument" | "discussionFocus" | "discussionOrigin"
+  >
 > & { allowShelfReference?: boolean };
 
 const MAX_DISCUSSION_EXTENSIONS = 2;
@@ -196,7 +230,7 @@ export function selectDiscussionTopic(
   personas: PersonaCard[],
   notes: Record<string, ReadingNotes>,
   focus?: DiscussionFocus,
-): { topic: string; evidence?: string } {
+): { topic: string; evidence?: string; origin: "user" | "table" } {
   const phraseOnly = (value?: string) =>
     value?.replace(/[.!?。？！]+/gu, ",").replace(/,+$/u, "").slice(0, 180);
   const topicSpread = (topic: string) => {
@@ -208,6 +242,7 @@ export function selectDiscussionTopic(
     return {
       topic,
       evidence: phraseOnly(extracted?.userEvidence ?? extracted?.evidence),
+      origin: extracted?.userEvidence ? "user" as const : "table" as const,
       score:
         (extracted?.relevance ?? 0) * 2 +
         (extracted?.userRelevance ?? 0) * 3 +
@@ -220,6 +255,7 @@ export function selectDiscussionTopic(
     candidates.push({
       topic: focus.emergentQuestion,
       evidence: phraseOnly(focus.emergentEvidence),
+      origin: focus.emergentUserRelevance >= 1.5 ? "user" : "table",
       score:
         focus.emergentRelevance * 2 +
         focus.emergentUserRelevance * 3 +
@@ -230,7 +266,11 @@ export function selectDiscussionTopic(
   }
 
   candidates.sort((left, right) => right.score - left.score);
-  return { topic: candidates[0].topic, evidence: candidates[0].evidence };
+  return {
+    topic: candidates[0].topic,
+    evidence: candidates[0].evidence,
+    origin: candidates[0].origin,
+  };
 }
 
 export function selectLeadDebaters(
@@ -276,6 +316,7 @@ interface PreparedUtterance {
   speaker: PersonaCard | "moderator";
   output: UtteranceOutput;
   shelfKey: string;
+  targetSpeaker?: string;
 }
 
 function createTaskLimiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
@@ -346,6 +387,29 @@ export class SessionEngine {
   private waitForSessionComplete?: RunSessionOptions["waitForSessionComplete"];
   private requestDiscussionAction?: RunSessionOptions["requestDiscussionAction"];
   private discussionFocusPromise?: Promise<DiscussionFocus | undefined>;
+
+  private participantLabels(): ParticipantLabel[] {
+    return [
+      {
+        id: "moderator",
+        displayName: localizedSpeakerName("moderator", this.language),
+        role: "moderator",
+      },
+      ...this.state.personas.map((persona) => ({
+        id: persona.id,
+        displayName: localizedSpeakerName(persona.id, this.language),
+        role: "reader" as const,
+      })),
+      { id: "user", displayName: this.userDisplayName, role: "user" },
+    ];
+  }
+
+  private displayNameFor(speakerId: string): string {
+    return (
+      this.participantLabels().find(({ id }) => id === speakerId)?.displayName ??
+      localizedSpeakerName(speakerId, this.language)
+    );
+  }
 
   constructor(
     private readonly client: GenerationClient,
@@ -509,12 +573,14 @@ export class SessionEngine {
               )
             : this.state.transcript,
         ),
+        participants: this.participantLabels(),
         activeTopic: options.activeTopic,
         targetSpeaker: options.targetSpeaker,
         userArgument: options.userArgument,
         allowShelfReference,
         validationError,
         discussionFocus: options.discussionFocus,
+        discussionOrigin: options.discussionOrigin,
       });
       const issues = validateUtteranceQuality(
         output,
@@ -535,22 +601,30 @@ export class SessionEngine {
         }
       }
       if (
-        task === "TOPIC_OPEN" &&
-        options.activeTopic &&
-        !output.utterance.includes(options.activeTopic)
-      ) {
-        issues.push("TOPIC_OPEN must state the code-selected active topic verbatim");
-      }
-      if (
         (task === "CHALLENGE_PERSONA" || task === "CHALLENGE_USER" || task === "DEVILS_ADVOCATE") &&
         (output.utterance.match(/[?？]/gu)?.length ?? 0) !== 1
       ) {
         issues.push("a direct challenge must ask exactly one pointed question");
       }
-      if (options.targetSpeaker && output.refers_to !== options.targetSpeaker) {
-        issues.push("a directed turn must preserve the code-selected target speaker");
+      const targetDisplayName = options.targetSpeaker
+        ? this.displayNameFor(options.targetSpeaker)
+        : undefined;
+      const requiresSpokenTarget =
+        options.targetSpeaker !== "user" ||
+        targetDisplayName !== localizedSpeakerName("user", this.language);
+      if (
+        options.targetSpeaker &&
+        targetDisplayName &&
+        requiresSpokenTarget &&
+        !output.utterance.includes(targetDisplayName)
+      ) {
+        issues.push(
+          `a directed turn must address the exact target display name ${JSON.stringify(targetDisplayName)}`,
+        );
       }
-      if (issues.length === 0) return { speaker, output, shelfKey };
+      if (issues.length === 0) {
+        return { speaker, output, shelfKey, targetSpeaker: options.targetSpeaker };
+      }
       validationError = issues.join("; ");
     }
 
@@ -558,7 +632,7 @@ export class SessionEngine {
       `Quality fallback: task=${task}; speaker=${isModerator ? "moderator" : speaker.id}`,
     );
     const output = this.buildFallbackUtterance(speaker, task, options);
-    return { speaker, output, shelfKey };
+    return { speaker, output, shelfKey, targetSpeaker: options.targetSpeaker };
   }
 
   private buildFallbackUtterance(
@@ -568,9 +642,20 @@ export class SessionEngine {
   ): UtteranceOutput {
     const ko = this.language === "ko";
     const targetsUser = (options.targetSpeaker ?? "user") === "user";
-    const target = localizedSpeakerName(options.targetSpeaker ?? "user", this.language);
+    const target = this.displayNameFor(options.targetSpeaker ?? "user");
     const targetLabel = target;
+    const usesDefaultUserLabel =
+      (options.targetSpeaker ?? "user") === "user" &&
+      target === localizedSpeakerName("user", this.language);
+    const targetVocative = usesDefaultUserLabel
+      ? ""
+      : ko
+        ? `${targetLabel}님`
+        : targetLabel;
+    const address = targetVocative ? `${targetVocative}, ` : "";
+    const targetSubject = target === "나" ? "말씀하신 분이" : `${targetLabel}님이`;
     const topic = options.activeTopic ?? this.state.activeTopic ?? this.state.book.candidateTopics[0];
+    const userPoint = options.userArgument?.paraphrase.trim().slice(0, 120);
     if (speaker === "moderator") {
       const moderatorLines: Partial<Record<UtteranceTask, string>> = ko
         ? {
@@ -579,11 +664,11 @@ export class SessionEngine {
             FIRST_IMPRESSIONS_OPEN: "이제 책 이야기로 들어가 보겠습니다. 구체적인 장면은 잠시 뒤에 두고, 책을 덮었을 때 남은 전체적인 첫인상부터 들려주세요.",
             SCENES_OPEN: "서로 다른 첫인상이 어디서 시작됐는지 조금 보이네요. 이번에는 그 느낌을 만든 구체적인 장면 하나를 골라볼까요?",
             TOPIC_OPEN: `앞선 이야기에서 한 질문이 선명해졌습니다. ${topic}`,
-            ASK_USER_POSITION: "두 사람의 견해가 갈렸습니다. 여러분은 이 질문에서 어느 쪽에 더 가까운가요?",
+            ASK_USER_POSITION: "두 사람의 관점을 들었습니다. 여러분은 이 질문을 어떻게 보시나요?",
             DEVILS_ADVOCATE: "잠시 반대편에서 묻겠습니다. 지금의 해석이 놓치고 있는 가장 강한 반례는 무엇일까요?",
-            TOPIC_CLOSE: "이견은 완전히 풀리지 않았지만 어디에서 갈리는지는 분명해졌습니다. 이 긴장을 남겨 둔 채 마무리로 가겠습니다.",
+            TOPIC_CLOSE: "서로 같은 지점과 다르게 본 지점이 조금 더 분명해졌습니다. 이 흐름을 가지고 마무리로 가겠습니다.",
             WRAP_OPEN: "이제 각자 오늘 테이블에서 가져갈 생각을 하나씩 남겨보겠습니다. 처음 생각과 달라진 점이 없어도 괜찮습니다.",
-            DISCUSSION_SUMMARY: "오늘은 같은 책의 근거가 서로 다른 판단으로 이어지는 지점을 살폈습니다. 여러분이 보탠 구분 덕분에 의견이 갈리는 경계도 더 선명해졌습니다. 몇몇 판단은 움직였지만 가장 강한 반론은 아직 남아 있습니다. 함께 이야기해 주셔서 고맙고, 이제 모임 기록에서 그 흐름을 확인하겠습니다.",
+            DISCUSSION_SUMMARY: "오늘은 같은 장면을 두고 무엇을 중요하게 봤는지 이야기했습니다. 여러분이 보탠 구분 덕분에 서로 같은 지점과 다른 지점이 더 분명해졌습니다. 결론이 모두 같아지지는 않았지만 각 판단의 범위는 전보다 또렷해졌습니다. 함께 이야기해 주셔서 고맙고, 이제 모임 기록에서 그 흐름을 확인하겠습니다.",
           }
         : {
             WELCOME: "Welcome to Open Reading Club. Before discussing the book, let us first meet the people sharing the table tonight.",
@@ -591,11 +676,11 @@ export class SessionEngine {
             FIRST_IMPRESSIONS_OPEN: "Now we can open the book. Save the specific scenes for a moment and begin with the overall impression that remained when you finished.",
             SCENES_OPEN: "Those first impressions already point in different directions. Now choose one concrete scene that produced yours.",
             TOPIC_OPEN: `One question has become clear from the earlier conversation. ${topic}`,
-            ASK_USER_POSITION: "The two readers have reached a real disagreement. Where do you stand on this question?",
+            ASK_USER_POSITION: "You have heard two readers test the question. Where do you stand?",
             DEVILS_ADVOCATE: "Let me push from the other side. What is the strongest counterexample this reading might miss?",
-            TOPIC_CLOSE: "The disagreement is not resolved, but its fault line is clearer. Let us carry that tension into the closing round.",
+            TOPIC_CLOSE: "The shared ground and the remaining difference are clearer. Let us carry both into the closing round.",
             WRAP_OPEN: "Let us each leave one thought from tonight's table. It is fine if your original view has not changed.",
-            DISCUSSION_SUMMARY: "Tonight we examined how the same evidence can lead readers toward different judgments. Your distinctions made the fault line between those judgments clearer. Some views moved, while the strongest counterclaim remains unresolved. Thank you all for sharing the table, and the written recap comes next.",
+            DISCUSSION_SUMMARY: "Tonight we compared what each reader treated as important in the same evidence. Your distinction made both the shared ground and the remaining difference clearer. The room did not reach one answer, but each claim now has a more precise boundary. Thank you all for sharing the table, and the written recap comes next.",
           };
       return {
         utterance: moderatorLines[task] ?? (ko
@@ -615,12 +700,19 @@ export class SessionEngine {
           ? `오늘은 ${localizedSpeakerName(speaker.id, this.language)}의 기록된 사고방식을 빌린 상상 속 독자로 함께합니다. ${speaker.socialIntroSeed.ko}`
           : `Tonight I join as an imagined reader shaped by ${speaker.name}'s documented ideas. ${speaker.socialIntroSeed.en}`
         : ko
-          ? `안녕하세요, ${localizedSpeakerName(speaker.id, this.language)}이고 ${speaker.roleLabel.ko}로 지내고 있어요. ${speaker.socialIntroSeed.ko}`
-          : `Hi, I'm ${speaker.name}. My day job is ${speaker.roleLabel.en.toLowerCase()}. ${speaker.socialIntroSeed.en}`;
+          ? `안녕하세요, ${localizedSpeakerName(speaker.id, this.language)}입니다. ${speaker.socialIntroSeed.ko}`
+          : `Hi, I'm ${speaker.name}. ${speaker.socialIntroSeed.en}`;
     } else if (task === "CHALLENGE_USER") {
+      const speakerStance = getTopicStance(this.state.notes[speaker.id], topic);
+      const userStance = options.userArgument?.stance ?? 0;
+      const hasOpposition = Math.abs(speakerStance - userStance) >= 1;
       utterance = ko
-        ? "그 결론을 그대로 받아들이기는 어렵습니다. 지금 든 근거가 가장 강한 반대 사례까지도 설명할 수 있을까요?"
-        : "I cannot accept that conclusion as it stands. Can your evidence also explain the strongest counterexample?";
+        ? hasOpposition
+          ? `${address}저는 그 결론과 다른 쪽에 무게를 둡니다. 지금 든 근거가 반대 사례까지 설명할 수 있을까요?`
+          : `${address}결론의 방향은 저도 비슷하게 봅니다. 다만 그 판단은 어디까지 적용된다고 보시나요?`
+        : hasOpposition
+          ? `${address}I put more weight on the other conclusion. Can your evidence also explain the strongest counterexample?`
+          : `${address}I read the conclusion much as you do. How far do you think that claim reaches?`;
     } else if (task === "CLOSING_REFLECTION") {
       utterance = ko
         ? `${lens}인 저는 오늘 대화에서 처음보다 더 어려운 질문 하나를 가져가게 됐습니다. 서로 다른 독자들과 이 책을 이야기해서 즐거웠어요.`
@@ -635,12 +727,12 @@ export class SessionEngine {
         : `I want to return to the scene that most unsettled my usual lens. It refused to give even a ${lens.toLowerCase()} an easy conclusion.`;
     } else if (task === "RESPOND_TO_USER_FOLLOWUP") {
       utterance = ko
-        ? "덧붙인 설명으로 입장의 경계가 더 또렷해졌습니다. 그래도 다른 결과 하나는 아직 설명되지 않아 그 부분은 남겨 두고 싶어요."
-        : "That addition makes the boundary of the position clearer. One consequence still remains unexplained, so I want to keep that part open.";
+        ? `${address}${userPoint ? `“${userPoint}”라는 설명으로` : "덧붙인 설명으로"} 말씀하신 범위가 더 분명해졌습니다. 제가 보던 장면에도 그 구분을 적용해 보겠습니다.`
+        : `${address}${userPoint ? `your point that “${userPoint}”` : "that addition"} makes the scope clearer. I will test that distinction against the scene I was considering.`;
     } else if (task === "BRIDGE_EXCHANGE") {
       utterance = ko
-        ? `${targetLabel}님, 방금 오간 답변과 반론의 차이에서 다른 기준 하나가 보입니다. 어느 한쪽을 반복하기보다 작품의 다른 근거가 그 경계를 어디에 긋는지 살펴보겠습니다.`
-        : `${target}, that answer and objection expose another standard worth testing. Rather than repeat either side, I want to see where different evidence from the book places that boundary.`;
+        ? `${address}방금 확인한 범위에 다른 기준 하나를 보태고 싶습니다. 작품의 다른 근거에도 그 구분이 이어지는지 살펴보죠.`
+        : `${address}I want to add another standard to the boundary you just tested. Let us see whether that distinction holds against different evidence from the book.`;
     } else if (task === "REACT_TO_USER_SCENE") {
       utterance = ko
         ? "방금 짚은 장면은 그 선택의 의미뿐 아니라 뒤에 남은 대가도 함께 보게 합니다. 한쪽만 강조할 때 사라지는 것이 무엇인지 조금 더 붙잡고 싶어요."
@@ -648,24 +740,34 @@ export class SessionEngine {
     } else if (task === "OPEN_PERSONA_POSITION") {
       const stance = getTopicStance(this.state.notes[speaker.id], topic);
       utterance = ko
-        ? `${targetLabel}님, 저는 이 질문에 ${stance >= 0.5 ? "대체로 그렇다고" : stance <= -0.5 ? "대체로 그렇지 않다고" : "한쪽으로 단정하기 어렵다고"} 봅니다. 같은 근거가 왜 서로 다른 판단으로 이어지는지 직접 나눠 보고 싶어요.`
-        : `${target}, I ${stance >= 0.5 ? "mostly agree with the proposition" : stance <= -0.5 ? "mostly reject the proposition" : "do not think the proposition supports one clean answer"}. I want to make clear why the same evidence leads us apart.`;
+        ? `${address}저는 이 질문에 ${stance >= 0.5 ? "대체로 그렇다고" : stance <= -0.5 ? "대체로 그렇지 않다고" : "한쪽으로 단정하기 어렵다고"} 봅니다. 같은 근거가 왜 서로 다른 판단으로 이어지는지 직접 나눠 보고 싶어요.`
+        : `${address}I ${stance >= 0.5 ? "mostly agree with the proposition" : stance <= -0.5 ? "mostly reject the proposition" : "do not think the proposition supports one clean answer"}. I want to make clear why the same evidence leads us apart.`;
     } else if (task === "CHALLENGE_PERSONA") {
+      const targetStance = [...this.state.transcript]
+        .reverse()
+        .find(({ speaker: priorSpeaker }) => priorSpeaker === options.targetSpeaker)?.stance;
+      const speakerStance = getTopicStance(this.state.notes[speaker.id], topic);
+      const hasOpposition =
+        typeof targetStance === "number" && Math.abs(speakerStance - targetStance) >= 1;
       utterance = ko
-        ? `${targetLabel}님, 그 결론은 장면이 남긴 반대 증거를 충분히 설명하지 못합니다. 같은 근거가 다른 결과를 낳는 부분은 어떻게 보시나요?`
-        : `${target}, that conclusion does not yet explain the scene's strongest contrary evidence. How do you account for the part where the same premise leads to a different result?`;
+        ? hasOpposition
+          ? `${address}저는 그 장면의 반대 증거를 더 크게 봅니다. 같은 근거가 다른 결과를 낳는 부분은 어떻게 보시나요?`
+          : `${address}결론은 비슷하지만 적용 범위는 더 확인하고 싶습니다. 그 판단은 어느 장면까지 이어진다고 보시나요?`
+        : hasOpposition
+          ? `${address}I give more weight to the scene's contrary evidence. How do you account for the same premise leading to a different result?`
+          : `${address}Our conclusions are close, but I want to test their scope. Which scenes do you think the claim reaches?`;
     } else if (task === "RESPOND_TO_PERSONA") {
       utterance = ko
-        ? `${targetLabel}님이 짚은 한계는 인정하지만, 그것만으로 제 판단이 뒤집히지는 않습니다. 같은 장면에서 우리가 무엇을 더 중요한 결과로 보는지가 아직 다릅니다.`
-        : `${target}, I grant the limit you identified, but it does not overturn my judgment. We still disagree about which consequence of the same scene should carry more weight.`;
+        ? `${address}말씀하신 범위는 이해했습니다. 제 판단이 다른 부분이 있다면 같은 장면의 결과를 어디까지 보는지에 있습니다.`
+        : `${address}I understand the scope you named. Where my judgment differs is how far the same scene's consequence reaches.`;
     } else if (task === "RESPOND_TO_USER_REPLY") {
       utterance = ko
-        ? "방금 답변으로 구분하려는 지점은 더 분명해졌습니다. 그래도 그 구분이 설명하지 못하는 결과가 남아 있어 제 반론은 완전히 풀리지 않았어요."
-        : `Your answer makes the distinction clearer. My objection is not fully resolved because one consequence still falls outside that distinction.`;
+        ? `${address}${userPoint ? `“${userPoint}”라는 답으로` : "방금 답변으로"} 판단의 범위가 더 분명해졌습니다. 제가 보던 장면과 어디까지 맞는지 다시 살펴보겠습니다.`
+        : `${address}${userPoint ? `your answer that “${userPoint}”` : "your answer"} makes the scope clearer. I will compare it with the scene I had in mind.`;
     } else {
       utterance = ko
-        ? `${targetsUser ? "짚어 주신 부분" : `${targetLabel}님이 짚은 부분`}은 이해하지만 제 판단은 아직 다릅니다. 같은 대목에서 생긴 이 차이를 조금 더 구체적으로 따져보고 싶어요.`
-        : `I understand ${targetsUser ? "your point" : `${target}'s point`}, but my judgment still differs. I want to test that difference more precisely against the same part of the book.`;
+        ? `${targetsUser ? "짚어 주신 부분" : `${targetSubject} 짚은 부분`}은 이해했습니다. 같은 대목에서 어디까지 같은 판단을 할 수 있는지 더 구체적으로 보고 싶어요.`
+        : `I understand ${targetsUser ? "your point" : `${target}'s point`}. I want to test how far that judgment holds against the same part of the book.`;
     }
     return {
       utterance,
@@ -686,7 +788,13 @@ export class SessionEngine {
       this.prepareGenerated(speaker, task, options),
       advancePromise,
     ]);
-    return this.commitGenerated(prepared.speaker, prepared.output, prepared.shelfKey, task);
+    return this.commitGenerated(
+      prepared.speaker,
+      prepared.output,
+      prepared.shelfKey,
+      task,
+      prepared.targetSpeaker,
+    );
   }
 
   private async appendPrepared(
@@ -698,7 +806,13 @@ export class SessionEngine {
       task,
       speaker: prepared.speaker,
     });
-    return this.commitGenerated(prepared.speaker, prepared.output, prepared.shelfKey, task);
+    return this.commitGenerated(
+      prepared.speaker,
+      prepared.output,
+      prepared.shelfKey,
+      task,
+      prepared.targetSpeaker,
+    );
   }
 
   private commitGenerated(
@@ -706,12 +820,13 @@ export class SessionEngine {
     output: UtteranceOutput,
     shelfKey: string,
     task: UtteranceTask,
+    targetSpeaker?: string,
   ): Utterance {
     const utterance: Utterance = {
       speaker: speaker === "moderator" ? "moderator" : speaker.id,
       text: output.utterance,
       stance: output.stance ?? undefined,
-      refersTo: output.refers_to ?? undefined,
+      refersTo: targetSpeaker,
       shelfRef: output.shelf_ref ?? undefined,
       stage: this.state.stage,
     };
@@ -759,11 +874,12 @@ export class SessionEngine {
     fallback: string,
     kind: UserTurnKind,
     target?: string,
-  ): Promise<void> {
+  ): Promise<string> {
     const text = this.requestUserInput
       ? await this.requestUserInput({ stage: this.state.stage, target, kind })
       : fallback;
     await this.appendUser(text, target);
+    return text.trim();
   }
 
   private selectChallenger(target: string, userStance: number): PersonaCard {
@@ -877,14 +993,18 @@ export class SessionEngine {
           )
         );
       })[0];
-    const second = [...this.state.personas]
-      .filter(({ id }) => id !== first.id && id !== lastPersona?.id)
-      .sort((left, right) => this.discussionTurnCount(left.id) - this.discussionTurnCount(right.id))[0] ??
-      lastPersona!;
+    const second =
+      lastPersona ??
+      [...this.state.personas]
+        .filter(({ id }) => id !== first.id)
+        .sort(
+          (left, right) =>
+            this.discussionTurnCount(left.id) - this.discussionTurnCount(right.id),
+        )[0];
 
     await this.appendGenerated(first, "RESPOND_TO_PERSONA", {
       activeTopic: topic,
-      targetSpeaker: lastPersona?.id ?? second.id,
+      targetSpeaker: second.id,
     });
     await this.appendGenerated(second, "RESPOND_TO_PERSONA", {
       activeTopic: topic,
@@ -892,7 +1012,10 @@ export class SessionEngine {
     });
   }
 
-  private async challengeUser(target: string): Promise<PersonaCard | "moderator"> {
+  private async challengeUser(
+    target: string,
+    directedPersona?: PersonaCard,
+  ): Promise<PersonaCard | "moderator"> {
     const userArgument = this.state.userStances[target];
     if (!userArgument) {
       await this.appendGenerated("moderator", "DEVILS_ADVOCATE", {
@@ -907,7 +1030,8 @@ export class SessionEngine {
       });
       return "moderator";
     }
-    const challenger = this.selectChallenger(target, userArgument.stance);
+    const challenger = directedPersona ?? this.selectChallenger(target, userArgument.stance);
+    this.lastChallengerId = challenger.id;
     await this.appendGenerated(challenger, "CHALLENGE_USER", {
       activeTopic: target,
       targetSpeaker: "user",
@@ -930,7 +1054,9 @@ export class SessionEngine {
     for (const introductionPromise of introductionPromises) {
       await this.appendPrepared(await introductionPromise, "PERSONA_INTRODUCTION");
     }
-    await this.appendGenerated("moderator", "INVITE_USER");
+    await this.appendGenerated("moderator", "INVITE_USER", {
+      targetSpeaker: "user",
+    });
     await this.requestAndAppendUser(userInput, "intro");
     await Promise.all(
       this.state.personas.map(async (persona) => {
@@ -1029,11 +1155,13 @@ export class SessionEngine {
     await this.appendGenerated("moderator", "TOPIC_OPEN", {
       activeTopic: topic,
       discussionFocus: selected.evidence,
+      discussionOrigin: selected.origin,
     });
     await this.appendGenerated(leadA, "OPEN_PERSONA_POSITION", {
       activeTopic: topic,
-      targetSpeaker: leadB.id,
+      targetSpeaker: selected.origin === "user" ? "user" : leadB.id,
       discussionFocus: selected.evidence,
+      discussionOrigin: selected.origin,
     });
     this.state.discussionPhase = "base_clash";
     await this.appendGenerated(leadB, "CHALLENGE_PERSONA", {
@@ -1056,9 +1184,17 @@ export class SessionEngine {
 
     if (action === "join") {
       this.state.discussionPhase = "user_exchange";
-      await this.appendGenerated("moderator", "ASK_USER_POSITION", { activeTopic: topic });
-      await this.requestAndAppendUser(userInput, "discussion_position", topic);
-      const challenger = await this.challengeUser(topic);
+      const positionText = await this.requestAndAppendUser(
+        userInput,
+        "discussion_position",
+        topic,
+      );
+      const directlyAddressed = resolveDirectlyAddressedPersona(
+        positionText,
+        this.state.personas,
+        this.language,
+      );
+      const challenger = await this.challengeUser(topic, directlyAddressed);
       await this.requestAndAppendUser(userReply, "discussion_reply", topic);
 
       const updatedUserArgument = this.state.userStances[topic] ?? {
@@ -1117,9 +1253,18 @@ export class SessionEngine {
         if (postJoinAction === "wrap") break;
         continuationCount += 1;
         if (postJoinAction === "join") {
-          await this.requestAndAppendUser(userFollowUp, "discussion_followup", topic);
+          const followUpText = await this.requestAndAppendUser(
+            userFollowUp,
+            "discussion_followup",
+            topic,
+          );
           const followUpArgument = this.state.userStances[topic] ?? updatedUserArgument;
-          const responder = this.selectFollowUpResponder(topic, followUpArgument.stance);
+          const responder =
+            resolveDirectlyAddressedPersona(
+              followUpText,
+              this.state.personas,
+              this.language,
+            ) ?? this.selectFollowUpResponder(topic, followUpArgument.stance);
           await this.appendGenerated(responder, "RESPOND_TO_USER_FOLLOWUP", {
             activeTopic: topic,
             targetSpeaker: "user",

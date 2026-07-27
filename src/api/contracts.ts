@@ -19,6 +19,12 @@ export const roomAtmosphereSchema = z
   })
   .strict();
 
+export const characterCoreExperimentMarkerSchema = z
+  .object({
+    version: z.literal("v2"),
+  })
+  .strict();
+
 const bookSourceSchema = z
   .object({ url: boundedString(8, 2_000) })
   .strict();
@@ -198,6 +204,7 @@ export const readingNotesRequestSchema = z
     book: confirmedBookSchema,
     persona: personaCardSchema,
     validationError: boundedString(1, 1200).optional(),
+    characterCoreExperiment: characterCoreExperimentMarkerSchema.optional(),
   })
   .strict();
 
@@ -211,6 +218,17 @@ export const utteranceRequestSchema = z
     stage: stageIdSchema,
     task: utteranceTaskSchema,
     recentTranscript: z.array(transcriptUtteranceSchema).max(12),
+    participants: z
+      .array(
+        z
+          .object({
+            id: boundedString(1, 100),
+            displayName: boundedString(1, 100),
+            role: z.enum(["moderator", "reader", "user"]),
+          })
+          .strict(),
+      )
+      .length(5),
     activeTopic: boundedString(1, 160).optional(),
     targetSpeaker: boundedString(1, 100).optional(),
     userArgument: z
@@ -224,6 +242,8 @@ export const utteranceRequestSchema = z
     allowShelfReference: z.boolean(),
     validationError: boundedString(1, 1200).optional(),
     discussionFocus: boundedString(1, 240).optional(),
+    discussionOrigin: z.enum(["user", "table"]).optional(),
+    characterCoreExperiment: characterCoreExperimentMarkerSchema.optional(),
   })
   .strict();
 

@@ -7,8 +7,17 @@ import { GenerationApiError, HttpGenerationClient } from "./api/httpGenerationCl
 import { MockGenerationClient } from "./api/mockGenerationClient";
 import { recordGenerationDiagnostic } from "./api/diagnostics";
 import type { GenerationClient } from "./api/generationClient";
+import {
+  APP_BUILD_INFO,
+  buildIdentifier,
+  shouldShowLocalBuildInfo,
+} from "./buildInfo";
 import { SessionEngine, toConfirmedBook } from "./engine/sessionEngine";
 import { localizedSpeakerName, localizedSpeakerRole, STAGE_LABELS } from "./localization";
+import {
+  listEnabledCharacterCorePersonaIds,
+  resolveCharacterCoreExperiment,
+} from "./characterCore/runtime";
 import {
   GUEST_PERSONAS,
   findPersona,
@@ -23,6 +32,7 @@ import {
   recapMailtoUrl,
 } from "./recapSharing";
 import { formatTranscriptAsMarkdown } from "./transcriptExport";
+import type { TranscriptExperimentMetadata } from "./transcriptExport";
 import type {
   AppLanguage,
   BookScope,
@@ -58,16 +68,16 @@ const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
     first_impression: "What was your first impression?",
     memorable_scene: "Which scene stayed with you?",
     discussion_position: "Where do you land on this question?",
-    discussion_reply: "How do you answer that challenge?",
+    discussion_reply: "How do you answer that question?",
     discussion_followup: "What else would you like to add to this exchange?",
     wrap_up: "What are you leaving the table with?",
   },
   ko: {
     intro: "하시는 일이나 요즘의 일상, 최근의 독서 생활처럼 편한 이야기로 자신을 소개해 주세요.",
     first_impression: "이 책의 첫인상은 어땠나요?",
-    memorable_scene: "어떤 장면이 가장 오래 남았나요?",
+    memorable_scene: "어떤 장면이 가장 기억에 남았나요?",
     discussion_position: "이 질문에 대해 어디에 서 있나요?",
-    discussion_reply: "그 반론에는 어떻게 답하시겠어요?",
+    discussion_reply: "방금 받은 질문에는 어떻게 답하시겠어요?",
     discussion_followup: "이 대화에 어떤 생각을 더 보태고 싶나요?",
     wrap_up: "오늘 테이블에서 무엇을 가지고 떠나시나요?",
   },
@@ -193,9 +203,10 @@ const COPY = {
     discussionChoice: "How would you like to continue?",
     joinDiscussion: "Join the discussion",
     addThought: "Add another thought",
+    finalThought: "Leave one final thought",
     keepListening: "Keep listening",
     continueDiscussion: "Continue the discussion",
-    wrapDiscussion: "Wrap up",
+    wrapDiscussion: "Move to closing",
     viewTranscript: (count: number) => `View transcript ${count}`,
     transcriptTitle: "Conversation transcript",
     closeTranscript: "Close transcript",
@@ -363,9 +374,10 @@ const COPY = {
     discussionChoice: "이 토론을 어떻게 이어갈까요?",
     joinDiscussion: "내 의견 보태기",
     addThought: "의견 덧붙이기",
+    finalThought: "마지막 생각 남기기",
     keepListening: "한 번 더 듣기",
     continueDiscussion: "토론 조금 더 이어보기",
-    wrapDiscussion: "이쯤에서 마무리",
+    wrapDiscussion: "마무리 순서로 이동",
     viewTranscript: (count: number) => `대화 기록 보기 ${count}`,
     transcriptTitle: "대화 기록",
     closeTranscript: "대화 기록 닫기",
@@ -418,6 +430,36 @@ const COPY = {
 type Screen = "setup" | "session" | "recap";
 type InputRequest = { stage: StageId; target?: string; kind: UserTurnKind };
 
+export function relevantInputContext(
+  transcript: Utterance[],
+  inputRequest?: InputRequest,
+): Utterance[] {
+  if (!inputRequest || inputRequest.stage !== "DISCUSSION") return [];
+  const generatedDiscussionTurns = transcript.filter(
+    ({ stage, speaker }) => stage === "DISCUSSION" && speaker !== "user" && speaker !== "moderator",
+  );
+  if (inputRequest.kind === "discussion_position") {
+    return generatedDiscussionTurns.slice(-2);
+  }
+  if (inputRequest.kind === "discussion_reply") {
+    return generatedDiscussionTurns.slice(-1);
+  }
+  if (inputRequest.kind === "discussion_followup") {
+    let lastUserIndex = -1;
+    transcript.forEach(({ stage, speaker }, index) => {
+      if (stage === "DISCUSSION" && speaker === "user") lastUserIndex = index;
+    });
+    const repliesSinceUser = transcript
+      .slice(lastUserIndex + 1)
+      .filter(
+        ({ stage, speaker }) =>
+          stage === "DISCUSSION" && speaker !== "user" && speaker !== "moderator",
+      );
+    return (repliesSinceUser.length > 0 ? repliesSinceUser : generatedDiscussionTurns).slice(-2);
+  }
+  return [];
+}
+
 type SessionPreparationStatus =
   | { kind: "reading_notes"; progress: string }
   | { kind: "recap" };
@@ -426,6 +468,14 @@ type RecapShareStatus = "idle" | "sharing" | "ready" | "failed";
 type RecapView = "recap" | "transcript";
 type GenerationMode = "mock" | "live";
 type LiveAvailability = "checking" | "available" | "unavailable";
+type CharacterCoreCapability =
+  | "checking"
+  | "unavailable"
+  | {
+      version: "v2";
+      localOnly: true;
+      sessionCallLimit: 45;
+    };
 type ConversationKind = "regular" | "imagined_guest";
 type DiscussionDecisionRequest = DiscussionDecisionTurn;
 
@@ -437,6 +487,113 @@ function resolveGenerationMode(
   if (params.get("live") === "1") return "live";
   if (params.get("mock") === "1") return "mock";
   return environmentMode === "test" ? "mock" : "live";
+}
+
+export function resolveSessionSeed(
+  search: string,
+  characterCoreExperimentEnabled: boolean,
+  hasSelectedGuest: boolean,
+  fallbackSeed: string,
+): string {
+  const requestedSeed = new URLSearchParams(search).get("seed");
+  if (requestedSeed) return requestedSeed;
+  if (characterCoreExperimentEnabled && !hasSelectedGuest) return "demo";
+  return fallbackSeed;
+}
+
+function CharacterCoreExperimentNotice({
+  enabledReaderNames,
+  compact = false,
+}: {
+  enabledReaderNames?: string[];
+  compact?: boolean;
+}) {
+  const readerLine = enabledReaderNames?.length
+    ? `Enabled readers: ${enabledReaderNames.join(", ")}`
+    : "Enabled readers are shown after the table is seated.";
+
+  return (
+    <div
+      className={`rounded-xl border border-cyan-300/35 bg-cyan-950/90 text-cyan-50 ${
+        compact ? "px-3 py-1.5 text-[10px]" : "p-3 text-xs"
+      }`}
+      data-testid="character-core-experiment"
+    >
+      <p className="font-black tracking-wide">LOCAL EXPERIMENT · Character Core v2</p>
+      <p className={compact ? "mt-0.5" : "mt-1"}>{readerLine}</p>
+      <p className="text-cyan-200/75">45 generation requests max</p>
+    </div>
+  );
+}
+
+function CharacterCoreExperimentAvailabilityNotice({
+  status,
+}: {
+  status: "checking" | "unavailable";
+}) {
+  return (
+    <div
+      className="rounded-xl border border-stone-300 bg-stone-100 p-3 text-xs text-stone-700"
+      data-testid="character-core-experiment-availability"
+    >
+      <p className="font-black tracking-wide">LOCAL EXPERIMENT · Character Core v2</p>
+      <p className="mt-1">
+        {status === "checking"
+          ? "Checking local server capability…"
+          : "Unavailable on this server. The session will use the standard dialogue policy."}
+      </p>
+    </div>
+  );
+}
+
+type CharacterCoreBuildStatus =
+  | "active"
+  | "ready"
+  | "available"
+  | "checking"
+  | "off";
+
+function LocalBuildBadge({
+  characterCoreStatus,
+}: {
+  characterCoreStatus: CharacterCoreBuildStatus;
+}) {
+  if (!shouldShowLocalBuildInfo(window.location.hostname)) return null;
+
+  const builtAt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(APP_BUILD_INFO.builtAt));
+  const statusColor =
+    characterCoreStatus === "active" || characterCoreStatus === "ready"
+      ? "text-emerald-300"
+      : characterCoreStatus === "checking"
+        ? "text-amber-200"
+        : "text-cyan-100/65";
+
+  return (
+    <aside
+      aria-label="Local development build"
+      className="pointer-events-none fixed bottom-3 left-3 z-[70] max-w-[calc(100vw-1.5rem)] rounded-lg border border-cyan-300/30 bg-stone-950/90 px-3 py-2 font-mono text-[9px] leading-4 text-cyan-50 shadow-xl backdrop-blur-md sm:text-[10px]"
+      data-testid="local-build-badge"
+    >
+      <p className="font-black tracking-wide">
+        LOCAL DEV · {buildIdentifier(APP_BUILD_INFO)}
+      </p>
+      <p className="max-w-[80vw] truncate text-cyan-100/70">
+        {APP_BUILD_INFO.branch} · built {builtAt} KST
+      </p>
+      <p className={statusColor}>
+        CHARACTER CORE v2 · {characterCoreStatus.toUpperCase()}
+      </p>
+    </aside>
+  );
 }
 
 async function writeToClipboard(text: string): Promise<void> {
@@ -529,19 +686,25 @@ function StagePortrait({
   userAvatarId,
   userDisplayName,
   secondary = false,
+  compact = false,
 }: {
   speaker: string;
   language: AppLanguage;
   userAvatarId: UserAvatarId;
   userDisplayName: string;
   secondary?: boolean;
+  compact?: boolean;
 }) {
   const portraitUrl = portraitUrlFor(speaker);
   const name = speakerDisplayName(speaker, language, userDisplayName);
   return (
     <div
       className={`relative shrink-0 overflow-hidden rounded-t-[5rem] border border-amber-100/25 bg-amber-950/40 shadow-[0_24px_70px_rgba(0,0,0,0.5)] transition-all duration-500 ${
-        secondary
+        compact
+          ? secondary
+            ? "h-32 w-24 opacity-85 sm:h-40 sm:w-28 lg:h-48 lg:w-36"
+            : "h-40 w-28 sm:h-48 sm:w-36 lg:h-56 lg:w-40"
+          : secondary
           ? "h-56 w-40 opacity-85 sm:h-72 sm:w-52 lg:h-[23rem] lg:w-64"
           : "h-72 w-52 sm:h-[24rem] sm:w-72 lg:h-[31rem] lg:w-[23rem]"
       }`}
@@ -897,7 +1060,9 @@ function ConversationStage({
       ? copy.nextPage
       : displayPage
         ? showClosingCast
-          ? copy.viewRecap
+          ? upcomingSpeaker === "user"
+            ? copy.finalThought
+            : copy.viewRecap
           : upcomingSpeaker === "user"
             ? copy.advanceToUser
             : copy.advanceSpeaker
@@ -991,10 +1156,14 @@ function ConversationStage({
               </p>
             </div>
           ) : (
-            <div className="flex flex-1 items-end justify-center gap-4 pb-40 sm:gap-12 lg:gap-20">
-              <StagePortrait speaker={primarySpeaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} />
+            <div
+              className={`flex flex-1 justify-center gap-4 sm:gap-12 lg:gap-20 ${
+                isUserTurn ? "items-start pb-72 pt-4 sm:pb-80" : "items-end pb-52 sm:pb-56"
+              }`}
+            >
+              <StagePortrait speaker={primarySpeaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} compact={isUserTurn} />
               {showReferencedSpeaker && referencedSpeaker && (
-                <StagePortrait speaker={referencedSpeaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} secondary />
+                <StagePortrait speaker={referencedSpeaker} language={language} userAvatarId={userAvatarId} userDisplayName={userDisplayName} secondary compact={isUserTurn} />
               )}
             </div>
           )}
@@ -1004,7 +1173,7 @@ function ConversationStage({
           ) : (
             <div
               data-testid="dialogue-box"
-              className="absolute bottom-3 left-1/2 z-20 h-40 w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-2xl border border-amber-100/25 bg-stone-950/90 p-4 text-left text-stone-100 shadow-[0_24px_70px_rgba(0,0,0,0.6)] backdrop-blur-md sm:bottom-6 sm:h-44 sm:w-[calc(100%-4rem)] sm:p-5 lg:w-[70%]"
+              className="absolute bottom-3 left-1/2 z-20 flex h-52 w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col rounded-2xl border border-amber-100/25 bg-stone-950/90 p-4 text-left text-stone-100 shadow-[0_24px_70px_rgba(0,0,0,0.6)] backdrop-blur-md sm:bottom-6 sm:h-56 sm:w-[calc(100%-4rem)] sm:p-5 lg:w-[76%]"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -1027,14 +1196,14 @@ function ConversationStage({
                   </span>
                 )}
               </div>
-              <p className="mt-3 min-h-14 whitespace-pre-wrap text-base leading-7 text-stone-100 sm:text-lg sm:leading-8">
+              <p className="mt-3 min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap pr-1 text-lg leading-8 text-stone-100 sm:text-xl sm:leading-9">
                 {displayPage ? visibleText : transitionText}
                 {displayPage && typing && <span className="ml-0.5 animate-pulse text-amber-300">▌</span>}
               </p>
               <span className="sr-only" aria-live="polite">
                 {displayPage?.text ?? transitionText}
               </span>
-              <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between sm:left-5 sm:right-5">
+              <div className="mt-3 flex shrink-0 items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1257,17 +1426,29 @@ function SfxControl({
 export function App() {
   const [language, setLanguage] = useState<AppLanguage>("ko");
   const generationMode = resolveGenerationMode(window.location.search, import.meta.env.MODE);
+  const requestedCharacterCoreExperiment = resolveCharacterCoreExperiment(
+    window.location.search,
+    window.location.hostname,
+  );
+  const characterCoreExperimentRequest =
+    generationMode === "live" && language === "ko"
+      ? requestedCharacterCoreExperiment
+      : undefined;
   const [conversationKind, setConversationKind] = useState<ConversationKind>("regular");
   const [selectedGuestId, setSelectedGuestId] = useState<ImaginedGuestId | "none">("none");
   const [guestCategoryFilter, setGuestCategoryFilter] = useState<Category>("analytical");
   const [liveAvailability, setLiveAvailability] = useState<LiveAvailability>("checking");
   const [liveModel, setLiveModel] = useState("gpt-5.6-terra");
+  const [characterCoreCapability, setCharacterCoreCapability] =
+    useState<CharacterCoreCapability>("checking");
   const [bookScope, setBookScope] = useState<BookScope>("single_book");
   const [roomAtmosphere, setRoomAtmosphere] = useState<RoomAtmosphere>();
   const [bookTitleInput, setBookTitleInput] = useState("");
   const [bookAuthorInput, setBookAuthorInput] = useState("");
   const [confirmedBook, setConfirmedBook] = useState<ConfirmedBook>();
   const [sessionPersonas, setSessionPersonas] = useState<PersonaCard[]>([]);
+  const [activeCharacterCoreSession, setActiveCharacterCoreSession] =
+    useState<TranscriptExperimentMetadata>();
   const [identifyingBook, setIdentifyingBook] = useState(false);
   const [identificationError, setIdentificationError] = useState("");
   const [screen, setScreen] = useState<Screen>("setup");
@@ -1296,11 +1477,31 @@ export function App() {
   const discussionDecisionResolver = useRef<((value: DiscussionAction) => void) | null>(null);
   const playbackActionRef = useRef<(() => void) | null>(null);
   const generationClientRef = useRef<GenerationClient | null>(null);
+  const generationClientExperimentRef = useRef(false);
   const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const soundStageRef = useRef<StageId>("INTRO");
   const lastSoundSpeakerRef = useRef<string>();
   const soundEffects = useSoundEffects();
   const copy = COPY[language];
+  const inputContext = relevantInputContext(transcript, inputRequest);
+  const availableCharacterCoreExperiment =
+    characterCoreExperimentRequest && typeof characterCoreCapability === "object"
+      ? characterCoreExperimentRequest
+      : undefined;
+  const characterCoreBuildStatus: CharacterCoreBuildStatus =
+    activeCharacterCoreSession
+      ? "active"
+      : availableCharacterCoreExperiment
+        ? "ready"
+        : typeof characterCoreCapability === "object"
+          ? "available"
+          : characterCoreCapability === "checking"
+            ? "checking"
+            : "off";
+  const localBuildBadge = (
+    <LocalBuildBadge characterCoreStatus={characterCoreBuildStatus} />
+  );
   const selectedGuest =
     conversationKind !== "imagined_guest" || selectedGuestId === "none"
       ? undefined
@@ -1384,12 +1585,26 @@ export function App() {
         const body = (await response.json()) as {
           liveGenerationAvailable?: boolean;
           model?: string;
+          characterCoreExperiment?: {
+            version?: unknown;
+            localOnly?: unknown;
+            sessionCallLimit?: unknown;
+          };
         };
         if (body.model) setLiveModel(body.model);
+        const capability = body.characterCoreExperiment;
+        setCharacterCoreCapability(
+          capability?.version === "v2" &&
+            capability.localOnly === true &&
+            capability.sessionCallLimit === 45
+            ? { version: "v2", localOnly: true, sessionCallLimit: 45 }
+            : "unavailable",
+        );
         setLiveAvailability(body.liveGenerationAvailable ? "available" : "unavailable");
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
+        setCharacterCoreCapability("unavailable");
         setLiveAvailability("unavailable");
       });
     return () => controller.abort();
@@ -1489,6 +1704,7 @@ export function App() {
     setConfirmedBook(undefined);
     setIdentificationError("");
     generationClientRef.current = null;
+    generationClientExperimentRef.current = false;
   };
 
   const runBookIdentification = async (scope: BookScope) => {
@@ -1501,8 +1717,13 @@ export function App() {
     setIdentificationError("");
     setConfirmedBook(undefined);
     const client =
-      generationMode === "live" ? new HttpGenerationClient() : new MockGenerationClient();
+      generationMode === "live"
+        ? new HttpGenerationClient(undefined, undefined, {
+            characterCoreExperiment: availableCharacterCoreExperiment,
+          })
+        : new MockGenerationClient();
     generationClientRef.current = client;
+    generationClientExperimentRef.current = Boolean(availableCharacterCoreExperiment);
     try {
       const identified = await client.identifyBook({
         title,
@@ -1513,6 +1734,7 @@ export function App() {
       setConfirmedBook(toConfirmedBook(identified));
     } catch (caught) {
       generationClientRef.current = null;
+      generationClientExperimentRef.current = false;
       setIdentificationError(
         caught instanceof GenerationApiError
           ? generationErrorMessage(caught)
@@ -1536,7 +1758,14 @@ export function App() {
   const copyTranscript = async () => {
     if (transcript.length === 0) return;
     try {
-      await writeToClipboard(formatTranscriptAsMarkdown(transcript, language));
+      await writeToClipboard(
+        formatTranscriptAsMarkdown(
+          transcript,
+          language,
+          userDisplayName,
+          activeCharacterCoreSession,
+        ),
+      );
       setCopyStatus("copied");
     } catch {
       setCopyStatus("failed");
@@ -1557,6 +1786,15 @@ export function App() {
   const closeTranscript = () => {
     setTranscriptOpen(false);
   };
+
+  useEffect(() => {
+    if (!transcriptOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      const container = transcriptScrollRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [transcript.length, transcriptOpen]);
 
   const copyRecap = async () => {
     if (!recap) return;
@@ -1678,12 +1916,49 @@ export function App() {
     setUpcomingSpeaker(undefined);
     setRoomAtmosphere(undefined);
 
-    const generationClient =
-      generationClientRef.current ??
-      (generationMode === "live" ? new HttpGenerationClient() : new MockGenerationClient());
-    const requestedSeed = new URLSearchParams(window.location.search).get("seed");
-    const seed = requestedSeed || crypto.randomUUID();
+    const seed = resolveSessionSeed(
+      window.location.search,
+      Boolean(availableCharacterCoreExperiment),
+      Boolean(selectedGuest),
+      crypto.randomUUID(),
+    );
     const personas = selectPersonas(seed, selectedGuest?.id);
+    const enabledCoreReaders = listEnabledCharacterCorePersonaIds(
+      personas.map(({ id }) => id),
+      language,
+    );
+    const activeCharacterCoreExperiment =
+      availableCharacterCoreExperiment && enabledCoreReaders.length > 0
+        ? availableCharacterCoreExperiment
+        : undefined;
+    const activeExperimentMetadata: TranscriptExperimentMetadata | undefined =
+      activeCharacterCoreExperiment && typeof characterCoreCapability === "object"
+        ? {
+            version: activeCharacterCoreExperiment.version,
+            enabledReaderNames: enabledCoreReaders.map((id) =>
+              localizedSpeakerName(id, language),
+            ),
+            maxGenerationRequests: characterCoreCapability.sessionCallLimit,
+          }
+        : undefined;
+    const generationClient =
+      generationMode === "live"
+        ? activeCharacterCoreExperiment
+          ? generationClientExperimentRef.current
+            ? generationClientRef.current ??
+              new HttpGenerationClient(undefined, undefined, {
+                characterCoreExperiment: activeCharacterCoreExperiment,
+              })
+            : new HttpGenerationClient(undefined, undefined, {
+                characterCoreExperiment: activeCharacterCoreExperiment,
+              })
+          : generationClientExperimentRef.current
+            ? new HttpGenerationClient()
+            : generationClientRef.current ?? new HttpGenerationClient()
+        : generationClientRef.current ?? new MockGenerationClient();
+    setActiveCharacterCoreSession(activeExperimentMetadata);
+    generationClientExperimentRef.current = Boolean(activeCharacterCoreExperiment);
+    generationClientRef.current = generationClient;
     setSessionPersonas(personas);
     const engine = new SessionEngine(generationClient, {
       onStatus(message) {
@@ -1844,8 +2119,10 @@ export function App() {
     setPreparationStatus(undefined);
     setConfirmedBook(undefined);
     setSessionPersonas([]);
+    setActiveCharacterCoreSession(undefined);
     setIdentificationError("");
     generationClientRef.current = null;
+    generationClientExperimentRef.current = false;
     setTranscript([]);
     setRecap("");
     setRecapView("recap");
@@ -1862,6 +2139,7 @@ export function App() {
   if (screen === "setup") {
     return (
       <main className="relative min-h-screen overflow-hidden bg-[#0d0907] px-5 py-10 text-stone-900 sm:py-14">
+        {localBuildBadge}
         <div className="fixed inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/reading-room-bg.png')" }} />
         <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,rgba(64,38,19,0.18),rgba(6,4,3,0.86)_72%)]" />
         <section className="relative z-10 mx-auto flex max-w-5xl flex-col rounded-[2rem] border border-amber-100/20 bg-[#fffaf0]/95 p-8 shadow-[0_32px_100px_rgba(0,0,0,0.62)] backdrop-blur-sm sm:p-12">
@@ -1905,6 +2183,19 @@ export function App() {
           <p className="mt-6 max-w-xl text-lg leading-8 text-stone-700">
             {copy.description}
           </p>
+          {characterCoreExperimentRequest && (
+            <div className="order-1 mt-5 max-w-xl">
+              {availableCharacterCoreExperiment ? (
+                <CharacterCoreExperimentNotice />
+              ) : (
+                <CharacterCoreExperimentAvailabilityNotice
+                  status={
+                    characterCoreCapability === "checking" ? "checking" : "unavailable"
+                  }
+                />
+              )}
+            </div>
+          )}
 
           <form onSubmit={(event) => void identifyBook(event)} className="order-2 mt-8 rounded-2xl border border-stone-200 bg-white p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
@@ -2323,6 +2614,7 @@ export function App() {
   if (screen === "recap") {
     return (
       <main className="relative min-h-screen overflow-hidden bg-[#0d0907] px-4 py-8 text-stone-900 sm:px-6">
+        {localBuildBadge}
         <div className="fixed inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/reading-room-bg.png')" }} />
         <div className="fixed inset-0 bg-[linear-gradient(180deg,rgba(8,5,3,0.82),rgba(9,6,4,0.72))]" />
         <section className="relative z-10 mx-auto max-w-5xl">
@@ -2332,6 +2624,14 @@ export function App() {
                 {copy.sessionComplete}
               </p>
               <h1 className="mt-2 font-serif text-4xl text-amber-50">{copy.completionTitle}</h1>
+              {activeCharacterCoreSession && (
+                <div className="mt-3">
+                  <CharacterCoreExperimentNotice
+                    enabledReaderNames={activeCharacterCoreSession.enabledReaderNames}
+                    compact
+                  />
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               {audioControls}
@@ -2418,7 +2718,12 @@ export function App() {
               <RenderedRecap markdown={recap} />
             ) : (
               <div className="space-y-4 rounded-2xl border border-stone-200 bg-[#fffdf8] p-5 shadow-sm sm:p-8">
-                <TranscriptList transcript={transcript} language={language} />
+                <TranscriptList
+                  transcript={transcript}
+                  language={language}
+                  userAvatarId={userAvatarId}
+                  userDisplayName={userDisplayName}
+                />
               </div>
             )}
           </div>
@@ -2430,6 +2735,7 @@ export function App() {
 
   return (
     <main className="min-h-screen bg-[#0d0907] text-stone-100">
+      {localBuildBadge}
       <header className="relative z-20 border-b border-amber-100/10 bg-[#130d09] px-3 py-3 sm:px-5">
         <div className="mx-auto flex max-w-[100rem] items-center gap-4">
           <div className="min-w-0 shrink-0">
@@ -2465,6 +2771,14 @@ export function App() {
           </ol>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {audioControls}
+            {activeCharacterCoreSession && (
+              <div className="hidden md:block">
+                <CharacterCoreExperimentNotice
+                  enabledReaderNames={activeCharacterCoreSession.enabledReaderNames}
+                  compact
+                />
+              </div>
+            )}
             {selectedGuest && (
               <span
                 className="hidden max-w-44 truncate rounded-full bg-violet-950 px-3 py-1 text-[10px] font-semibold text-violet-200 xl:inline-flex"
@@ -2529,7 +2843,11 @@ export function App() {
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button type="button" onClick={() => submitDiscussionDecision("join")} className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-bold text-amber-950">
-                    {discussionDecision.phase === "before_join" ? copy.joinDiscussion : copy.addThought}
+                    {discussionDecision.phase === "before_join"
+                      ? copy.joinDiscussion
+                      : discussionDecision.round >= 2
+                        ? copy.finalThought
+                        : copy.addThought}
                   </button>
                   {discussionDecision.canListen && (
                     <button type="button" onClick={() => submitDiscussionDecision("listen")} className="rounded-lg border border-amber-200/30 bg-white/10 px-4 py-2 text-sm font-semibold text-amber-50">
@@ -2542,28 +2860,46 @@ export function App() {
                 </div>
               </div>
             ) : inputRequest ? (
-              <form onSubmit={handleSubmit} className="w-full rounded-2xl border border-amber-200/30 bg-stone-950/95 p-4 text-stone-100 shadow-2xl backdrop-blur-md lg:mx-auto lg:w-[70%]">
+              <form onSubmit={handleSubmit} className="w-full rounded-2xl border border-amber-200/30 bg-stone-950/95 p-5 text-stone-100 shadow-2xl backdrop-blur-md lg:mx-auto lg:w-[76%]">
                 <div className="flex items-start gap-3">
                   <UserAvatarArtwork avatarId={userAvatarId} className="h-11 w-11 shrink-0 rounded-xl" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300">{copy.waitingForYou}</p>
                     <label htmlFor="user-turn" className="text-sm font-semibold text-amber-50">{INPUT_PROMPTS[language][inputRequest.kind]}</label>
-                    {inputRequest.kind === "discussion_reply" && transcript.at(-1) && (
-                      <p className="mt-1 max-h-12 overflow-y-auto text-xs leading-5 text-stone-400">
-                        {copy.challengedLine}: {transcript.at(-1)?.text}
-                      </p>
-                    )}
                   </div>
                 </div>
+                {inputContext.length > 0 && (
+                  <div className="mt-3 max-h-32 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-amber-200/70">
+                      {copy.challengedLine}
+                    </p>
+                    {inputContext.map((utterance, index) => (
+                      <article
+                        key={`${utterance.speaker}:${index}`}
+                        className="text-base leading-7 text-stone-200"
+                        aria-label={speakerDisplayName(
+                          utterance.speaker,
+                          language,
+                          userDisplayName,
+                        )}
+                      >
+                        <p className="font-bold text-amber-100">
+                          {speakerDisplayName(utterance.speaker, language, userDisplayName)}
+                        </p>
+                        <p>{utterance.text}</p>
+                      </article>
+                    ))}
+                  </div>
+                )}
                 <textarea
                   id="user-turn"
                   autoFocus
-                  rows={2}
+                  rows={3}
                   maxLength={4000}
                   value={inputText}
                   onChange={(event) => setInputText(event.target.value)}
                   placeholder={copy.placeholder}
-                  className="mt-3 h-20 w-full resize-none rounded-xl border border-white/15 bg-black/25 p-3 text-base leading-7 text-white outline-none placeholder:text-stone-600 focus:border-amber-300"
+                  className="mt-3 h-24 w-full resize-none rounded-xl border border-white/15 bg-black/25 p-3 text-lg leading-8 text-white outline-none placeholder:text-stone-600 focus:border-amber-300"
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <p className="hidden text-[10px] text-stone-500 sm:block">{copy.submitHint}</p>
@@ -2614,7 +2950,19 @@ export function App() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 pb-8 sm:px-8">
+            {activeCharacterCoreSession && (
+              <div className="border-b border-cyan-900/15 bg-cyan-50 px-5 py-3">
+                <CharacterCoreExperimentNotice
+                  enabledReaderNames={activeCharacterCoreSession.enabledReaderNames}
+                  compact
+                />
+              </div>
+            )}
+            <div
+              ref={transcriptScrollRef}
+              data-testid="transcript-scroll"
+              className="flex-1 overflow-y-auto px-5 pb-8 sm:px-8"
+            >
               <TranscriptList
                 transcript={transcript}
                 language={language}

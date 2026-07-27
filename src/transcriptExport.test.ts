@@ -49,4 +49,27 @@ describe("formatTranscriptAsMarkdown", () => {
     expect(markdown).toContain("**Alex**");
     expect(markdown).toContain("**You**");
   });
+
+  it("uses the session display name for the user when provided", () => {
+    const markdown = formatTranscriptAsMarkdown(sample, "ko", "David");
+
+    expect(markdown).toContain("**David**");
+    expect(markdown).not.toContain("**나**");
+  });
+
+  it("adds local Character Core metadata only when explicitly enabled", () => {
+    const normal = formatTranscriptAsMarkdown(sample, "ko", "David");
+    const experimental = formatTranscriptAsMarkdown(sample, "ko", "David", {
+      version: "v2",
+      enabledReaderNames: ["마커스"],
+      maxGenerationRequests: 45,
+    });
+
+    expect(normal.startsWith("## ")).toBe(true);
+    expect(normal).not.toContain("Character Core");
+    expect(experimental.startsWith("# LOCAL EXPERIMENT · Character Core v2")).toBe(true);
+    expect(experimental).toContain("- Enabled readers: 마커스");
+    expect(experimental).toContain("- Safety cap: 45 generation requests max");
+    expect(experimental).toContain("\n\n## ");
+  });
 });

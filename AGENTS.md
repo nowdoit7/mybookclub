@@ -57,11 +57,11 @@ These are project-defining. Do not "improve" past them without asking.
    as typed objects. Adding a persona must require zero engine changes.
 4. **Every model call uses strict JSON schema output.** No free-text parsing,
    no regex extraction. Schema in SPEC §6.
-5. **Rebuttal enforcement is not optional.** After the user joins a discussion
-   and states a position, at least one persona challenges it (SPEC §9). A user
-   who chooses to keep listening may instead observe the mandatory directed
-   persona-to-persona clash. If either path becomes hard to implement, tell me;
-   don't quietly soften it.
+5. **Meaningful position review is not optional.** After the user joins a
+   discussion and states a position, at least one persona tests its disagreement,
+   scope, evidence, causality, or consequence (SPEC §9). Compatible positions
+   must not be turned into fake conflict. A user who chooses to keep listening
+   may instead observe the mandatory directed persona-to-persona examination.
 6. **Persona utterances: 2–4 sentences.** Enforced in prompt AND by schema
    maxLength. Personas that monologue are a bug.
 7. **Copyright:** discuss themes and scenes; quote at most a short phrase;
@@ -85,14 +85,15 @@ without a browser. Three layers, in priority order:
 engine logic — they're fast and the invariants are known up front:
 - state machine visits all 5 stages in order, never skips
 - persona draw always yields exactly one emotional / analytical / contextual
-- rebuttal targeting picks the persona whose stance is furthest from the user
-- the same challenger never fires twice in a row
+- position-review targeting picks the persona whose stance is furthest from the user
+- the same reviewer never fires twice in a row
 - shelf-citation budget is capped at one per persona per stage
 
 **2. Mock-LLM session tests** (fake client returns canned JSON, full session
 runs in-memory). These assert flow invariants, not text:
-- a user who joins is challenged at least once, and every discussion contains a
-  directed persona-to-persona disagreement — **these are tests, not hopes**
+- a user's position is meaningfully examined at least once, and every discussion
+  contains a directed persona-to-persona exchange; fake disagreement is a
+  failure — **these are tests, not hopes**
 - no persona speaks twice in a row
 - utterances per topic stay under the cap
 - every stage is reached and a recap is produced

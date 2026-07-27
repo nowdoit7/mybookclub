@@ -17,14 +17,23 @@ import type {
   StageId,
   Utterance,
 } from "../types";
+import type { CharacterCoreExperimentMarker } from "../characterCore/runtime";
 
 export type { UtteranceTask } from "./contracts";
+export type { CharacterCoreExperimentMarker } from "../characterCore/runtime";
 
 export interface ReadingNotesRequest {
   language: AppLanguage;
   book: ConfirmedBook;
   persona: PersonaCard;
   validationError?: string;
+  characterCoreExperiment?: CharacterCoreExperimentMarker;
+}
+
+export interface ParticipantLabel {
+  id: string;
+  displayName: string;
+  role: "moderator" | "reader" | "user";
 }
 
 export interface UtteranceRequest {
@@ -36,12 +45,15 @@ export interface UtteranceRequest {
   stage: StageId;
   task: UtteranceTask;
   recentTranscript: Utterance[];
+  participants: ParticipantLabel[];
   activeTopic?: string;
   targetSpeaker?: string;
   userArgument?: { stance: number; paraphrase: string; personaReason?: string };
   allowShelfReference: boolean;
   validationError?: string;
   discussionFocus?: string;
+  discussionOrigin?: "user" | "table";
+  characterCoreExperiment?: CharacterCoreExperimentMarker;
 }
 
 export interface DiscussionFocusRequest {

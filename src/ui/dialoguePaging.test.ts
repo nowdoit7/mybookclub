@@ -21,11 +21,20 @@ describe("dialogue paging", () => {
     expect(pages.join(" ")).toBe(source);
   });
 
-  it("splits a single oversized sentence without exceeding the page limit", () => {
-    const pages = paginateDialogue(`${"긴문장".repeat(80)}.`, "ko");
+  it("keeps a single oversized sentence intact for the scrollable dialogue box", () => {
+    const source = `${"긴문장".repeat(80)}.`;
+    const pages = paginateDialogue(source, "ko");
 
-    expect(pages.length).toBeGreaterThan(1);
-    expect(pages.every((page) => page.length <= 150)).toBe(true);
+    expect(pages).toEqual([source]);
+  });
+
+  it("never splits a long sentence at a word boundary", () => {
+    const first = `${"긴 문장을 자연스럽게 이어 말합니다 ".repeat(8).trim()}.`;
+    const second = "다음 문장은 새 페이지에서 시작합니다.";
+    const pages = paginateDialogue(`${first} ${second}`, "ko");
+
+    expect(pages).toEqual([first, second]);
+    expect(pages.join(" ")).toBe(`${first} ${second}`);
   });
 
   it("builds a stable flat page sequence for transcript navigation", () => {

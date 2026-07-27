@@ -10,6 +10,7 @@ import {
 } from "./contracts";
 import type { BookIdentificationRequest } from "./contracts";
 import type {
+  CharacterCoreExperimentMarker,
   GenerationClient,
   DiscussionFocusRequest,
   ReadingNotesRequest,
@@ -38,6 +39,12 @@ const FIREBASE_HOSTING_NAMES = new Set([
   "reading-table-buildweek.firebaseapp.com",
 ]);
 
+const CHARACTER_CORE_REQUEST_LIMIT = 45;
+
+export interface HttpGenerationClientOptions {
+  characterCoreExperiment?: CharacterCoreExperimentMarker;
+}
+
 export function resolveGenerationApiBaseUrl(hostname = globalThis.location?.hostname ?? ""): string {
   return FIREBASE_HOSTING_NAMES.has(hostname)
     ? FIREBASE_FUNCTION_API_BASE_URL
@@ -56,12 +63,28 @@ export class GenerationApiError extends Error {
 }
 
 export class HttpGenerationClient implements GenerationClient {
+  private characterCoreRequestCount = 0;
+
   constructor(
     private readonly baseUrl = resolveGenerationApiBaseUrl(),
     private readonly sessionId: string = crypto.randomUUID(),
+    private readonly options: HttpGenerationClientOptions = {},
   ) {}
 
   private async post<T>(path: string, input: unknown, schema: z.ZodType<T>): Promise<T> {
+    if (
+      this.options.characterCoreExperiment &&
+      this.characterCoreRequestCount >= CHARACTER_CORE_REQUEST_LIMIT
+    ) {
+      throw new GenerationApiError("session_call_limit_reached", 429, {
+        endpoint: path,
+        detail: `Character Core v2 local experiments are limited to ${CHARACTER_CORE_REQUEST_LIMIT} generation requests per session.`,
+      });
+    }
+    if (this.options.characterCoreExperiment) {
+      this.characterCoreRequestCount += 1;
+    }
+
     const startedAt = performance.now();
     const diagnosticId = startGenerationDiagnostic(path);
     let response: Response;
@@ -72,6 +95,9 @@ export class HttpGenerationClient implements GenerationClient {
         headers: {
           "content-type": "application/json",
           "x-session-id": this.sessionId,
+          ...(this.options.characterCoreExperiment
+            ? { "x-character-core-experiment": this.options.characterCoreExperiment.version }
+            : {}),
         },
         body: JSON.stringify(input),
       });
@@ -147,7 +173,11 @@ export class HttpGenerationClient implements GenerationClient {
   }
 
   generateReadingNotes(input: ReadingNotesRequest) {
-    return this.post("reading-notes", input, readingNotesSchema);
+    return this.post(
+      "reading-notes",
+      this.withCharacterCoreMarker(input),
+      readingNotesSchema,
+    );
   }
 
   extractDiscussionFocus(input: DiscussionFocusRequest) {
@@ -155,7 +185,7 @@ export class HttpGenerationClient implements GenerationClient {
   }
 
   generateUtterance(input: UtteranceRequest) {
-    return this.post("utterance", input, utteranceSchema);
+    return this.post("utterance", this.withCharacterCoreMarker(input), utteranceSchema);
   }
 
   extractUserStance(input: UserStanceRequest) {
@@ -164,6 +194,16 @@ export class HttpGenerationClient implements GenerationClient {
 
   generateRecap(input: RecapRequest) {
     return this.post("recap", input, recapSchema);
+  }
+
+  private withCharacterCoreMarker<T extends ReadingNotesRequest | UtteranceRequest>(
+    input: T,
+  ): T {
+    if (!this.options.characterCoreExperiment || input.language !== "ko") return input;
+    return {
+      ...input,
+      characterCoreExperiment: this.options.characterCoreExperiment,
+    };
   }
 }
 

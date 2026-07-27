@@ -129,6 +129,21 @@ async function worker(): Promise<void> {
         stage: "FIRST_IMPRESSIONS",
         task: "FIRST_IMPRESSION",
         recentTranscript,
+        participants: [
+          {
+            id: "moderator",
+            displayName: localizedSpeakerName("moderator", language),
+            role: "moderator",
+          },
+          {
+            id: guest.id,
+            displayName: localizedSpeakerName(guest.id, language),
+            role: "reader",
+          },
+          { id: "reader-b", displayName: "Reader B", role: "reader" },
+          { id: "reader-c", displayName: "Reader C", role: "reader" },
+          { id: "user", displayName: language === "ko" ? "나" : "You", role: "user" },
+        ],
         allowShelfReference: false,
       });
       results[index] = {

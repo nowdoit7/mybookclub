@@ -9,11 +9,15 @@ import {
   extractWebSearchSources,
   guestReadingNotesRule,
   guestSignatureMomentRule,
+  localizedSpokenConversationRule,
   localizedRecapParticipants,
+  appendCharacterCorePrompt,
   personaPromptData,
   requireParsedOutput,
+  resolveReadingNotesCharacterCorePromptSlice,
+  resolveUtteranceCharacterCorePromptSlice,
 } from "./openaiGenerationClient";
-import { GUEST_PERSONAS, selectPersonas } from "../src/personas";
+import { GUEST_PERSONAS, PERSONAS, selectPersonas } from "../src/personas";
 import type { UtteranceRequest } from "../src/api/generationClient";
 import type { ConfirmedBook } from "../src/types";
 
@@ -124,6 +128,26 @@ describe("recap participant labels", () => {
   });
 });
 
+describe("localized spoken conversation policy", () => {
+  it("keeps Korean naturalness subordinate to meaning preservation", () => {
+    const rule = localizedSpokenConversationRule("ko");
+
+    expect(rule).toContain("exact scene facts");
+    expect(rule).toContain("idiomatic spoken Korean");
+    expect(rule).toContain("one main conversational action per sentence");
+    expect(rule).toContain("Character voice");
+    expect(rule).toContain("never evidence of character");
+  });
+
+  it("evaluates English independently instead of translating Korean speech rules", () => {
+    const rule = localizedSpokenConversationRule("en");
+
+    expect(rule).toContain("idiomatic spoken English");
+    expect(rule).toContain("do not translate Korean honorifics");
+    expect(rule).not.toContain("idiomatic spoken Korean");
+  });
+});
+
 describe("imagined guest signature moment", () => {
   const requestFor = (
     speaker: UtteranceRequest["speaker"],
@@ -150,7 +174,81 @@ describe("imagined guest signature moment", () => {
     stage: "FIRST_IMPRESSIONS",
     task,
     recentTranscript: [],
+    participants: [
+      { id: "moderator", displayName: "Alex", role: "moderator" },
+      { id: "reader-a", displayName: "Reader A", role: "reader" },
+      { id: "reader-b", displayName: "Reader B", role: "reader" },
+      { id: "reader-c", displayName: "Reader C", role: "reader" },
+      { id: "user", displayName: "David", role: "user" },
+    ],
     allowShelfReference: false,
+  });
+
+  describe("Character Core prompt integration", () => {
+    const marcus = PERSONAS.find(({ id }) => id === "marcus")!;
+
+    it("leaves an unmarked prompt byte-for-byte unchanged", () => {
+      const basePrompt = "Existing production prompt.";
+      const input = requestFor(marcus, "CHALLENGE_USER", {}, "ko");
+
+      expect(resolveUtteranceCharacterCorePromptSlice(input)).toBeUndefined();
+      expect(appendCharacterCorePrompt(basePrompt, undefined)).toBe(basePrompt);
+    });
+
+    it("adds only the minimal marked Core slice and selected runtime state", () => {
+      const utteranceInput: UtteranceRequest = {
+        ...requestFor(marcus, "CHALLENGE_USER", {}, "ko"),
+        characterCoreExperiment: { version: "v2" },
+      };
+      const utteranceSlice =
+        resolveUtteranceCharacterCorePromptSlice(utteranceInput);
+      const utterancePrompt = appendCharacterCorePrompt(
+        "Existing utterance prompt.",
+        utteranceSlice,
+      );
+      const notesSlice = resolveReadingNotesCharacterCorePromptSlice({
+        language: "ko",
+        book: utteranceInput.book,
+        persona: marcus,
+        characterCoreExperiment: { version: "v2" },
+      });
+      const notesPrompt = appendCharacterCorePrompt(
+        "Existing reading-notes prompt.",
+        notesSlice,
+      );
+
+      expect(utteranceSlice).toMatchObject({
+        version: "v2",
+        personaId: "marcus",
+        state: "engaged",
+      });
+      expect(utterancePrompt).toContain("Runtime state: engaged");
+      expect(utterancePrompt).toContain("Core belief:");
+      expect(notesPrompt).toContain("Ranked commitments:");
+
+      for (const prompt of [utterancePrompt, notesPrompt]) {
+        expect(prompt).not.toMatch(/https?:\/\//u);
+        expect(prompt).not.toContain("provenance");
+        expect(prompt).not.toContain("sourceUrls");
+        expect(prompt).not.toContain("boundary_crossed");
+        expect(prompt).not.toContain("stateTransitions");
+      }
+    });
+
+    it("does not add Character Core instructions to moderator turns", () => {
+      const input: UtteranceRequest = {
+        ...requestFor("moderator", "TOPIC_OPEN", {}, "ko"),
+        characterCoreExperiment: { version: "v2" },
+      };
+
+      expect(resolveUtteranceCharacterCorePromptSlice(input)).toBeUndefined();
+      expect(
+        appendCharacterCorePrompt(
+          "Existing moderator prompt.",
+          resolveUtteranceCharacterCorePromptSlice(input),
+        ),
+      ).toBe("Existing moderator prompt.");
+    });
   });
 
   it.each(GUEST_PERSONAS)("offers $name one signature opportunity only in first impressions", (guest) => {
