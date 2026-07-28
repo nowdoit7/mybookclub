@@ -234,7 +234,7 @@ describe("recap quality validation", () => {
 Summary.
 ## Where everyone landed
 | Reader | Position |\n| --- | --- |\n| You | A view |
-## Sparks — moments of real disagreement
+## Agenda questions and perspectives
 - A disagreement.
 ## Scenes you might have missed
 - A scene.

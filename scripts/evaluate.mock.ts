@@ -33,18 +33,11 @@ function evaluate(result: CompletedSession): Check[] {
     const count = countSentences(text);
     return count < 2 || count > 4;
   }).length;
-  const topicOpening = discussion.find(({ speaker }) => speaker === "moderator");
+  const topicOpenings = discussion.filter(
+    ({ speaker }, index) => speaker === "moderator" && index % 7 === 0,
+  );
   const discussionUserTurns = discussion.filter(({ speaker }) => speaker === "user");
-  const roles = state.discussionRoles;
-  const leadOpeningIndex = discussion.findIndex(
-    ({ speaker, refersTo }) => speaker === roles?.leadA && refersTo === roles?.leadB,
-  );
-  const challengeIndex = discussion.findIndex(
-    ({ speaker, refersTo }) => speaker === roles?.challenger && refersTo === "user",
-  );
-  const bridgeIndex = discussion.findIndex(
-    ({ speaker }) => speaker === roles?.bridgeReader,
-  );
+  const agendas = state.agendaRounds;
   const spokenDiscussionTurns = discussion.filter(
     ({ speaker }) => personaIds.has(speaker),
   );
@@ -68,46 +61,51 @@ function evaluate(result: CompletedSession): Check[] {
       detail: `${firstImpressions.length}/3 independent first impressions`,
     },
     {
-      name: "conversation-grounded topic",
+      name: "two distinct conversation-grounded agendas",
       passed:
-        Boolean(state.activeTopic) &&
-        Boolean(topicOpening?.text.includes(state.activeTopic ?? "")) &&
-        state.book.candidateTopics.includes(state.activeTopic ?? ""),
-      detail: state.activeTopic ?? "no active topic",
+        agendas.length === 2 &&
+        new Set(agendas.map(({ topic }) => topic)).size === 2 &&
+        agendas.every(({ topic }, index) => topicOpenings[index]?.text.includes(topic)),
+      detail: agendas.map(({ topic }) => topic).join(" / "),
     },
     {
-      name: "user position challenged",
-      passed: discussion.some(
+      name: "user position reflected",
+      passed: discussion.filter(
         ({ speaker, refersTo }) => personaIds.has(speaker) && refersTo === "user",
-      ),
-      detail: "at least one discussion rebuttal targets the user",
+      ).length === 2,
+      detail: "one reader responds to the user in each agenda round",
     },
     {
-      name: "user gets the challenged turn back",
-      passed:
-        discussionUserTurns.length === 2 && discussion[challengeIndex + 1]?.speaker === "user",
+      name: "user gets both agenda turns",
+      passed: discussionUserTurns.length === 2,
       detail: `${discussionUserTurns.length}/2 user turns in the main discussion`,
     },
     {
-      name: "persona-to-persona clash",
+      name: "agenda round order",
       passed:
-        Boolean(roles) &&
-        roles?.leadA !== roles?.leadB &&
-        discussion[leadOpeningIndex + 1]?.speaker === roles?.leadB &&
-        discussion[leadOpeningIndex + 1]?.refersTo === roles?.leadA &&
-        discussion[leadOpeningIndex + 2]?.speaker === "moderator",
-      detail: roles
-        ? `${roles.leadA} opens, ${roles.leadB} challenges once, then code returns the floor`
-        : "roles missing",
+        agendas.length === 2 &&
+        agendas.every((agenda, index) => {
+          const offset = index * 7;
+          return (
+            discussion[offset]?.speaker === "moderator" &&
+            discussion[offset + 1]?.speaker === agenda.lead &&
+            discussion[offset + 2]?.speaker === agenda.responder &&
+            discussion[offset + 3]?.speaker === "moderator" &&
+            discussion[offset + 4]?.speaker === "user" &&
+            discussion[offset + 5]?.speaker === agenda.reflector &&
+            discussion[offset + 6]?.speaker === "moderator"
+          );
+        }),
+      detail: "each round follows open, lead, response, user, reflection, and close",
     },
     {
-      name: "causal user exchange",
+      name: "natural perspective range",
       passed:
-        challengeIndex >= 0 &&
-        discussion[challengeIndex + 1]?.speaker === "user" &&
-        discussion[challengeIndex + 2]?.speaker === roles?.challenger &&
-        bridgeIndex === challengeIndex + 3,
-      detail: "user reply returns to the challenger before the third reader bridges",
+        agendas.every(
+          ({ lead, responder, reflector }) =>
+            new Set([lead, responder, reflector]).size === 3,
+        ),
+      detail: "all three readers contribute without a forced challenger role",
     },
     {
       name: "concentrated discussion floor",
@@ -115,7 +113,7 @@ function evaluate(result: CompletedSession): Check[] {
         new Set(
           discussion.filter(({ speaker }) => personaIds.has(speaker)).map(({ speaker }) => speaker),
         ).size <= 3,
-      detail: "two leads carry the clash while a third reader may bridge it",
+      detail: "three readers share the two agenda rounds",
     },
     {
       name: "spoken discussion style",
@@ -166,7 +164,7 @@ async function runCase({
             firstImpression: "중심 질문은 흥미로웠지만 제시 방식에는 아직 판단을 유보하고 있습니다.",
             memorableScene: "앞에서 이해한 내용을 새롭게 보게 만든 대목이 가장 오래 남았습니다.",
             discussion: "형식과 그 결과를 함께 설명하는 해석이 더 설득력 있다고 생각합니다.",
-            discussionReply: "그 반론은 중요하지만 의도와 결과를 구분하면 제 해석은 여전히 성립합니다.",
+            discussionSecond: "두 번째 발제에서는 의도와 결과를 나누어 볼 때 드러나는 차이를 말하고 싶습니다.",
             wrapUp: "다른 독자의 근거를 들으며 처음 판단을 더 세밀하게 다듬었습니다.",
           }
         : {
@@ -174,7 +172,7 @@ async function runCase({
             firstImpression: "The central question interested me, but I am still testing how the book presented it.",
             memorableScene: "The passage that changed my earlier understanding stayed with me.",
             discussion: "I prefer an interpretation that explains both the form and its consequences.",
-            discussionReply: "That objection matters, but my reading still holds if intention and consequence are separated.",
+            discussionSecond: "For the second agenda, I want to separate intention from consequence and see what changes.",
             wrapUp: "The other readers helped me make my first judgment more precise.",
           },
   });

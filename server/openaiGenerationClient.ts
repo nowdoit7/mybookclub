@@ -133,10 +133,10 @@ function roomAtmosphereRule(atmosphere: UtteranceRequest["roomAtmosphere"]): str
         : "occasional humor may fit";
   const tension =
     atmosphere.tension >= 0.62
-      ? "the disagreement is visibly tense and should stay specific without hostility"
+      ? "the differences in reading are visibly tense and should stay specific without hostility"
       : atmosphere.tension < 0.35
         ? "the room is low-tension"
-        : "the room has a clear but manageable disagreement";
+        : "the room has clear but manageable differences";
   const energy = atmosphere.energy >= 0.65 ? "energetic" : atmosphere.energy < 0.4 ? "quiet and reflective" : "measured";
   return `Emergent room atmosphere: ${warmth}, ${energy}; ${playfulness}; ${tension}. Adapt delivery subtly while preserving the speaker's own voice and position. Do not imitate the user's wording, force jokes, or turn the whole group into one personality.`;
 }
@@ -160,6 +160,12 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
       return "Briefly thank the user for the introduction, make a natural transition into the book, and invite an overall first feeling, judgment, or question. Explicitly save concrete scenes and passages for the next stage.";
     case "FIRST_IMPRESSION":
       return "Give a personal overall reaction anchored in private notes. This is independent testimony, not debate: do not agree with, quote, praise, rebut, correct, or cross-examine another participant. Do not lead with a specific memorable scene because the next stage is reserved for scenes.";
+    case "AGENDA_LEAD":
+      return `${input.discussionFocus?.trim() ? `Use the supplied earlier-conversation thread, ${JSON.stringify(input.discussionFocus.trim())}, as context without treating it as a conclusion. ` : ""}This is a prepared book-club agenda response, not an opening argument. Give your own answer to the exact active question from the distinctive reading habit in your private notes, grounded in one verified scene or feature. Do not address, praise, rebut, or pre-empt another participant.`;
+    case "AGENDA_RESPONSE":
+      return "Give an independent answer to the exact agenda question from this reader's own lens and one verified scene or feature. It is fine to reach a similar or different conclusion, but explain a distinct reason instead of praising, rebutting, summarizing, or imitating the previous speaker.";
+    case "AGENDA_USER_RESPONSE":
+      return "Respond directly to the user's actual contribution in exactly 2 short spoken sentences. Choose the most truthful conversational move: deepen a genuine point of agreement, explain one precise difference, add a missing implication, or ask one sincere clarifying question. Do not manufacture opposition, grade the user, give generic praise, or repeat their words.";
     case "OPEN_PERSONA_POSITION":
       return `${input.discussionFocus?.trim() ? `Continue directly from Alex's supplied conversation thread, ${JSON.stringify(input.discussionFocus.trim())}, without substituting a different issue. ` : ""}State one committed answer to the active topic from your private notes. Address the supplied reader directly and give one piece of scene-level evidence; do not summarize the room.`;
     case "CHALLENGE_PERSONA":
@@ -173,9 +179,9 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "SCENES_OPEN":
       return "In the first sentence, briefly acknowledge the range or tension in the user's just-stated first impression without evaluating it. In the second sentence, transition to the memorable-scenes round and ask for one concrete scene, passage, image, or example that produced that impression.";
     case "TOPIC_OPEN":
-      return `Briefly name the supplied thread from the earlier conversation, then state this exact code-selected question verbatim without substituting another topic: ${input.activeTopic}`;
+      return `Briefly explain why the supplied thread makes this worth discussing, then present this exact prepared agenda question verbatim without substituting another topic: ${input.activeTopic}`;
     case "ASK_USER_POSITION":
-      return "After the two readers' disagreement, invite the user to enter with their own position on the active topic. Do not presume which side they support.";
+      return "After two readers have offered distinct views, invite the user to share their own reading of the agenda question. Do not frame the choice as two sides or presume agreement or disagreement.";
     case "CHALLENGE_USER":
       return "Address the user's paraphrased claim directly, state the private-note reason that conflicts with it, and ask one pointed question. Respectfully but firmly challenge; do not concede.";
     case "DEVILS_ADVOCATE":
@@ -189,13 +195,13 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "BRIDGE_EXCHANGE":
       return "Use exactly 2 short spoken sentences. Pick up the exact unresolved difference from the user's reply and the challenger's response, then add one genuinely different scene-level consideration from your private notes. Address the supplied target, but do not merely support one side, praise the user, summarize the exchange, or open an unrelated topic.";
     case "TOPIC_CLOSE":
-      return "Name the precise disagreement that remains open and close this topic without declaring a winner or inventing consensus. Bridge naturally toward the closing round.";
+      return "Close this agenda in 2 short spoken sentences: name one point the readers shared or clarified, then one meaningful difference or newly opened question. Do not declare a winner, force consensus, or introduce new evidence.";
     case "WRAP_OPEN":
-      return "In 2 warm spoken sentences, name only the unresolved tension being carried forward and invite the user to leave a closing thought. Do not repeat the full topic summary.";
+      return "In 2 warm spoken sentences, connect the two agenda questions without flattening them, then invite the user to leave one closing thought. Do not repeat a full summary.";
     case "CLOSING_REFLECTION":
       return "Use exactly 2 short sentences total. Give this reader's independent takeaway from what genuinely happened, then naturally include either a persona-specific farewell or their pleasure at sharing the table. The ending must sound recognizably like this reader, not an interchangeable group sign-off. Do not introduce a new argument, evidence, question, or advice; do not address the user by default, copy the user's analogy, occupation, or phrasing, turn their personal plan into group advice, recite a before-and-after formula, or summarize the whole meeting.";
     case "DISCUSSION_SUMMARY":
-      return "Use exactly 4 spoken sentences. Name the central disagreement, identify one precise contribution from the user, explain one genuine movement and the strongest unresolved counterclaim, then warmly thank the table and say in the selected language that the meeting recap comes next. Base it only on the supplied conversation; do not introduce a new opinion, reopen the debate, repeat a previous transition summary, or end with English words in a Korean session.";
+      return "Use exactly 4 spoken sentences. Name the two agenda questions, identify one precise contribution from the user, explain one shared insight and one meaningful difference or open question, then warmly thank the table and say in the selected language that the meeting recap comes next. Base it only on the supplied conversation; do not introduce a new opinion, reopen the discussion, repeat a previous transition summary, or end with English words in a Korean session.";
     default:
       return "Perform the named task directly.";
   }
@@ -379,7 +385,7 @@ export class OpenAIGenerationClient implements GenerationClient {
     return this.parse(
       readingNotesSchema,
       "private_reading_notes",
-      `You are ${input.persona.name}. Stay committed to the supplied persona card. ${imaginedGuestRule(input.persona, input.book)} ${guestReadingNotesRule(input.persona, input.book, input.language)} These are private anchor notes, not dialogue. Build one contestable thesis from this persona's specific lens; do not collapse into a generic balanced verdict. Preserve every candidate topic verbatim and in order. overall_take must be 2-3 sentences. Use any guest achievement metadata only to derive a distinctive way of thinking; do not put biography, fame, or a résumé into the notes. Include a genuine personal reaction, an unresolved doubt, evidence that could change your mind, and a question you actually want to ask another reader. These must differ from the thesis instead of restating it. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
+      `You are ${input.persona.name}. Stay committed to the supplied persona card. ${imaginedGuestRule(input.persona, input.book)} ${guestReadingNotesRule(input.persona, input.book, input.language)} These are private preparation notes for a book club, not dialogue or a debate brief. Develop one distinctive reading from this persona's specific lens without forcing a verdict or artificial opposition. Preserve every candidate topic verbatim and in order. overall_take must be 2-3 sentences. Use any guest achievement metadata only to derive a distinctive way of thinking; do not put biography, fame, or a résumé into the notes. question_for_table must be an open, specific agenda question grounded in the verified book that can support multiple good-faith interpretations, not a yes/no proposition. Include a genuine personal reaction, an unresolved doubt, evidence that could change your mind, and that agenda question; each must add something different. ${languageRule(input.language)} ${COPYRIGHT_RULE}`,
       JSON.stringify({
         book: input.book,
         persona: personaPromptData(input.persona, true),
@@ -484,12 +490,12 @@ export class OpenAIGenerationClient implements GenerationClient {
     };
     const recapStructure =
       input.language === "ko"
-        ? `Start with "# {book title} — 리딩 테이블 모임 기록, {provided date}". Then use exactly these level-two headings: "토론 요약", "모두의 최종 입장", "불꽃 — 실제로 부딪힌 순간", "놓치기 쉬운 장면", "책장에서 꺼낸 연결", and "잠들기 전 생각할 질문".`
-        : `Start with "# {book title} — Reading Table Recap, {provided date}". Then use exactly these level-two headings: "Discussion summary", "Where everyone landed", "Sparks — moments of real disagreement", "Scenes you might have missed", "From the shelves", and "A question to sleep on".`;
+        ? `Start with "# {book title} — 리딩 테이블 모임 기록, {provided date}". Then use exactly these level-two headings: "토론 요약", "모두의 최종 입장", "발제와 주요 관점", "놓치기 쉬운 장면", "책장에서 꺼낸 연결", and "잠들기 전 생각할 질문".`
+        : `Start with "# {book title} — Reading Table Recap, {provided date}". Then use exactly these level-two headings: "Discussion summary", "Where everyone landed", "Agenda questions and perspectives", "Scenes you might have missed", "From the shelves", and "A question to sleep on".`;
     return this.parse(
       recapSchema,
       "meeting_recap",
-      `${recapStructure} Keep the discussion summary to 3-5 sentences, the sparks section to at most 2 bullets, and the scenes section to at most 3 bullets. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section with exactly one row or column for every supplied participant, including the user, and use the supplied participant names exactly in both the table and prose. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, or private notes. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
+      `${recapStructure} Keep the discussion summary to 3-5 sentences, cover both supplied agenda questions in the agenda section with at most 2 bullets, and keep the scenes section to at most 3 bullets. For each agenda, preserve shared ground, meaningful differences, the user's actual contribution, and any open question without inventing a conflict. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section with exactly one row or column for every supplied participant, including the user, and use the supplied participant names exactly in both the table and prose. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, or private notes. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
       JSON.stringify(safeInput),
       { reasoningEffort: "low", maxOutputTokens: 1_400 },
     );

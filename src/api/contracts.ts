@@ -37,6 +37,9 @@ export const utteranceTaskSchema = z.enum([
   "INVITE_USER",
   "FIRST_IMPRESSIONS_OPEN",
   "FIRST_IMPRESSION",
+  "AGENDA_LEAD",
+  "AGENDA_RESPONSE",
+  "AGENDA_USER_RESPONSE",
   "OPEN_PERSONA_POSITION",
   "CHALLENGE_PERSONA",
   "RESPOND_TO_PERSONA",
@@ -211,7 +214,7 @@ export const utteranceRequestSchema = z
     stage: stageIdSchema,
     task: utteranceTaskSchema,
     recentTranscript: z.array(transcriptUtteranceSchema).max(12),
-    activeTopic: boundedString(1, 160).optional(),
+    activeTopic: boundedString(1, 300).optional(),
     targetSpeaker: boundedString(1, 100).optional(),
     userArgument: z
       .object({
@@ -231,7 +234,7 @@ export const userStanceRequestSchema = z
   .object({
     language: z.enum(["en", "ko"]),
     text: boundedString(1, 4000),
-    target: boundedString(1, 160),
+    target: boundedString(1, 300),
     book: confirmedBookSchema,
   })
   .strict();

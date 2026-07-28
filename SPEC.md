@@ -1,4 +1,4 @@
-# Open Reading Club — Build Spec v1.1
+# Open Reading Club — Build Spec v1.2
 
 > **Product name:** Open Reading Club
 > **Hackathon:** OpenAI Build Week 2026 · Track: **Apps for Your Life**
@@ -7,12 +7,33 @@
 
 ---
 
+## v1.2 normative amendment — agenda-led book club
+
+The Korean product brief in
+[`docs/issue-led-book-club-spec.ko.md`](docs/issue-led-book-club-spec.ko.md)
+defines the current main-discussion behavior. It supersedes older passages in
+this document that require a rebuttal, challenger, directed clash, or
+devil's-advocate fallback.
+
+The discussion now selects two semantically distinct, book-grounded agenda
+questions from the three readers' private preparation. Each round follows a
+code-owned order: moderator opens the agenda, one prepared reader answers,
+another reader adds an independent view, the user answers, the third reader
+responds to the user's contribution, and the moderator closes by preserving
+shared ground, differences, and an open question. Agreement and disagreement
+must arise from genuine readings; the system never manufactures opposition.
+
+The session sequence is: introduction → independent first impressions →
+independent memorable scenes → agenda 1 → agenda 2 → wrap-up. The user receives
+one speaking turn in each agenda round, and the recap records both agendas,
+major perspectives, the user's contribution, and remaining questions.
+
 ## 1. Product overview
 
 ### One-liner
 An AI-powered book club: finish a book, enter its title, and sit down at a round
 table with 3 AI readers — each with a distinct interpretive lens, a lifetime
-bookshelf, and opinions they actually defend.
+bookshelf, and a prepared question and interpretation to bring to the table.
 
 ### The problem
 Fewer and fewer people have someone to talk to about the book they just finished.
@@ -21,23 +42,23 @@ the same book was read three completely different ways — but most readers don'
 have access to one.
 
 ### Why this isn't "just a ChatGPT prompt"
-A single chatbot converges: it agrees with you, summarizes both sides, plays the
-friendly narrator. A real book club **collides**. This app is different because:
+A single chatbot tends to converge: it agrees with you, summarizes both sides,
+and plays the friendly narrator. A real book club develops several grounded
+readings of the same work. This app is different because:
 
 1. **Committed stances** — each persona pre-generates private reading notes and
    defends that position throughout the session.
 2. **Orchestration in code** — a deterministic state machine (not the LLM) runs
-   the 5-stage meeting, controls speaking order, and **forces disagreement**:
-   after the user speaks, at least one persona must push back.
+   the meeting, selects two distinct agendas, controls speaking order, and
+   guarantees the user a turn in each agenda without forcing disagreement.
 3. **A persistent artifact** — every session ends with an auto-generated,
    structured **meeting recap document** (the kind a real book club secretary
    would write), downloadable and shareable.
 4. **A purpose-built UI** — a five-person cast-card establishing scene that cuts
    into a full-screen portrait-led conversation stage, directed speaker/target
    cues, manual paged dialogue, and hard user stops.
-5. **Participant or audience agency** — code schedules genuine reader-to-reader
-   conflict, while bounded checkpoints let the user join, keep listening, or
-   wrap up instead of being forced into the center of every exchange.
+5. **Participant agency** — every agenda gives the user a clear place to add a
+   view while the readers may agree, differ, ask, or connect evidence naturally.
 
 ### Target user story (for demo + README)
 The developer is a member of a real corporate book club in Korea. The demo
@@ -54,7 +75,7 @@ different interpretations preserved rather than flattened.
 | Technological implementation (Codex use) | Multi-agent orchestration engine, stateless per-utterance calls, JSON-schema outputs, prefetch pipeline. Document Codex collaboration in README + commit history. |
 | Design (complete product experience) | Full 5-stage session flow with beginning/middle/end, recap artifact, coherent portrait-led book-club UI. Not a tech demo — a finished loop. |
 | Potential impact | Access to book-club-quality discussion for readers who have none; also pre/post-meeting companion for real clubs. |
-| Quality of the idea | "Committed-stance multi-agent book club with enforced disagreement" — not a chatbot skin. |
+| Quality of the idea | "Agenda-led multi-reader book club with grounded, distinct interpretations" — not a chatbot skin. |
 
 **Submission requirements checklist (do not lose track):**
 - [ ] Public repo (or private shared with testing@devpost.com + build-week-event@openai.com)
@@ -79,9 +100,9 @@ different interpretations preserved rather than flattened.
 - 5-stage session flow run by a **code state machine** (moderator)
 - Moderator utterances generated by LLM, logic 100% in code
 - Per-utterance stateless GPT-5.6 calls with JSON-schema output
-- **Rebuttal enforcement**: ≥1 persona challenges the user's stated position in the discussion stage
-- At least one directed **persona-to-persona exchange** in the discussion stage;
-  the user may join it, observe one bounded extension, or wrap up
+- Two semantically distinct, book-grounded agenda questions per session
+- One user speaking turn and one reader response in each agenda round; agreement
+  and disagreement arise naturally rather than through a mandatory challenger
 - An emergent room atmosphere derived from the drawn readers, then adjusted
   gradually by user wording and code-scheduled conversation events; it affects
   delivery without changing persona positions, flow, or adding a model call

@@ -80,6 +80,14 @@ export interface DiscussionFocus {
   emergentUserRelevance: number;
 }
 
+export interface AgendaRound {
+  topic: string;
+  evidence?: string;
+  lead: string;
+  responder: string;
+  reflector: string;
+}
+
 export interface ConfirmedBook {
   title: string;
   author: string;
@@ -147,6 +155,8 @@ export interface SessionState {
   };
   discussionPhase?: DiscussionPhase;
   discussionListenCount: number; // 0..2 bounded reader-to-reader extensions
+  agendaRounds: AgendaRound[];
+  activeAgendaIndex?: number;
   seed?: string;
 }
 

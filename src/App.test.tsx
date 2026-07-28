@@ -473,11 +473,9 @@ describe("text prototype", () => {
           "aria-current",
           "true",
         );
-        if (inputIndex === 4) {
-          expect(screen.getByRole("region", { name: "현재 대화" })).toHaveTextContent(
-            "지금 답변할 발언",
-          );
-        }
+        expect(screen.getByRole("region", { name: "현재 대화" })).toHaveTextContent(
+          "내 차례",
+        );
         fireEvent.change(textbox, { target: { value: inputs[inputIndex] } });
         inputIndex += 1;
         fireEvent.click(screen.getByRole("button", { name: "공유" }));
@@ -504,8 +502,8 @@ describe("text prototype", () => {
     expect(screen.queryByText("## 토론 요약")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Markdown 다운로드" })).toBeVisible();
 
-    fireEvent.click(screen.getByRole("tab", { name: "전체 대화 31" }));
-    expect(screen.getAllByRole("article")).toHaveLength(31);
+    fireEvent.click(screen.getByRole("tab", { name: "전체 대화 37" }));
+    expect(screen.getAllByRole("article")).toHaveLength(37);
     expect(screen.getByRole("button", { name: "전체 대화 복사" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("tab", { name: "모임 기록" }));

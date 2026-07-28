@@ -9,6 +9,9 @@ import { countSentences } from "./sentenceValidation";
 
 const EXACT_SENTENCE_COUNTS: Partial<Record<UtteranceTask, number>> = {
   PERSONA_INTRODUCTION: 2,
+  AGENDA_LEAD: 2,
+  AGENDA_RESPONSE: 2,
+  AGENDA_USER_RESPONSE: 2,
   CHALLENGE_PERSONA: 2,
   RESPOND_TO_PERSONA: 2,
   RESPOND_TO_USER_REPLY: 2,
@@ -140,6 +143,9 @@ export function validateUtteranceQuality(
   }
 
   const discussionTasks = new Set<UtteranceTask>([
+    "AGENDA_LEAD",
+    "AGENDA_RESPONSE",
+    "AGENDA_USER_RESPONSE",
     "OPEN_PERSONA_POSITION",
     "CHALLENGE_PERSONA",
     "RESPOND_TO_PERSONA",
@@ -176,7 +182,7 @@ const RECAP_HEADINGS: Record<AppLanguage, string[]> = {
   en: [
     "## Discussion summary",
     "## Where everyone landed",
-    "## Sparks — moments of real disagreement",
+    "## Agenda questions and perspectives",
     "## Scenes you might have missed",
     "## From the shelves",
     "## A question to sleep on",
@@ -184,7 +190,7 @@ const RECAP_HEADINGS: Record<AppLanguage, string[]> = {
   ko: [
     "## 토론 요약",
     "## 모두의 최종 입장",
-    "## 불꽃 — 실제로 부딪힌 순간",
+    "## 발제와 주요 관점",
     "## 놓치기 쉬운 장면",
     "## 책장에서 꺼낸 연결",
     "## 잠들기 전 생각할 질문",

@@ -3,8 +3,8 @@
 ## Project
 
 **The Reading Table** — an AI book club. The user finishes a book, enters the
-title, and joins a round table with three AI readers who hold committed
-interpretive positions and argue about it.
+title, and joins a round table with three AI readers who bring distinct,
+book-grounded agenda questions and interpretations.
 
 **`SPEC.md` is the source of truth for product behavior.** Read it before
 proposing changes. If something here contradicts SPEC.md, SPEC.md wins — tell
@@ -33,8 +33,8 @@ feedback loop — run it after every change without asking.
 
 ```
 src/
-  engine/      moderator state machine, speaking-order scheduler,
-               rebuttal targeting  ← pure functions, no React, no fetch
+  engine/      moderator state machine, agenda selection, speaking-order scheduler
+               ← pure functions, no React, no fetch
   prompts/     prompt assembly, house rules, directive templates
   personas/    persona cards as DATA (one file per persona) + draw logic
   api/         GPT-5.6 client, JSON-schema calls, retry/repair
@@ -57,11 +57,10 @@ These are project-defining. Do not "improve" past them without asking.
    as typed objects. Adding a persona must require zero engine changes.
 4. **Every model call uses strict JSON schema output.** No free-text parsing,
    no regex extraction. Schema in SPEC §6.
-5. **Rebuttal enforcement is not optional.** After the user joins a discussion
-   and states a position, at least one persona challenges it (SPEC §9). A user
-   who chooses to keep listening may instead observe the mandatory directed
-   persona-to-persona clash. If either path becomes hard to implement, tell me;
-   don't quietly soften it.
+5. **Agenda integrity is not optional.** Select two semantically distinct,
+   book-grounded agenda questions and give the user one turn in each round.
+   Readers may agree or disagree, but never manufacture opposition. Preserve
+   shared ground, differences, and the open question when each round closes.
 6. **Persona utterances: 2–4 sentences.** Enforced in prompt AND by schema
    maxLength. Personas that monologue are a bug.
 7. **Copyright:** discuss themes and scenes; quote at most a short phrase;
@@ -85,14 +84,15 @@ without a browser. Three layers, in priority order:
 engine logic — they're fast and the invariants are known up front:
 - state machine visits all 5 stages in order, never skips
 - persona draw always yields exactly one emotional / analytical / contextual
-- rebuttal targeting picks the persona whose stance is furthest from the user
-- the same challenger never fires twice in a row
+- agenda selection returns two semantically distinct grounded questions
+- each agenda assigns three different readers as lead, responder, and reflector
 - shelf-citation budget is capped at one per persona per stage
 
 **2. Mock-LLM session tests** (fake client returns canned JSON, full session
 runs in-memory). These assert flow invariants, not text:
-- a user who joins is challenged at least once, and every discussion contains a
-  directed persona-to-persona disagreement — **these are tests, not hopes**
+- every discussion runs two agenda rounds and gives the user one turn in each
+- each round follows the code-owned lead → independent response → user →
+  reflection sequence without requiring artificial disagreement
 - no persona speaks twice in a row
 - utterances per topic stay under the cap
 - every stage is reached and a recap is produced

@@ -20,6 +20,7 @@ import { resolveGuestAuthorPerspective } from "../personas/guestWorkRelations";
 import { localizedSpeakerName } from "../localization";
 import type {
   CompletedSession,
+  AgendaRound,
   AppLanguage,
   ConfirmedBook,
   PersonaCard,
@@ -50,6 +51,7 @@ export interface ScriptedUserInputs {
   firstImpression: string;
   memorableScene: string;
   discussion: string;
+  discussionSecond: string;
   discussionReply: string;
   discussionFollowUp: string;
   wrapUp: string;
@@ -91,6 +93,8 @@ const SIMULATED_USER_INPUTS: ScriptedUserInputs = {
     "The moment when the book's central tension became hardest to ignore stayed with me after I finished reading.",
   discussion:
     "I think the strongest interpretation has to account for both the book's choices and the consequences those choices leave unresolved.",
+  discussionSecond:
+    "I read this question less as a verdict and more as a way to notice what the book lets each character see or avoid.",
   discussionReply:
     "That objection matters, but I still think my reading holds if we distinguish the character's intention from the consequences the book shows us.",
   discussionFollowUp:
@@ -152,7 +156,6 @@ type GenerationOptions = Partial<
   Pick<UtteranceRequest, "activeTopic" | "targetSpeaker" | "userArgument" | "discussionFocus">
 > & { allowShelfReference?: boolean };
 
-const MAX_DISCUSSION_EXTENSIONS = 2;
 const MAX_CONCURRENT_READING_NOTES = 2;
 const TRANSIENT_READING_NOTE_CODES = new Set([
   "network_error",
@@ -231,6 +234,68 @@ export function selectDiscussionTopic(
 
   candidates.sort((left, right) => right.score - left.score);
   return { topic: candidates[0].topic, evidence: candidates[0].evidence };
+}
+
+export function selectAgendaRounds(
+  book: ConfirmedBook,
+  personas: PersonaCard[],
+  notes: Record<string, ReadingNotes>,
+  focus?: DiscussionFocus,
+): AgendaRound[] {
+  if (personas.length !== 3) {
+    throw new Error("Agenda selection requires exactly three personas.");
+  }
+  const phraseOnly = (value?: string) =>
+    value?.replace(/[.!?。！？]+/gu, ",").replace(/,+$/u, "").slice(0, 180);
+  const candidates = personas.map((persona, index) => {
+    const personaNotes = notes[persona.id];
+    const preferred = [...personaNotes.stanceByTopic].sort((left, right) => {
+      const leftFocus = focus?.topicScores.find(({ topic }) => topic === left.topic);
+      const rightFocus = focus?.topicScores.find(({ topic }) => topic === right.topic);
+      const leftScore =
+        Math.abs(left.stance) + (leftFocus?.relevance ?? 0) + (leftFocus?.userRelevance ?? 0);
+      const rightScore =
+        Math.abs(right.stance) + (rightFocus?.relevance ?? 0) + (rightFocus?.userRelevance ?? 0);
+      return rightScore - leftScore;
+    })[0];
+    const extracted = focus?.topicScores.find(({ topic }) => topic === preferred.topic);
+    return {
+      topic: personaNotes.questionForTable.trim().slice(0, 300) || preferred.topic,
+      alternateTopic: preferred.topic,
+      evidence: phraseOnly(
+        extracted?.userEvidence ?? extracted?.evidence ?? personaNotes.keyScenes[0],
+      ),
+      lead: persona.id,
+      sourceIndex: index,
+      score:
+        Math.abs(preferred.stance) +
+        (extracted?.relevance ?? 0) * 2 +
+        (extracted?.userRelevance ?? 0) * 3,
+    };
+  });
+  candidates.sort((left, right) => right.score - left.score || left.sourceIndex - right.sourceIndex);
+  const first = candidates[0];
+  const second = [...candidates.slice(1)].sort(
+    (left, right) =>
+      sceneSimilarity(first.topic, left.topic) - sceneSimilarity(first.topic, right.topic) ||
+      right.score - left.score ||
+      left.sourceIndex - right.sourceIndex,
+  )[0];
+  const secondTopic =
+    [second.topic, second.alternateTopic, ...book.candidateTopics].find(
+      (topic) => topic.trim() && sceneSimilarity(first.topic, topic) < 0.72,
+    ) ?? second.topic;
+
+  return [first, { ...second, topic: secondTopic }].map((candidate) => {
+    const leadIndex = personas.findIndex(({ id }) => id === candidate.lead);
+    return {
+      topic: candidate.topic,
+      evidence: candidate.evidence,
+      lead: candidate.lead,
+      responder: personas[(leadIndex + 1) % personas.length].id,
+      reflector: personas[(leadIndex + 2) % personas.length].id,
+    };
+  });
 }
 
 export function selectLeadDebaters(
@@ -408,6 +473,7 @@ export class SessionEngine {
       stageTurnCount: 0,
       userStances: {},
       discussionListenCount: 0,
+      agendaRounds: [],
       seed,
     };
     this.onAtmosphereChange?.(structuredClone(this.state.roomAtmosphere));
@@ -434,8 +500,7 @@ export class SessionEngine {
     await this.runMemorableScenes(userInputs.memorableScene);
     await this.runDiscussion(
       userInputs.discussion,
-      userInputs.discussionReply,
-      userInputs.discussionFollowUp,
+      userInputs.discussionSecond,
     );
     await this.runWrapUp(userInputs.wrapUp);
 
@@ -578,24 +643,24 @@ export class SessionEngine {
             INVITE_USER: "이번에는 여러분 차례입니다. 하시는 일이나 요즘의 독서 생활처럼 편한 이야기로 자신을 소개해 주세요.",
             FIRST_IMPRESSIONS_OPEN: "이제 책 이야기로 들어가 보겠습니다. 구체적인 장면은 잠시 뒤에 두고, 책을 덮었을 때 남은 전체적인 첫인상부터 들려주세요.",
             SCENES_OPEN: "서로 다른 첫인상이 어디서 시작됐는지 조금 보이네요. 이번에는 그 느낌을 만든 구체적인 장면 하나를 골라볼까요?",
-            TOPIC_OPEN: `앞선 이야기에서 한 질문이 선명해졌습니다. ${topic}`,
-            ASK_USER_POSITION: "두 사람의 견해가 갈렸습니다. 여러분은 이 질문에서 어느 쪽에 더 가까운가요?",
+            TOPIC_OPEN: `앞선 이야기에서 한 실마리가 선명해졌습니다. 준비한 발제를 하나 꺼내겠습니다. ${topic}`,
+            ASK_USER_POSITION: "두 사람의 서로 다른 생각을 들었습니다. 여러분은 이 발제를 어떻게 읽으셨나요?",
             DEVILS_ADVOCATE: "잠시 반대편에서 묻겠습니다. 지금의 해석이 놓치고 있는 가장 강한 반례는 무엇일까요?",
-            TOPIC_CLOSE: "이견은 완전히 풀리지 않았지만 어디에서 갈리는지는 분명해졌습니다. 이 긴장을 남겨 둔 채 마무리로 가겠습니다.",
-            WRAP_OPEN: "이제 각자 오늘 테이블에서 가져갈 생각을 하나씩 남겨보겠습니다. 처음 생각과 달라진 점이 없어도 괜찮습니다.",
-            DISCUSSION_SUMMARY: "오늘은 같은 책의 근거가 서로 다른 판단으로 이어지는 지점을 살폈습니다. 여러분이 보탠 구분 덕분에 의견이 갈리는 경계도 더 선명해졌습니다. 몇몇 판단은 움직였지만 가장 강한 반론은 아직 남아 있습니다. 함께 이야기해 주셔서 고맙고, 이제 모임 기록에서 그 흐름을 확인하겠습니다.",
+            TOPIC_CLOSE: "함께 본 지점이 하나 더 선명해졌습니다. 생각이 갈린 부분과 새로 열린 질문도 그대로 남겨 두겠습니다.",
+            WRAP_OPEN: "두 발제가 서로 다른 길로 책을 다시 보게 했습니다. 오늘 테이블에서 가져갈 생각을 하나씩 남겨보겠습니다.",
+            DISCUSSION_SUMMARY: "오늘은 서로 다른 두 발제를 따라 책을 살펴봤습니다. 여러분이 보탠 구분 덕분에 같은 장면을 읽는 기준이 더 구체적으로 드러났습니다. 함께 발견한 지점도 있었고 끝내 다르게 본 지점도 남았습니다. 함께 이야기해 주셔서 고맙고, 이제 모임 기록에서 그 흐름을 확인하겠습니다.",
           }
         : {
             WELCOME: "Welcome to Open Reading Club. Before discussing the book, let us first meet the people sharing the table tonight.",
             INVITE_USER: "Now it is your turn. Introduce yourself through your work, your current reading life, or any small detail you would like to share.",
             FIRST_IMPRESSIONS_OPEN: "Now we can open the book. Save the specific scenes for a moment and begin with the overall impression that remained when you finished.",
             SCENES_OPEN: "Those first impressions already point in different directions. Now choose one concrete scene that produced yours.",
-            TOPIC_OPEN: `One question has become clear from the earlier conversation. ${topic}`,
-            ASK_USER_POSITION: "The two readers have reached a real disagreement. Where do you stand on this question?",
+            TOPIC_OPEN: `One thread has become clear from the earlier conversation. Here is a prepared agenda question. ${topic}`,
+            ASK_USER_POSITION: "You have heard two distinct readings. How do you read this agenda question?",
             DEVILS_ADVOCATE: "Let me push from the other side. What is the strongest counterexample this reading might miss?",
-            TOPIC_CLOSE: "The disagreement is not resolved, but its fault line is clearer. Let us carry that tension into the closing round.",
-            WRAP_OPEN: "Let us each leave one thought from tonight's table. It is fine if your original view has not changed.",
-            DISCUSSION_SUMMARY: "Tonight we examined how the same evidence can lead readers toward different judgments. Your distinctions made the fault line between those judgments clearer. Some views moved, while the strongest counterclaim remains unresolved. Thank you all for sharing the table, and the written recap comes next.",
+            TOPIC_CLOSE: "One shared point is clearer now. We will also keep the meaningful difference and the new question it opened.",
+            WRAP_OPEN: "The two agenda questions reopened the book by different paths. Let us each leave one thought from tonight's table.",
+            DISCUSSION_SUMMARY: "Tonight we followed two different agenda questions through the book. Your contribution made one important distinction more concrete. The table found some shared ground while preserving a meaningful difference and an open question. Thank you for sharing the table, and the written recap comes next.",
           };
       return {
         utterance: moderatorLines[task] ?? (ko
@@ -633,6 +698,18 @@ export class SessionEngine {
       utterance = ko
         ? `저는 제 관점이 가장 불편하게 흔들린 장면을 다시 보고 싶습니다. 그 순간이 ${lens}인 제게도 간단한 결론을 허락하지 않았어요.`
         : `I want to return to the scene that most unsettled my usual lens. It refused to give even a ${lens.toLowerCase()} an easy conclusion.`;
+    } else if (task === "AGENDA_LEAD") {
+      utterance = ko
+        ? `저는 이 발제를 ${lens}의 관점에서 먼저 생각해 봤습니다. 한쪽 결론을 고르기보다 작품이 무엇을 보여 주고 무엇을 남겨 두는지 살펴보고 싶어요.`
+        : `I first approached this agenda through my perspective as a ${lens.toLowerCase()}. I want to examine what the book reveals and leaves open rather than force one verdict.`;
+    } else if (task === "AGENDA_RESPONSE") {
+      utterance = ko
+        ? `제게는 같은 발제에서 ${lens}의 관심사가 먼저 보입니다. 결론이 겹치더라도 중요하게 보는 이유와 대목은 다를 수 있어요.`
+        : `The same agenda first draws me toward the concerns of a ${lens.toLowerCase()}. Even where conclusions overlap, the reason and textual feature carrying the weight can differ.`;
+    } else if (task === "AGENDA_USER_RESPONSE") {
+      utterance = ko
+        ? "방금 말씀은 이 발제를 읽는 기준을 더 구체적으로 만들었습니다. 억지로 반대하기보다 그 생각이 책의 다른 대목까지 어떻게 이어지는지 보태고 싶어요."
+        : "Your contribution makes the standard behind this reading more concrete. Rather than manufacture an objection, I want to add how that thought might extend to another part of the book.";
     } else if (task === "RESPOND_TO_USER_FOLLOWUP") {
       utterance = ko
         ? "덧붙인 설명으로 입장의 경계가 더 또렷해졌습니다. 그래도 다른 결과 하나는 아직 설명되지 않아 그 부분은 남겨 두고 싶어요."
@@ -955,12 +1032,17 @@ export class SessionEngine {
   private async runMemorableScenes(userInput: string): Promise<void> {
     this.setStage("MEMORABLE_SCENES");
     await this.appendGenerated("moderator", "SCENES_OPEN");
-    const ranked = [...this.state.personas].sort(
-      (left, right) =>
-        this.state.notes[left.id].overallStance - this.state.notes[right.id].overallStance,
-    );
-    const sceneReaders: [PersonaCard, PersonaCard] = [ranked[0], ranked[ranked.length - 1]];
-    const sceneAnchors = selectDistinctSceneAnchors(sceneReaders, this.state.notes);
+    const sceneReaders = [...this.state.personas];
+    const selectedAnchors: string[] = [];
+    const sceneAnchors = sceneReaders.map((persona) => {
+      const anchor = [...this.state.notes[persona.id].keyScenes].sort(
+        (left, right) =>
+          Math.max(0, ...selectedAnchors.map((selected) => sceneSimilarity(left, selected))) -
+          Math.max(0, ...selectedAnchors.map((selected) => sceneSimilarity(right, selected))),
+      )[0];
+      selectedAnchors.push(anchor);
+      return anchor;
+    });
     const scenePromises = sceneReaders.map((persona, index) =>
       this.prepareGenerated(persona, "MEMORABLE_SCENE", {
         allowShelfReference: true,
@@ -1002,137 +1084,67 @@ export class SessionEngine {
   }
 
   private async runDiscussion(
-    userInput: string,
-    userReply: string,
-    userFollowUp: string,
+    firstUserInput: string,
+    secondUserInput: string,
   ): Promise<void> {
     this.setStage("DISCUSSION");
     this.state.discussionPhase = "opening";
     const focus = await this.discussionFocusPromise;
-    const selected = selectDiscussionTopic(
+    const rounds = selectAgendaRounds(
       this.state.book,
       this.state.personas,
       this.state.notes,
       focus,
     );
-    const topic = selected.topic;
-    this.state.activeTopic = topic;
-    const [leadA, leadB] = selectLeadDebaters(
-      topic,
-      this.state.personas,
-      this.state.notes,
-    );
-    this.state.discussionRoles = {
-      leadA: leadA.id,
-      leadB: leadB.id,
-    };
-    await this.appendGenerated("moderator", "TOPIC_OPEN", {
-      activeTopic: topic,
-      discussionFocus: selected.evidence,
-    });
-    await this.appendGenerated(leadA, "OPEN_PERSONA_POSITION", {
-      activeTopic: topic,
-      targetSpeaker: leadB.id,
-      discussionFocus: selected.evidence,
-    });
-    this.state.discussionPhase = "base_clash";
-    await this.appendGenerated(leadB, "CHALLENGE_PERSONA", {
-      activeTopic: topic,
-      targetSpeaker: leadA.id,
-    });
-    this.state.discussionPhase = "awaiting_user_choice";
+    this.state.agendaRounds = rounds;
 
-    let action = this.requestDiscussionAction
-      ? await this.requestDiscussionAction({ round: 0, canListen: true, phase: "before_join" })
-      : "join";
-    if (action === "listen") {
-      this.state.discussionListenCount = 1;
-      await this.appendContinuationChain(topic);
-      action = this.requestDiscussionAction
-        ? await this.requestDiscussionAction({ round: 1, canListen: false, phase: "before_join" })
-        : "join";
-      if (action === "listen") action = "join";
-    }
-
-    if (action === "join") {
+    for (const [index, round] of rounds.entries()) {
+      const topic = round.topic;
+      const lead = this.state.personas.find(({ id }) => id === round.lead)!;
+      const responder = this.state.personas.find(({ id }) => id === round.responder)!;
+      const reflector = this.state.personas.find(({ id }) => id === round.reflector)!;
+      this.state.activeAgendaIndex = index;
+      this.state.activeTopic = topic;
+      this.state.discussionRoles = {
+        leadA: lead.id,
+        leadB: responder.id,
+        bridgeReader: reflector.id,
+      };
+      await this.appendGenerated("moderator", "TOPIC_OPEN", {
+        activeTopic: topic,
+        discussionFocus: round.evidence,
+      });
+      await this.appendGenerated(lead, "AGENDA_LEAD", {
+        activeTopic: topic,
+        discussionFocus: round.evidence,
+      });
+      await this.appendGenerated(responder, "AGENDA_RESPONSE", {
+        activeTopic: topic,
+        discussionFocus: round.evidence,
+      });
       this.state.discussionPhase = "user_exchange";
       await this.appendGenerated("moderator", "ASK_USER_POSITION", { activeTopic: topic });
-      await this.requestAndAppendUser(userInput, "discussion_position", topic);
-      const challenger = await this.challengeUser(topic);
-      await this.requestAndAppendUser(userReply, "discussion_reply", topic);
-
-      const updatedUserArgument = this.state.userStances[topic] ?? {
+      await this.requestAndAppendUser(
+        index === 0 ? firstUserInput : secondUserInput,
+        "discussion_position",
+        topic,
+      );
+      const userArgument = this.state.userStances[topic] ?? {
         stance: 0,
         paraphrase:
           this.language === "ko"
-            ? "이번 질문에는 입장이 제시되지 않았습니다."
-            : "No position was offered for this question.",
+            ? "이번 발제에 대한 의견이 아직 구체적으로 정리되지 않았습니다."
+            : "No specific view was offered for this agenda question.",
       };
-      await this.appendGenerated(challenger, "RESPOND_TO_USER_REPLY", {
+      await this.appendGenerated(reflector, "AGENDA_USER_RESPONSE", {
         activeTopic: topic,
         targetSpeaker: "user",
-        userArgument:
-          challenger === "moderator"
-            ? updatedUserArgument
-            : {
-                ...updatedUserArgument,
-                personaReason: this.personaReasonFor(challenger, topic),
-              },
-      });
-
-      const bridgeReader = this.selectBridgeReader(
-        topic,
-        updatedUserArgument.stance,
-        challenger,
-      );
-      const bridgeTarget = this.bridgeTarget(
-        topic,
-        updatedUserArgument.stance,
-        bridgeReader,
-        challenger,
-      );
-      this.state.discussionRoles = {
-        ...this.state.discussionRoles,
-        challenger: challenger === "moderator" ? "moderator" : challenger.id,
-        bridgeReader: bridgeReader.id,
-      };
-      this.state.discussionPhase = "bridge_reader";
-      await this.appendGenerated(bridgeReader, "BRIDGE_EXCHANGE", {
-        activeTopic: topic,
-        targetSpeaker: bridgeTarget,
         userArgument: {
-          ...updatedUserArgument,
-          personaReason: this.personaReasonFor(bridgeReader, topic),
+          ...userArgument,
+          personaReason: this.personaReasonFor(reflector, topic),
         },
       });
-
-      let continuationCount = 0;
-      this.state.discussionPhase = "continuation_checkpoint";
-      while (continuationCount < MAX_DISCUSSION_EXTENSIONS && this.requestDiscussionAction) {
-        const postJoinAction = await this.requestDiscussionAction({
-          round: continuationCount + 1,
-          canListen: true,
-          phase: "after_join",
-        });
-        if (postJoinAction === "wrap") break;
-        continuationCount += 1;
-        if (postJoinAction === "join") {
-          await this.requestAndAppendUser(userFollowUp, "discussion_followup", topic);
-          const followUpArgument = this.state.userStances[topic] ?? updatedUserArgument;
-          const responder = this.selectFollowUpResponder(topic, followUpArgument.stance);
-          await this.appendGenerated(responder, "RESPOND_TO_USER_FOLLOWUP", {
-            activeTopic: topic,
-            targetSpeaker: "user",
-            userArgument: {
-              ...followUpArgument,
-              personaReason: this.personaReasonFor(responder, topic),
-            },
-          });
-        } else {
-          this.state.discussionListenCount += 1;
-          await this.appendContinuationChain(topic);
-        }
-      }
+      await this.appendGenerated("moderator", "TOPIC_CLOSE", { activeTopic: topic });
     }
     this.state.discussionPhase = "closing";
   }

@@ -108,6 +108,11 @@ function makeNotes(input: ReadingNotesRequest): ReadingNotesOutput {
   const name = readerName(input.persona, input.language);
   const lens = categoryLens[input.language][input.persona.category];
   const stances = stanceProfiles[input.persona.id] ?? [0, 0.5, -0.5];
+  const agendaTopicIndex = {
+    emotional: 1,
+    analytical: 0,
+    contextual: 2,
+  }[input.persona.category];
   const overallTake = isKorean
     ? `제 첫 관심은 ${lens}에 가 있습니다. 아직 구체적인 작품 사실을 보태기보다 테이블에서 나온 장면을 이 관점으로 천천히 시험해 보고 싶어요.`
     : `My first instinct is to look at ${lens}. Rather than add unverified details, I want to test that instinct against the moments raised at the table.`;
@@ -143,9 +148,7 @@ function makeNotes(input: ReadingNotesRequest): ReadingNotesOutput {
     possible_revision: isKorean
       ? "다른 독자가 더 구체적인 대목을 제시한다면 제 입장을 기꺼이 조정하겠습니다."
       : "I will revise my position if another reader offers a more precise moment from the book.",
-    question_for_table: isKorean
-      ? "같은 대목을 읽고도 서로 다른 판단에 이른 이유는 무엇일까요?"
-      : "Why might the same moment lead readers toward different judgments?",
+    question_for_table: input.book.candidateTopics[agendaTopicIndex],
   });
 }
 
@@ -247,6 +250,9 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
     ? {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
         FIRST_IMPRESSION: input.notes?.overallTake,
+        AGENDA_LEAD: `저는 “${topic}”를 ${reason}을 중심으로 먼저 생각했습니다. 이 질문은 한쪽 결론보다 작품이 보여 주고 남겨 둔 것을 함께 살피게 합니다.`,
+        AGENDA_RESPONSE: `저는 같은 질문에서 ${reason}을 먼저 봅니다. 결론이 닿더라도 중요하게 보는 이유와 대목은 다를 수 있어요.`,
+        AGENDA_USER_RESPONSE: `방금 답에서 중요한 구분이 들렸어요. 저는 ${reason}을 기준으로 아직 말하지 않은 결과 하나까지 이어 보겠습니다.`,
         OPEN_PERSONA_POSITION: `${moodLead} ${input.discussionFocus ? `앞서 나온 “${excerpt(input.discussionFocus, "대화의 실마리", 80)}”를 이어, ` : ""}${targetName}님, 저는 “${topic}”를 판단할 때 ${reason}을 먼저 살펴야 한다고 생각합니다.`,
         CHALLENGE_PERSONA: `${targetName}님, 그 주장은 중요한 예외를 너무 빨리 정리합니다. 같은 근거가 반대 결론을 낳는 경우까지 어떻게 설명하시겠어요?`,
         RESPOND_TO_PERSONA: `${targetName}님이 짚은 예외는 인정하지만 제 결론까지 무너지지는 않습니다. 오히려 ${reason}을 얼마나 중요하게 볼 것인지가 아직 남은 차이입니다.`,
@@ -265,6 +271,9 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
     : {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
         FIRST_IMPRESSION: input.notes?.overallTake,
+        AGENDA_LEAD: `I approach “${topic}” through ${reason}. It supports more than one grounded reading instead of demanding a verdict.`,
+        AGENDA_RESPONSE: `I begin with ${reason}. A similar conclusion can still rest on different evidence.`,
+        AGENDA_USER_RESPONSE: `I heard a useful distinction in your answer. Through ${reason}, I would extend it to one consequence the table has not named yet.`,
         OPEN_PERSONA_POSITION: `${moodLead} ${input.discussionFocus ? `Following the earlier thread about “${excerpt(input.discussionFocus, "the conversation thread", 80)},” ` : ""}${targetName}, I think ${reason} should carry the most weight when we answer ${topic}.`,
         CHALLENGE_PERSONA: `${targetName}, that claim closes an important exception too quickly. How does it explain the same evidence leading to the opposite conclusion?`,
         RESPOND_TO_PERSONA: `${targetName}'s exception matters, but it does not undo my conclusion. Our unresolved difference is how much weight to give ${reason}.`,
@@ -313,11 +322,11 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         FIRST_IMPRESSIONS_OPEN: "소개해 주셔서 고맙습니다. 이제 책으로 들어가되 구체적인 장면은 다음 순서에 남겨 두고, 책을 덮었을 때의 전체적인 느낌이나 질문부터 한 분씩 이야기해 볼까요?",
         DEVILS_ADVOCATE: "잠시 반대편에서 밀어붙여 보겠습니다. 모두가 이 해석에 동의한다면 우리가 시험하지 않고 지나치는 근거는 무엇일까요?",
         SCENES_OPEN: `“${userFirstImpression}”라는 첫인상이 어디에서 시작됐는지 궁금해지네요. 이번에는 그 느낌을 만든 구체적인 장면이나 대목 하나를 골라볼까요?`,
-        TOPIC_OPEN: `${input.discussionFocus ? `앞선 이야기에서 ${input.discussionFocus}라는 문제를 직접 짚었습니다. ` : ""}그 흐름을 이어 오늘의 중심 질문을 살펴보겠습니다. ${topic}`,
-        ASK_USER_POSITION: "서로 다른 입장의 끝을 들어봤습니다. 여러분은 이 질문에 대해 어디에 서 있나요?",
-        TOPIC_CLOSE: `오늘 우리는 “${stripTerminal(topic, "이 질문")}”라는 질문을 놓고 이야기했습니다. 같은 근거가 낳은 해석의 차이를 합의로 덮지 않고 기억해 두겠습니다.`,
-        WRAP_OPEN: "이견은 남아 있지만 어디에서 판단이 갈리는지는 더 선명해졌습니다. 오늘 대화가 여러분의 생각을 어떻게 움직였는지 마지막으로 들려주시겠어요?",
-        DISCUSSION_SUMMARY: `오늘 테이블에서는 질문 “${stripTerminal(topic, "중심 질문")}”를 중심에 두고 서로 다른 판단의 근거를 비교했습니다. 테이블에서 직접 나온 구분 덕분에 논쟁의 경계도 더 또렷해졌습니다. 일부 판단은 움직였지만 가장 강한 반론은 여전히 남아 있습니다. 각자의 생각을 솔직하게 나눠 주셔서 고맙고, 이제 모임 기록에서 그 변화와 이견을 함께 확인하겠습니다.`,
+        TOPIC_OPEN: `${input.discussionFocus ? `앞선 이야기에서 ${input.discussionFocus}라는 실마리가 나왔습니다. ` : ""}그 흐름을 이어 준비한 발제를 하나 꺼내겠습니다. ${topic}`,
+        ASK_USER_POSITION: "두 분의 서로 다른 생각을 들었습니다. 여러분은 이 발제를 어떻게 읽으셨나요?",
+        TOPIC_CLOSE: `“${stripTerminal(topic, "이 발제")}”를 통해 함께 본 지점이 하나 더 선명해졌습니다. 생각이 갈린 부분과 새로 열린 질문도 그대로 남겨 두겠습니다.`,
+        WRAP_OPEN: "두 발제가 서로 다른 길로 책을 다시 보게 했습니다. 오늘 테이블에서 가져가고 싶은 생각을 하나씩 남겨볼까요?",
+        DISCUSSION_SUMMARY: "오늘은 서로 다른 두 발제를 따라 책을 살펴봤습니다. 여러분이 보탠 구분 덕분에 같은 장면을 읽는 기준이 더 구체적으로 드러났습니다. 함께 발견한 지점도 있었고 끝내 다르게 본 지점도 남았습니다. 각자의 생각을 나눠 주셔서 고맙고, 이제 모임 기록에서 그 흐름을 확인하겠습니다.",
       }
     : {
         WELCOME: `Welcome to Open Reading Club. We will discuss ${input.book.title} by ${input.book.author}, but first let us meet the people sitting with us tonight.`,
@@ -325,11 +334,11 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         FIRST_IMPRESSIONS_OPEN: "Thank you for introducing yourself. Let us open the book, save the specific scenes for the next round, and begin with the overall feeling or question it left behind.",
         DEVILS_ADVOCATE: "Let me push from the other side for a moment. If everyone accepts this reading, what evidence are we choosing not to test?",
         SCENES_OPEN: `I am curious where the impression “${userFirstImpression}” began. Which concrete scene, passage, image, or example produced it?`,
-        TOPIC_OPEN: `${input.discussionFocus ? `The earlier conversation kept returning to ${input.discussionFocus}. ` : ""}That gives us our central question: ${topic}`,
-        ASK_USER_POSITION: "You have heard the edges of the disagreement. Where do you land on this question?",
-        TOPIC_CLOSE: `We tested how the same evidence can support different answers to ${stripTerminal(topic, "this question")}. The remaining difference matters more than a forced consensus.`,
-        WRAP_OPEN: "The disagreement remains, but its fault line is clearer now. Before we leave the table, how did this conversation move your view?",
-        DISCUSSION_SUMMARY: `Tonight the table compared the reasons behind different answers to ${stripTerminal(topic, "the central question")}. The user's distinction made the boundary of that disagreement clearer. Some judgments moved, while the strongest counterclaim remains unresolved. Thank you all for sharing the table, and the written recap comes next.`,
+        TOPIC_OPEN: `${input.discussionFocus ? `The earlier conversation surfaced ${input.discussionFocus}. ` : ""}Following that thread, here is one prepared agenda question: ${topic}`,
+        ASK_USER_POSITION: "You have heard two distinct readings. How do you read this agenda question?",
+        TOPIC_CLOSE: `Our discussion of ${stripTerminal(topic, "this agenda")} clarified one point the table shares. We will also keep the meaningful difference and the new question it opened.`,
+        WRAP_OPEN: "The two agenda questions reopened the book by different paths. What is one thought you want to carry away from the table?",
+        DISCUSSION_SUMMARY: "Tonight we followed two different agenda questions through the book. Your contribution made one important distinction more concrete. The table found some shared ground while preserving a meaningful difference and an open question. Thank you all for sharing the table, and the written recap comes next.",
       };
 
   return utteranceSchema.parse({
@@ -435,9 +444,10 @@ export class MockGenerationClient implements GenerationClient {
 
   async generateRecap(input: RecapRequest) {
     const isKorean = input.language === "ko";
-    const topic =
-      Object.keys(input.userStances).find((key) => key !== "overall_impression") ??
-      input.book.candidateTopics[0];
+    const agendaTopics = Object.keys(input.userStances).filter(
+      (key) => key !== "overall_impression",
+    );
+    const topic = agendaTopics[0] ?? input.book.candidateTopics[0];
     const user = input.userStances[topic];
     const names = input.personas.map((persona) => readerName(persona, input.language));
     const personaCells = input.personas.map((persona) => {
@@ -451,14 +461,14 @@ export class MockGenerationClient implements GenerationClient {
       `${user?.stance.toFixed(1) ?? (isKorean ? "통과" : "pass")} — ${user?.paraphrase ?? (isKorean ? "기록된 입장 없음" : "No position recorded")}`,
     ];
     const scene = userTurn(input.transcript, "MEMORABLE_SCENES");
-    const challenge = input.transcript.find(
-      ({ speaker, refersTo }) => speaker !== "moderator" && refersTo === "user",
-    );
-    const challenger = challenge
-      ? localizedSpeakerName(challenge.speaker, input.language)
-      : isKorean
-        ? "진행자"
-        : "the moderator";
+    const agendaSummary = agendaTopics
+      .map((agenda, index) => {
+        const contribution = input.userStances[agenda]?.paraphrase;
+        return isKorean
+          ? `- 발제 ${index + 1}: **${agenda}** — ${contribution ?? "사용자 의견은 기록되지 않았습니다."}`
+          : `- Agenda ${index + 1}: **${agenda}** — ${contribution ?? "No user position was recorded."}`;
+      })
+      .join("\n");
     const citedBooks = input.transcript
       .filter(({ shelfRef }) => shelfRef)
       .map(({ shelfRef, stage }) =>
@@ -476,8 +486,8 @@ export class MockGenerationClient implements GenerationClient {
 ## 모두의 최종 입장
 ${table}
 
-## 불꽃 — 실제로 부딪힌 순간
-- ${challenger}가 사용자의 입장에 반대 가능성을 제시하면서, 처음 나온 해석이 다른 근거까지 설명할 수 있는지 물었습니다.
+## 발제와 주요 관점
+${agendaSummary}
 
 ## 놓치기 쉬운 장면
 - ${scene ? `사용자가 직접 고른 대목: ${excerpt(scene.text, "사용자가 고른 대목")}` : "사용자가 특정 장면을 고르지 않아 대화에서 확인되지 않은 작품 내용을 덧붙이지 않았습니다."}
@@ -495,8 +505,8 @@ The table centered on **${topic}** and compared the different reading lenses of 
 ## Where everyone landed
 ${table}
 
-## Sparks — moments of real disagreement
-- ${challenger} tested the user's position by asking whether the first interpretation could account for the strongest counterevidence raised at the table.
+## Agenda questions and perspectives
+${agendaSummary}
 
 ## Scenes you might have missed
 - ${scene ? `The user brought this moment to the table: ${excerpt(scene.text, "the user's chosen moment")}` : "The user did not choose a specific scene, so the recap adds no unverified book details."}

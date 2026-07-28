@@ -86,3 +86,5 @@
 - 2026-07-22: Rejected model lines that stop mid-sentence, enforced exact two-sentence directed exchanges and the four-sentence moderator close, and kept the single repair retry as the recovery path.
 - 2026-07-22: Kept Alex in the moderator role whenever the user states a position by always assigning a persona challenger, and guaranteed an explicitly invited imagined guest a lead role in the main discussion.
 - 2026-07-22: Rebuilt the submission README around the live demo, reproducible seed, exact deployed architecture, verification evidence, and concrete Codex collaboration decisions; added an MIT license for source code while explicitly excluding project media.
+- 2026-07-28: Replaced the forced-clash main discussion with two distinct, book-grounded agenda rounds that each give the user a turn and preserve natural agreement or disagreement.
+- 2026-07-28: Expanded memorable-scene testimony to all three readers and added deterministic agenda deduplication when generated questions overlap.
