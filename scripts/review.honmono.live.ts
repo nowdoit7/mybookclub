@@ -4,6 +4,7 @@ import { OpenAIGenerationClient } from "../server/openaiGenerationClient";
 import { SessionEngine } from "../src/engine/sessionEngine";
 import { selectPersonas } from "../src/personas";
 import { formatTranscriptAsMarkdown } from "../src/transcriptExport";
+import type { Utterance } from "../src/types";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error(
@@ -12,6 +13,7 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 const personas = selectPersonas("review:honmono:ko");
+const capturedTranscript: Utterance[] = [];
 const engine = new SessionEngine(
   new OpenAIGenerationClient(
     process.env.OPENAI_API_KEY,
@@ -21,10 +23,13 @@ const engine = new SessionEngine(
     onStatus(message) {
       console.error(`[${message}]`);
     },
+    onUtterance(utterance) {
+      capturedTranscript.push(utterance);
+    },
   },
 );
 
-const result = await engine.run({
+const sessionInput = {
   title: "혼모노",
   author: "성해나",
   language: "ko",
@@ -45,14 +50,22 @@ const result = await engine.run({
     wrapUp:
       "오늘은 『혼모노』를 진짜와 가짜의 판정 이야기뿐 아니라, 정체성과 권력 그리고 시간이 사람을 어떻게 바꾸는지 묻는 소설집으로 다시 보게 됐습니다.",
   },
-});
+} as const;
 
-console.log(`# 실제 API 대화 품질 검토 — 『${result.state.book.title}』\n`);
-console.log(`- 모델: ${process.env.OPENAI_MODEL ?? "gpt-5.6-terra"}`);
-console.log(`- 검증 상태: ${result.state.book.verificationStatus}`);
-console.log(`- 참가자: ${result.state.personas.map(({ name }) => name).join(", ")}, 데이비드`);
-console.log(`- 발제 1: ${result.state.agendaRounds[0]?.topic ?? "생성되지 않음"}`);
-console.log(`- 발제 2: ${result.state.agendaRounds[1]?.topic ?? "생성되지 않음"}\n`);
-console.log(formatTranscriptAsMarkdown(result.state.transcript, "ko"));
-console.log("\n# 모임 기록\n");
-console.log(result.recapMarkdown);
+try {
+  const result = await engine.run(sessionInput);
+  console.log(`# 실제 API 대화 품질 검토 — 『${result.state.book.title}』\n`);
+  console.log(`- 모델: ${process.env.OPENAI_MODEL ?? "gpt-5.6-terra"}`);
+  console.log(`- 검증 상태: ${result.state.book.verificationStatus}`);
+  console.log(`- 참가자: ${result.state.personas.map(({ name }) => name).join(", ")}, 데이비드`);
+  console.log(`- 발제 1: ${result.state.agendaRounds[0]?.topic ?? "생성되지 않음"}`);
+  console.log(`- 발제 2: ${result.state.agendaRounds[1]?.topic ?? "생성되지 않음"}\n`);
+  console.log(formatTranscriptAsMarkdown(result.state.transcript, "ko"));
+  console.log("\n# 모임 기록\n");
+  console.log(result.recapMarkdown);
+} catch (error) {
+  console.log("# 실제 API 대화 품질 검토 — 회고 생성 실패\n");
+  console.log(formatTranscriptAsMarkdown(capturedTranscript, "ko"));
+  console.error(error);
+  process.exitCode = 1;
+}

@@ -558,6 +558,22 @@ describe("SessionEngine", () => {
     expect(Object.fromEntries(calls)).toEqual({ maddie: 1, marcus: 2, dev: 1 });
   });
 
+  it("retries an incomplete recap once without rerunning the conversation", async () => {
+    const client = new MockGenerationClient();
+    const originalGenerateRecap = client.generateRecap.bind(client);
+    let recapCalls = 0;
+    client.generateRecap = async (input) => {
+      recapCalls += 1;
+      if (recapCalls === 1) throw new IncompleteGenerationError("max_output_tokens");
+      return originalGenerateRecap(input);
+    };
+
+    await expect(
+      new SessionEngine(client).run({ title: "A Reader-Selected Book", seed: "demo" }),
+    ).resolves.toMatchObject({ state: { stage: "WRAP_UP" } });
+    expect(recapCalls).toBe(2);
+  });
+
   it("retries a transient reading-note connection failure once", async () => {
     const client = new MockGenerationClient();
     const originalGenerateNotes = client.generateReadingNotes.bind(client);

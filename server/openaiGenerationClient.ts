@@ -497,7 +497,7 @@ export class OpenAIGenerationClient implements GenerationClient {
       "meeting_recap",
       `${recapStructure} Keep the discussion summary to 3-5 sentences, cover both supplied agenda questions in the agenda section with at most 2 bullets, and keep the scenes section to at most 3 bullets. For each agenda, preserve shared ground, meaningful differences, the user's actual contribution, and any open question without inventing a conflict. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown stance table in the final-position section with exactly one row or column for every supplied participant, including the user, and use the supplied participant names exactly in both the table and prose. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, or private notes. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
       JSON.stringify(safeInput),
-      { reasoningEffort: "low", maxOutputTokens: 1_400 },
+      { reasoningEffort: "low", maxOutputTokens: 2_200 },
     );
   }
 }

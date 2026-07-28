@@ -1197,10 +1197,20 @@ export class SessionEngine {
     };
     let validationError: string | undefined;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const output: RecapOutput = await this.client.generateRecap({
-        ...baseRequest,
-        validationError,
-      });
+      let output: RecapOutput;
+      try {
+        output = await this.client.generateRecap({
+          ...baseRequest,
+          validationError,
+        });
+      } catch (error) {
+        if (attempt === 0 && error instanceof IncompleteGenerationError) {
+          validationError =
+            "The previous recap ended before its structured output was complete. Return the full but concise recap within the output limit.";
+          continue;
+        }
+        throw error;
+      }
       const issues = validateRecapQuality(output.markdown, this.language, [
         ...this.state.personas.map(({ id }) => localizedSpeakerName(id, this.language)),
         this.userDisplayName,
