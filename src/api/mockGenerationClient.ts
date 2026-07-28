@@ -263,12 +263,12 @@ function closingReflection(persona: PersonaCard, language: AppLanguage): string 
     language === "ko"
       ? {
           emotional: "서로 다른 마음을 들을 수 있어 즐거웠고, 다음 책에서도 다시 만나고 싶어요.",
-          analytical: "제가 놓친 장면을 들을 수 있어 좋았습니다. 다음 테이블에서 뵙죠.",
+          analytical: "제가 놓친 장면을 들을 수 있어 좋았고, 다음 테이블에서 뵙겠습니다.",
           contextual: "함께 시야를 넓혀 가는 대화가 즐거웠고, 다음 책에서 또 만나요.",
         }[persona.category]
       : {
           emotional: "I loved hearing how differently this table felt the book, and I hope we meet over another one.",
-          analytical: "I enjoyed hearing about the moments I missed. See you at the next table.",
+          analytical: "I enjoyed hearing about the moments I missed, and I hope to see you at the next table.",
           contextual: "I enjoyed widening the view together; until the next book.",
         }[persona.category];
 
@@ -287,7 +287,12 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
       : "another reader";
   const usesDefaultUserLabel =
     input.targetSpeaker === "user" &&
-    targetName === localizedSpeakerName("user", input.language);
+    [
+      localizedSpeakerName("user", input.language).toLocaleLowerCase(),
+      "you",
+      "user",
+      "사용자",
+    ].includes(targetName.toLocaleLowerCase());
   const targetVocative = usesDefaultUserLabel
     ? ""
     : isKorean
@@ -338,14 +343,14 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
         REACT_TO_USER_SCENE: `방금 들은 “${userMoment}” 덕분에 앞선 이야기가 훨씬 구체적으로 다가옵니다. 저는 그 대목에서 ${categoryLens.ko[persona.category]}도 함께 보였어요.`,
         RESPOND_TO_USER_REPLY: `${address}그 장면 때문에 그렇게 느끼셨군요. 저는 다른 부분을 먼저 봤는데, 말씀을 듣고 나니 두 느낌이 함께 이해됩니다.`,
         RESPOND_TO_USER_FOLLOWUP: `${address}덧붙인 설명을 들으니 왜 그렇게 읽으셨는지 알겠어요. 저는 ${reason}도 함께 생각해 보게 됩니다.`,
-        BRIDGE_EXCHANGE: `${address}저는 여기에 다른 시선 하나를 보태고 싶어요. ${reason}까지 함께 보면 앞선 이야기가 조금 더 넓어집니다.`,
+        BRIDGE_EXCHANGE: `${address}${stripTerminal(input.activeTopic, "이번 발제")}에 다른 시선 하나를 보태고 싶어요. ${reason}까지 함께 보면 앞선 이야기가 조금 더 넓어집니다.`,
         CLOSING_REFLECTION: closingReflection(persona, input.language),
       }
     : {
         PERSONA_INTRODUCTION: personaIntroduction(persona, input.language),
         FIRST_IMPRESSION: input.notes?.overallTake,
         OPEN_PERSONA_POSITION: `${moodLead} I first noticed ${reason}. I would like to place that beside the scene already on the table.`,
-        CHALLENGE_PERSONA: `${targetName}, hearing you makes the scene look different. I first noticed ${reason}; putting both views together gives the moment more depth.`,
+        CHALLENGE_PERSONA: `${targetName}, hearing you makes the scene look different. I first noticed ${reason}. Putting both views together gives the moment more depth.`,
         RESPOND_TO_PERSONA: `${targetName}, I can see that reading. I first noticed ${reason}, and your comment helps me see what I missed.`,
         CHALLENGE_USER: `${targetName}, I can understand that response. Which scene especially led you to read it that way?`,
         MEMORABLE_SCENE: sceneAnchor
@@ -356,7 +361,7 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
         REACT_TO_USER_SCENE: `Hearing “${userMoment}” makes the earlier conversation much more concrete. I also noticed ${categoryLens.en[persona.category]} in that moment.`,
         RESPOND_TO_USER_REPLY: `${targetName}, now I understand why that scene led you there. I noticed something else first, but both responses can sit together.`,
         RESPOND_TO_USER_FOLLOWUP: `${targetName}, that addition helps me understand your reading. It also makes me think about ${reason}.`,
-        BRIDGE_EXCHANGE: `${targetName}, I want to add one more perspective. Looking at ${reason} can widen the conversation we just had.`,
+        BRIDGE_EXCHANGE: `${address}I want to add one perspective to ${stripTerminal(input.activeTopic, "this agenda")}. Looking at ${reason} can widen the conversation we just had.`,
         CLOSING_REFLECTION: closingReflection(persona, input.language),
       };
   const utterance =
@@ -380,6 +385,16 @@ function personaUtterance(input: UtteranceRequest): UtteranceOutput {
 function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
   const isKorean = input.language === "ko";
   const topic = input.activeTopic ?? input.book.candidateTopics[0];
+  const agendaTopics = [
+    input.meetingPlan?.primaryPrompt,
+    input.meetingPlan?.reservePrompt,
+  ].filter((value): value is string => Boolean(value));
+  const agendaPair =
+    agendaTopics.length === 2
+      ? isKorean
+        ? `첫 번째 발제 “${stripTerminal(agendaTopics[0], "첫 번째 질문")}”와 두 번째 발제 “${stripTerminal(agendaTopics[1], "두 번째 질문")}”`
+        : `the first agenda, ${stripTerminal(agendaTopics[0], "the first question")}, and the second, ${stripTerminal(agendaTopics[1], "the second question")}`
+      : stripTerminal(topic, isKorean ? "중심 질문" : "the central question");
   const userFirstImpression = excerpt(
     lastUserTurn(input),
     isKorean ? "방금 들려준 첫인상" : "the first impression you just shared",
@@ -394,9 +409,11 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         SCENES_OPEN: `“${userFirstImpression}”라는 첫인상이 어디에서 시작됐는지 궁금해지네요. 이번에는 그 느낌을 만든 구체적인 장면이나 대목 하나를 골라볼까요?`,
         TOPIC_OPEN: `${input.discussionFocus ? "앞서 나온 장면과 첫인상을 이어서 이야기해 보죠. " : ""}${topic}`,
         ASK_USER_POSITION: "다른 분들의 이야기를 들으셨는데요. 여러분은 이 대목에서 무엇을 느끼거나 생각하셨나요?",
-        TOPIC_CLOSE: `오늘은 “${stripTerminal(topic, "이 질문")}”를 두고 각자 먼저 보인 장면과 느낌을 나눴습니다. 같은 부분과 다르게 읽은 부분을 모두 가져가겠습니다.`,
-        WRAP_OPEN: "다른 분들의 이야기를 들으며 새롭게 보인 부분이 있나요? 오늘 대화에서 가져갈 생각을 마지막으로 들려주세요.",
-        DISCUSSION_SUMMARY: `오늘 테이블에서는 “${stripTerminal(topic, "중심 질문")}”를 중심에 두고 각자 먼저 본 장면과 느낌을 나눴습니다. 여러분의 이야기에 다른 독자들의 시선이 더해지면서 한 가지 결론보다 여러 가능성이 보였습니다. 생각을 편하게 나눠 주셔서 고맙습니다. 이제 모임 기록에서 오늘 넓어진 생각을 정리해 보겠습니다.`,
+        TOPIC_CLOSE: input.discussionFocus === "One more distinct agenda follows."
+          ? `“${stripTerminal(topic, "이 질문")}”에서는 같은 부분과 다르게 읽은 부분이 함께 보였습니다. 이제 결이 다른 두 번째 발제로 넘어가겠습니다.`
+          : `“${stripTerminal(topic, "이 질문")}”에서도 각자 먼저 보인 장면과 느낌을 나눴습니다. 두 발제에서 열린 생각을 모두 가져가겠습니다.`,
+        WRAP_OPEN: "서로 다른 두 발제를 지나며 새롭게 보인 부분이 있나요? 오늘 대화에서 가져갈 생각을 마지막으로 들려주세요.",
+        DISCUSSION_SUMMARY: `오늘 테이블에서는 ${agendaPair}를 차례로 살폈습니다. 여러분의 이야기에 다른 독자들의 시선이 더해지면서 두 질문에서 여러 가능성이 보였습니다. 생각을 편하게 나눠 주셔서 고맙습니다. 이제 모임 기록에서 발제별로 넓어진 생각을 정리해 보겠습니다.`,
       }
     : {
         WELCOME: `Welcome to Open Reading Club. We will discuss ${input.book.title} by ${input.book.author}, but first let us meet the people sitting with us tonight.`,
@@ -406,9 +423,11 @@ function moderatorUtterance(input: UtteranceRequest): UtteranceOutput {
         SCENES_OPEN: `I am curious where the impression “${userFirstImpression}” began. Which concrete scene, passage, image, or example produced it?`,
         TOPIC_OPEN: `${input.discussionFocus ? `The earlier conversation kept returning to ${input.discussionFocus}. ` : ""}That gives us our central question: ${topic}`,
         ASK_USER_POSITION: "You have heard what the other readers noticed. What did you feel or think in this part of the book?",
-        TOPIC_CLOSE: `We shared the scenes and feelings that first came to mind around ${stripTerminal(topic, "this question")}. We can carry both the common ground and the different readings with us.`,
-        WRAP_OPEN: "Did another reader help you notice something new? Before we leave the table, what thought will you carry from this conversation?",
-        DISCUSSION_SUMMARY: `Tonight we explored ${stripTerminal(topic, "the central question")} by sharing the scenes and feelings each person noticed first. Adding your reading to the other perspectives opened several possibilities instead of one final answer. Thank you for sharing the table. The written recap comes next.`,
+        TOPIC_CLOSE: input.discussionFocus === "One more distinct agenda follows."
+          ? `We found both common ground and different readings around ${stripTerminal(topic, "this question")}. Let us carry those forward into a distinct second agenda.`
+          : `We shared what each person noticed around ${stripTerminal(topic, "this question")}. We can carry what both agendas opened into the closing round.`,
+        WRAP_OPEN: "After exploring two distinct agenda questions, did another reader help you notice something new? Before we leave the table, what thought will you carry?",
+        DISCUSSION_SUMMARY: `Tonight we explored ${agendaPair} in sequence. Adding your reading to the other perspectives opened possibilities in both discussions. Thank you for sharing the table. The written recap will preserve each agenda separately.`,
       };
 
   return utteranceSchema.parse({
@@ -518,11 +537,13 @@ export class MockGenerationClient implements GenerationClient {
 
   async generateRecap(input: RecapRequest) {
     const isKorean = input.language === "ko";
-    const topic =
-      Object.keys(input.userStances).find((key) => key !== "overall_impression") ??
-      input.book.candidateTopics[0];
-    const user = input.userStances[topic];
+    const topics = input.agendaRounds.map(({ topic }) => topic);
+    const userAgendaThoughts = topics
+      .map((topic) => input.userStances[topic]?.paraphrase)
+      .filter((value): value is string => Boolean(value));
     const names = input.personas.map((persona) => readerName(persona, input.language));
+    const participantName = (id: string): string =>
+      readerName(input.personas.find((persona) => persona.id === id)!, input.language);
     const perspectiveRows: string[][] = input.personas.map((persona) => [
       readerName(persona, input.language),
       isKorean
@@ -531,27 +552,27 @@ export class MockGenerationClient implements GenerationClient {
     ]);
     perspectiveRows.push([
       input.userDisplayName,
-      user?.paraphrase ??
+      userAgendaThoughts.join(" / ") ||
         (isKorean
-          ? "이번 질문에서는 의견을 보태지 않고 다른 독자들의 이야기를 들었습니다."
-          : "Listened to the other readers without adding a response to this question."),
+          ? "두 발제에서는 의견을 보태지 않고 다른 독자들의 이야기를 들었습니다."
+          : "Listened to the other readers without adding a response to either agenda."),
     ]);
     const scene = userTurn(input.transcript, "MEMORABLE_SCENES");
-    const readerExchange = input.transcript.find(
-      ({ speaker, refersTo }) =>
-        speaker !== "moderator" &&
-        speaker !== "user" &&
-        Boolean(refersTo) &&
-        refersTo !== "user" &&
-        refersTo !== "moderator",
-    );
-    const readingDifference = readerExchange
-      ? isKorean
-        ? `- ${localizedSpeakerName(readerExchange.speaker, input.language)}는 ${localizedSpeakerName(readerExchange.refersTo!, input.language)}의 이야기를 들은 뒤 자신이 먼저 본 부분을 보탰습니다. 어느 쪽이 맞는지 가르기보다 같은 장면을 두 시선으로 넓혀 보았습니다.`
-        : `- After hearing ${localizedSpeakerName(readerExchange.refersTo!, input.language)}, ${localizedSpeakerName(readerExchange.speaker, input.language)} added what they had noticed first. The table widened the scene through two views instead of deciding which one was right.`
-      : isKorean
-        ? "- 이번 모임에서는 서로 정면으로 충돌한 해석이 없었습니다. 각자가 먼저 본 장면과 느낌을 더하며 대화를 넓혔습니다."
-        : "- No readings directly conflicted in this session. Each person widened the conversation by adding a scene or feeling they noticed first.";
+    const agendaSummary = input.agendaRounds
+      .map((round, index) => {
+        const userThought = input.userStances[round.topic]?.paraphrase;
+        const boundedUserThought = userThought
+          ? excerpt(
+              userThought,
+              isKorean ? "사용자의 발제 응답" : "the user's agenda response",
+              120,
+            )
+          : undefined;
+        return isKorean
+          ? `- 발제 ${index + 1} — **${round.topic}**: ${participantName(round.lead)}가 먼저 관점을 열고, ${participantName(round.responder)}가 다른 장면이나 맥락을 보탰습니다. ${boundedUserThought ? `${input.userDisplayName}은 ${boundedUserThought}라는 생각을 보탰고, ` : `${input.userDisplayName}은 이번 발제에서는 듣기를 택했고, `}${participantName(round.reflector)}가 대화를 한 번 더 넓혔습니다.`
+          : `- Agenda ${index + 1} — **${round.topic}**: ${participantName(round.lead)} opened with a prepared perspective, and ${participantName(round.responder)} added another scene or context. ${boundedUserThought ? `${input.userDisplayName} contributed ${boundedUserThought}, and ` : `${input.userDisplayName} listened in this round, and `}${participantName(round.reflector)} widened the discussion once more.`;
+      })
+      .join("\n");
     const citedBooks = input.transcript
       .filter(({ shelfRef }) => shelfRef)
       .map(({ shelfRef, stage }) =>
@@ -570,13 +591,13 @@ export class MockGenerationClient implements GenerationClient {
       ? `# ${input.book.title} — 리딩 테이블 모임 기록, ${input.date}
 
 ## 오늘 나눈 이야기
-테이블은 **${stripTerminal(topic, "중심 질문")}**를 중심에 두고 ${names.join(", ")}와 ${input.userDisplayName}이 각자 먼저 본 장면과 느낌을 나눴습니다. 같은 결론을 만들기보다 다른 독자의 말을 통해 책과 사람을 보는 시선이 어디까지 넓어졌는지 기록했습니다.
+테이블은 **${topics[0]}**와 **${topics[1]}**라는 두 발제를 차례로 다뤘습니다. ${names.join(", ")}와 ${input.userDisplayName}이 각자 먼저 본 장면과 느낌을 나눴고, 같은 결론을 만들기보다 발제마다 시선이 어디까지 넓어졌는지 기록했습니다.
 
 ## 각자가 가져간 생각
 ${table}
 
-## 서로 다르게 읽은 순간
-${readingDifference}
+## 발제와 주요 관점
+${agendaSummary}
 
 ## 놓치기 쉬운 장면
 - ${scene ? `사용자가 직접 고른 대목: ${excerpt(scene.text, "사용자가 고른 대목")}` : "사용자가 특정 장면을 고르지 않아 대화에서 확인되지 않은 작품 내용을 덧붙이지 않았습니다."}
@@ -589,13 +610,13 @@ ${citedBooks.length > 0 ? citedBooks.join("\n") : "- 이번 모임에서는 다�
       : `# ${input.book.title} — Reading Table Recap, ${input.date}
 
 ## What we explored
-The table centered on **${topic}** as ${names.join(", ")} and ${input.userDisplayName} shared the scenes and feelings they noticed first. Rather than forcing one conclusion, the recap records how listening to another reader widened the view of the book and its people.
+The table explored two agenda questions in sequence: **${topics[0]}** and **${topics[1]}**. ${names.join(", ")} and ${input.userDisplayName} shared the scenes and feelings they noticed first, and the recap preserves how each discussion widened without forcing one conclusion.
 
 ## What each reader took away
 ${table}
 
-## Where readings differed
-${readingDifference}
+## Agenda questions and perspectives
+${agendaSummary}
 
 ## Scenes you might have missed
 - ${scene ? `The user brought this moment to the table: ${excerpt(scene.text, "the user's chosen moment")}` : "The user did not choose a specific scene, so the recap adds no unverified book details."}

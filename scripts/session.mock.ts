@@ -43,7 +43,7 @@ const result = await engine.run({
           firstImpression: "책이 던진 중심 질문은 흥미로웠지만 그것을 제시하는 방식에는 조금 거리감이 있었습니다.",
           memorableScene: "앞에서 이해한 내용을 다시 생각하게 만든 대목이 가장 기억에 남았습니다.",
           discussion: "한 가지 해석보다는 책의 형식과 그 결과를 함께 설명하는 해석이 더 설득력 있다고 봅니다.",
-          discussionReply: "그 질문을 생각해도 의도와 결과를 나누어 볼 필요가 있다고 봅니다.",
+          discussionSecond: "두 번째 발제에서는 의도와 결과를 나누어 볼 필요가 있다고 봅니다.",
           wrapUp: "처음 판단을 유지하면서도 다른 관점이 붙잡은 근거를 함께 확인하게 됐습니다.",
         }
       : {
@@ -51,7 +51,7 @@ const result = await engine.run({
           firstImpression: "The central question interested me, although I felt some distance from the way it was presented.",
           memorableScene: "The passage that made me reconsider my earlier understanding stayed with me.",
           discussion: "The strongest interpretation should account for both the book's form and the consequences it leaves behind.",
-          discussionReply: "That objection matters, but my reading still holds if intention and consequence are separated.",
+          discussionSecond: "For the second agenda, I want to separate intention from consequence.",
           wrapUp: "I kept my first judgment while learning to test it against evidence the other readers noticed.",
         },
 });

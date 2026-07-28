@@ -134,7 +134,7 @@ for (const testCase of CURRENT_CASES) {
       firstImpression: "인물의 선택을 보면서 안타까운 마음이 들었습니다.",
       memorableScene: "처음에는 지나쳤지만 뒤의 이야기를 읽고 다시 떠올린 장면이 있습니다.",
       discussion: "저는 그 장면에서 정답보다 인물이 왜 그렇게 느꼈는지가 궁금했습니다.",
-      discussionReply: "혼자 남은 인물의 표정이 떠올라서 그렇게 읽었습니다.",
+      discussionSecond: "두 번째 발제에서는 혼자 남은 인물의 표정이 무엇을 바꾸는지 생각했습니다.",
       wrapUp: "다른 분이 본 장면을 들으니 제가 놓친 감정이 보였습니다.",
     },
   });

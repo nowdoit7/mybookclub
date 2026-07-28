@@ -120,11 +120,18 @@ export interface MeetingPlan {
   researchBrief: string;
   anchors: ResearchAnchor[];
   primaryPrompt: string;
-  reservePrompt?: string;
+  reservePrompt: string;
   assignments: PerspectiveAssignment[];
   uncertainties: string[];
   connectionConcepts: string[];
   sources: BookSource[];
+}
+
+export interface AgendaRound {
+  topic: string;
+  lead: string;
+  responder: string;
+  reflector: string;
 }
 
 export type StageId =
@@ -172,6 +179,8 @@ export interface SessionState {
   stage: StageId;
   stageTurnCount: number;
   activeTopic?: string;
+  agendaRounds: AgendaRound[];
+  activeAgendaIndex?: number;
   userStance?: number;
   userStances: Record<string, { stance: number; paraphrase: string }>;
   discussionRoles?: {

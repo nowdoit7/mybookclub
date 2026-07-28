@@ -61,7 +61,8 @@ export function updateAtmosphereFromUser(
 const TASK_DELTAS: Partial<Record<UtteranceTask, Partial<RoomAtmosphere>>> = {
   WELCOME: { warmth: 0.03 },
   PERSONA_INTRODUCTION: { warmth: 0.02 },
-  CHALLENGE_PERSONA: { tension: 0.11, energy: 0.06, warmth: -0.02 },
+  OPEN_PERSONA_POSITION: { energy: 0.03 },
+  CHALLENGE_PERSONA: { warmth: 0.01, energy: 0.02 },
   CHALLENGE_USER: { tension: 0.11, energy: 0.06, warmth: -0.02 },
   DEVILS_ADVOCATE: { tension: 0.09, energy: 0.04 },
   RESPOND_TO_PERSONA: { tension: 0.03, energy: 0.03 },

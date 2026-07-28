@@ -166,7 +166,7 @@ export const internalMeetingPlanSchema = z
     researchBrief: boundedString(80, 1600),
     anchors: z.array(internalResearchAnchorSchema).min(8).max(12),
     primaryPrompt: boundedString(10, 240),
-    reservePrompt: boundedString(10, 240).optional(),
+    reservePrompt: boundedString(10, 240),
     assignments: z.array(internalPerspectiveAssignmentSchema).length(3),
     uncertainties: z.array(boundedString(5, 300)).max(5),
     connectionConcepts: z.array(boundedString(5, 240)).max(4),
@@ -278,7 +278,7 @@ export const meetingPlanModelSchema = z
       .min(8)
       .max(12),
     primary_prompt: boundedString(10, 240),
-    reserve_prompt: boundedString(10, 240).nullable(),
+    reserve_prompt: boundedString(10, 240),
     assignments: z
       .array(
         z
@@ -359,6 +359,18 @@ export const recapRequestSchema = z
     book: confirmedBookSchema,
     personas: z.array(personaCardSchema).length(3),
     userDisplayName: boundedString(1, 32),
+    agendaRounds: z
+      .array(
+        z
+          .object({
+            topic: boundedString(10, 240),
+            lead: boundedString(1, 80),
+            responder: boundedString(1, 80),
+            reflector: boundedString(1, 80),
+          })
+          .strict(),
+      )
+      .length(2),
     transcript: z.array(transcriptUtteranceSchema).min(1).max(80),
     personaStances: z.record(z.string(), z.number().min(-2).max(2)),
     userStances: z.record(

@@ -21,6 +21,7 @@ import { resolveGuestAuthorPerspective } from "../personas/guestWorkRelations";
 import { localizedSpeakerName } from "../localization";
 import type {
   CompletedSession,
+  AgendaRound,
   AppLanguage,
   ConfirmedBook,
   MeetingPlan,
@@ -53,6 +54,7 @@ export interface ScriptedUserInputs {
   firstImpression: string;
   memorableScene: string;
   discussion: string;
+  discussionSecond: string;
   discussionReply: string;
   discussionFollowUp: string;
   wrapUp: string;
@@ -94,6 +96,8 @@ const SIMULATED_USER_INPUTS: ScriptedUserInputs = {
     "The moment when the book's central tension became hardest to ignore stayed with me after I finished reading.",
   discussion:
     "I think the strongest interpretation has to account for both the book's choices and the consequences those choices leave unresolved.",
+  discussionSecond:
+    "For the second agenda, I want to separate what the characters intended from the consequences the book lets us see.",
   discussionReply:
     "That objection matters, but I still think my reading holds if we distinguish the character's intention from the consequences the book shows us.",
   discussionFollowUp:
@@ -146,7 +150,7 @@ function normalizeMeetingPlan(output: MeetingPlanOutput): MeetingPlan {
       isCommonInterpretation: anchor.is_common_interpretation,
     })),
     primaryPrompt: output.primary_prompt,
-    reservePrompt: output.reserve_prompt ?? undefined,
+    reservePrompt: output.reserve_prompt,
     assignments: output.assignments.map((assignment) => ({
       personaId: assignment.persona_id,
       anchorId: assignment.anchor_id,
@@ -196,7 +200,6 @@ type GenerationOptions = Partial<
   >
 > & { allowShelfReference?: boolean };
 
-const MAX_DISCUSSION_EXTENSIONS = 2;
 const MAX_CONCURRENT_READING_NOTES = 2;
 const TRANSIENT_READING_NOTE_CODES = new Set([
   "network_error",
@@ -334,6 +337,68 @@ export function selectPerspectiveReaders(
 /** @deprecated Use selectPerspectiveReaders. Kept for checkpoint fixture compatibility. */
 export const selectLeadDebaters = selectPerspectiveReaders;
 
+export function selectAgendaRounds(
+  meetingPlan: MeetingPlan,
+  personas: PersonaCard[],
+  notes: Record<string, ReadingNotes>,
+): AgendaRound[] {
+  if (personas.length !== 3) {
+    throw new Error("Agenda selection requires exactly three personas.");
+  }
+  const prompts = [meetingPlan.primaryPrompt, meetingPlan.reservePrompt];
+  const usedLeads = new Set<string>();
+
+  return prompts.map((topic) => {
+    const rankedLeads = personas
+      .filter(({ id }) => !usedLeads.has(id))
+      .map((persona, sourceIndex) => {
+        const assignment = meetingPlan.assignments.find(
+          ({ personaId }) => personaId === persona.id,
+        );
+        const anchor = meetingPlan.anchors.find(({ id }) => id === assignment?.anchorId);
+        const preparation = [
+          assignment?.questionToExplore,
+          assignment?.emotionalDoor,
+          anchor?.label,
+          anchor?.detail,
+          perspectiveText(notes[persona.id], topic),
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return {
+          persona,
+          sourceIndex,
+          relevance: sceneSimilarity(topic, preparation),
+        };
+      })
+      .sort(
+        (left, right) =>
+          right.relevance - left.relevance || left.sourceIndex - right.sourceIndex,
+      );
+    const lead = rankedLeads[0].persona;
+    usedLeads.add(lead.id);
+    const companions = personas
+      .filter(({ id }) => id !== lead.id)
+      .sort(
+        (left, right) =>
+          sceneSimilarity(
+            perspectiveText(notes[lead.id], topic),
+            perspectiveText(notes[left.id], topic),
+          ) -
+          sceneSimilarity(
+            perspectiveText(notes[lead.id], topic),
+            perspectiveText(notes[right.id], topic),
+          ),
+      );
+    return {
+      topic,
+      lead: lead.id,
+      responder: companions[0].id,
+      reflector: companions[1].id,
+    };
+  });
+}
+
 interface PreparedUtterance {
   speaker: PersonaCard | "moderator";
   output: UtteranceOutput;
@@ -407,7 +472,6 @@ export class SessionEngine {
   private waitForAdvance?: RunSessionOptions["waitForAdvance"];
   private requestUserInput?: RunSessionOptions["requestUserInput"];
   private waitForSessionComplete?: RunSessionOptions["waitForSessionComplete"];
-  private requestDiscussionAction?: RunSessionOptions["requestDiscussionAction"];
   private participantLabels(): ParticipantLabel[] {
     return [
       {
@@ -450,7 +514,6 @@ export class SessionEngine {
     this.waitForAdvance = options.waitForAdvance;
     this.requestUserInput = options.requestUserInput;
     this.waitForSessionComplete = options.waitForSessionComplete;
-    this.requestDiscussionAction = options.requestDiscussionAction;
     this.shelfCitations.clear();
     this.lastChallengerId = undefined;
     const seed = options.seed ?? "session";
@@ -506,6 +569,7 @@ export class SessionEngine {
       transcript: [],
       stage: "INTRO",
       stageTurnCount: 0,
+      agendaRounds: [],
       userStances: {},
       discussionListenCount: 0,
       seed,
@@ -532,11 +596,7 @@ export class SessionEngine {
     await this.runIntro(userInputs.intro, notePromises);
     await this.runFirstImpressions(userInputs.firstImpression);
     await this.runMemorableScenes(userInputs.memorableScene);
-    await this.runDiscussion(
-      userInputs.discussion,
-      userInputs.discussionReply,
-      userInputs.discussionFollowUp,
-    );
+    await this.runDiscussion(userInputs.discussion, userInputs.discussionSecond);
     await this.runWrapUp(userInputs.wrapUp);
 
     this.onStatus?.("Generating meeting recap");
@@ -1119,143 +1179,95 @@ export class SessionEngine {
   }
 
   private async runDiscussion(
-    userInput: string,
-    userReply: string,
-    userFollowUp: string,
+    firstUserInput: string,
+    secondUserInput: string,
   ): Promise<void> {
     this.setStage("DISCUSSION");
     this.state.discussionPhase = "opening";
-    const topic = this.state.meetingPlan.primaryPrompt;
-    this.state.activeTopic = topic;
-    const [leadA, leadB] = selectPerspectiveReaders(
-      topic,
+    const rounds = selectAgendaRounds(
+      this.state.meetingPlan,
       this.state.personas,
       this.state.notes,
     );
-    this.state.discussionRoles = {
-      leadA: leadA.id,
-      leadB: leadB.id,
-    };
-    await this.appendGenerated("moderator", "TOPIC_OPEN", {
-      activeTopic: topic,
-      discussionOrigin: "table",
-    });
-    await this.appendGenerated(leadA, "OPEN_PERSONA_POSITION", {
-      activeTopic: topic,
-      discussionOrigin: "table",
-    });
-    this.state.discussionPhase = "base_clash";
-    await this.appendGenerated(leadB, "CHALLENGE_PERSONA", {
-      activeTopic: topic,
-      targetSpeaker: leadA.id,
-    });
-    this.state.discussionPhase = "awaiting_user_choice";
+    this.state.agendaRounds = rounds;
+    const userInputs = [firstUserInput, secondUserInput];
 
-    let action = this.requestDiscussionAction
-      ? await this.requestDiscussionAction({ round: 0, canListen: true, phase: "before_join" })
-      : "join";
-    if (action === "listen") {
-      this.state.discussionListenCount = 1;
-      await this.appendContinuationChain(topic);
-      action = this.requestDiscussionAction
-        ? await this.requestDiscussionAction({ round: 1, canListen: false, phase: "before_join" })
-        : "join";
-      if (action === "listen") action = "join";
-    }
-
-    if (action === "join") {
+    for (const [index, round] of rounds.entries()) {
+      const topic = round.topic;
+      const lead = this.state.personas.find(({ id }) => id === round.lead)!;
+      const responder = this.state.personas.find(({ id }) => id === round.responder)!;
+      const reflector = this.state.personas.find(({ id }) => id === round.reflector)!;
+      const leadAssignment = this.state.meetingPlan.assignments.find(
+        ({ personaId }) => personaId === lead.id,
+      );
+      const leadAnchor = this.state.meetingPlan.anchors.find(
+        ({ id }) => id === leadAssignment?.anchorId,
+      );
+      this.state.activeAgendaIndex = index;
+      this.state.activeTopic = topic;
+      this.state.discussionRoles = {
+        leadA: lead.id,
+        leadB: responder.id,
+        bridgeReader: reflector.id,
+      };
+      await this.appendGenerated("moderator", "TOPIC_OPEN", {
+        activeTopic: topic,
+        discussionOrigin: "table",
+      });
+      await this.appendGenerated(lead, "OPEN_PERSONA_POSITION", {
+        activeTopic: topic,
+        discussionOrigin: "table",
+        discussionFocus: leadAnchor?.detail,
+      });
+      this.state.discussionPhase = "base_clash";
+      await this.appendGenerated(responder, "CHALLENGE_PERSONA", {
+        activeTopic: topic,
+        targetSpeaker: lead.id,
+      });
+      await this.appendGenerated("moderator", "ASK_USER_POSITION", {
+        activeTopic: topic,
+      });
       this.state.discussionPhase = "user_exchange";
       const positionText = await this.requestAndAppendUser(
-        userInput,
+        userInputs[index],
         "discussion_position",
         topic,
       );
-      const directlyAddressed = resolveDirectlyAddressedPersona(
-        positionText,
-        this.state.personas,
-        this.language,
-      );
-      const responder = await this.exploreUserView(topic, directlyAddressed);
-      await this.requestAndAppendUser(userReply, "discussion_reply", topic);
-
-      const updatedUserArgument = this.state.userStances[topic] ?? {
-        stance: 0,
-        paraphrase:
-          this.language === "ko"
-            ? "이번 질문에서는 의견을 보태지 않고 다른 이야기를 들었습니다."
-            : "The user listened to the other readers without adding a response to this question.",
-      };
-      await this.appendGenerated(responder, "RESPOND_TO_USER_REPLY", {
-        activeTopic: topic,
-        targetSpeaker: "user",
-        userArgument:
-          responder === "moderator"
-            ? updatedUserArgument
-            : {
-                ...updatedUserArgument,
-                personaReason: this.personaReasonFor(responder, topic),
-              },
-      });
-
-      const bridgeReader = this.selectBridgeReader(responder);
-      this.state.discussionRoles = {
-        ...this.state.discussionRoles,
-        challenger: responder === "moderator" ? "moderator" : responder.id,
-        bridgeReader: bridgeReader.id,
-      };
       this.state.discussionPhase = "bridge_reader";
-      await this.appendGenerated(bridgeReader, "BRIDGE_EXCHANGE", {
-        activeTopic: topic,
-        targetSpeaker: "user",
-        userArgument: {
-          ...updatedUserArgument,
-          personaReason: this.personaReasonFor(bridgeReader, topic),
-        },
-      });
-
-      let continuationCount = 0;
-      this.state.discussionPhase = "continuation_checkpoint";
-      while (continuationCount < MAX_DISCUSSION_EXTENSIONS && this.requestDiscussionAction) {
-        const postJoinAction = await this.requestDiscussionAction({
-          round: continuationCount + 1,
-          canListen: true,
-          phase: "after_join",
+      if (positionText.trim()) {
+        const userArgument = this.state.userStances[topic]!;
+        await this.appendGenerated(reflector, "BRIDGE_EXCHANGE", {
+          activeTopic: topic,
+          targetSpeaker: "user",
+          userArgument: {
+            ...userArgument,
+            personaReason: this.personaReasonFor(reflector, topic),
+          },
         });
-        if (postJoinAction === "wrap") break;
-        continuationCount += 1;
-        if (postJoinAction === "join") {
-          const followUpText = await this.requestAndAppendUser(
-            userFollowUp,
-            "discussion_followup",
-            topic,
-          );
-          const followUpArgument = this.state.userStances[topic] ?? updatedUserArgument;
-          const responder =
-            resolveDirectlyAddressedPersona(
-              followUpText,
-              this.state.personas,
-              this.language,
-            ) ?? this.selectFollowUpResponder();
-          await this.appendGenerated(responder, "RESPOND_TO_USER_FOLLOWUP", {
-            activeTopic: topic,
-            targetSpeaker: "user",
-            userArgument: {
-              ...followUpArgument,
-              personaReason: this.personaReasonFor(responder, topic),
-            },
-          });
-        } else {
-          this.state.discussionListenCount += 1;
-          await this.appendContinuationChain(topic);
-        }
+      } else {
+        await this.appendGenerated(reflector, "RESPOND_TO_PERSONA", {
+          activeTopic: topic,
+          targetSpeaker: responder.id,
+        });
       }
+      await this.appendGenerated("moderator", "TOPIC_CLOSE", {
+        activeTopic: topic,
+        discussionFocus:
+          index === rounds.length - 1
+            ? "This was the final agenda."
+            : "One more distinct agenda follows.",
+      });
     }
     this.state.discussionPhase = "closing";
   }
 
   private async runWrapUp(userInput: string): Promise<void> {
     this.setStage("WRAP_UP");
-    await this.appendGenerated("moderator", "WRAP_OPEN");
+    const agendaSummary =
+      "The table completed both prepared agenda questions in order; preserve them as distinct discussions.";
+    await this.appendGenerated("moderator", "WRAP_OPEN", {
+      discussionFocus: agendaSummary,
+    });
     await this.requestAndAppendUser(userInput, "wrap_up");
     const closingIds = [
       this.state.discussionRoles?.challenger,
@@ -1278,6 +1290,7 @@ export class SessionEngine {
     }
     const summary = await this.appendGenerated("moderator", "DISCUSSION_SUMMARY", {
       activeTopic: this.state.activeTopic,
+      discussionFocus: agendaSummary,
     });
     await this.waitForSessionComplete?.(summary);
   }
@@ -1290,6 +1303,7 @@ export class SessionEngine {
       book: this.state.book,
       personas: this.state.personas,
       userDisplayName: this.userDisplayName,
+      agendaRounds: this.state.agendaRounds,
       transcript: this.state.transcript,
       personaStances: Object.fromEntries(
         this.state.personas.map((persona) => [
@@ -1301,14 +1315,24 @@ export class SessionEngine {
     };
     let validationError: string | undefined;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const output: RecapOutput = await this.client.generateRecap({
-        ...baseRequest,
-        validationError,
-      });
+      let output: RecapOutput;
+      try {
+        output = await this.client.generateRecap({
+          ...baseRequest,
+          validationError,
+        });
+      } catch (error) {
+        if (attempt === 0 && error instanceof IncompleteGenerationError) {
+          validationError =
+            "The previous recap ended before its structured output was complete. Return the full but concise recap within the output limit.";
+          continue;
+        }
+        throw error;
+      }
       const issues = validateRecapQuality(output.markdown, this.language, [
         ...this.state.personas.map(({ id }) => localizedSpeakerName(id, this.language)),
         this.userDisplayName,
-      ]);
+      ], this.state.agendaRounds.map(({ topic }) => topic));
       if (issues.length === 0) return output.markdown;
       validationError = issues.join("; ");
     }

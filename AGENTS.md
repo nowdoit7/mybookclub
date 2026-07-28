@@ -3,8 +3,8 @@
 ## Project
 
 **The Reading Table** — an AI book club. The user finishes a book, enters the
-title, and joins a round table with three AI readers who hold committed
-interpretive positions and argue about it.
+title, and joins a round table with three AI readers who bring distinct,
+well-grounded perspectives to two prepared agenda questions.
 
 **`SPEC.md` is the source of truth for product behavior.** Read it before
 proposing changes. If something here contradicts SPEC.md, SPEC.md wins — tell
@@ -57,12 +57,11 @@ These are project-defining. Do not "improve" past them without asking.
    as typed objects. Adding a persona must require zero engine changes.
 4. **Every model call uses strict JSON schema output.** No free-text parsing,
    no regex extraction. Schema in SPEC §6.
-5. **Perspective expansion is not optional.** After the user joins the shared
-   prompt conversation, at least one persona responds to the user's actual
-   feeling or interpretation and adds a distinct scene, emotion, context, or
-   genuine question (SPEC §9). Agreement is allowed. Disagreement appears only
-   when the readings genuinely differ; evidence tests, rebuttals, and
-   counterexamples are never mandatory conversation devices.
+5. **Perspective expansion is not optional.** In each of the two agenda rounds,
+   one persona responds to the user's actual feeling or interpretation and adds
+   a distinct scene, emotion, context, or genuine question (SPEC §9). Agreement
+   is allowed. Disagreement appears only when the readings genuinely differ;
+   evidence tests, rebuttals, and counterexamples are never mandatory devices.
 6. **Persona utterances: 2–4 sentences.** Enforced in prompt AND by schema
    maxLength. Personas that monologue are a bug.
 7. **Copyright:** discuss themes and scenes; quote at most a short phrase;
@@ -86,17 +85,17 @@ without a browser. Three layers, in priority order:
 engine logic — they're fast and the invariants are known up front:
 - state machine visits all 5 stages in order, never skips
 - persona draw always yields exactly one emotional / analytical / contextual
-- position-review targeting picks the persona whose stance is furthest from the user
-- the same reviewer never fires twice in a row
+- two agenda questions are used in prepared order and have distinct leads
+- every agenda contains one lead, one responder, one reflector, and one user turn
 - shelf-citation budget is capped at one per persona per stage
 
 **2. Mock-LLM session tests** (fake client returns canned JSON, full session
 runs in-memory). These assert flow invariants, not text:
-- a user's position is meaningfully examined at least once, and every discussion
-  contains a directed persona-to-persona exchange; fake disagreement is a
-  failure — **these are tests, not hopes**
+- the user's contribution is meaningfully expanded once in each agenda, and
+  every agenda contains a directed reader-to-reader exchange; fake disagreement
+  is a failure — **these are tests, not hopes**
 - no persona speaks twice in a row
-- utterances per topic stay under the cap
+- every agenda follows the seven-turn code-owned schedule
 - every stage is reached and a recap is produced
 
 **3. Live smoke test** (`npm run test:live`, real API, few runs, costs credits).

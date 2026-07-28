@@ -11,6 +11,7 @@ import type {
 } from "./contracts";
 import type {
   AppLanguage,
+  AgendaRound,
   ConfirmedBook,
   MeetingPlan,
   PersonaCard,
@@ -89,6 +90,7 @@ export interface RecapRequest {
   book: ConfirmedBook;
   personas: PersonaCard[];
   userDisplayName: string;
+  agendaRounds: AgendaRound[];
   transcript: Utterance[];
   personaStances: Record<string, number>;
   userStances: Record<string, { stance: number; paraphrase: string }>;

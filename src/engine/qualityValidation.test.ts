@@ -395,8 +395,9 @@ describe("recap quality validation", () => {
 Summary.
 ## What each reader took away
 | Reader | Takeaway |\n| --- | --- |\n| You | A view |
-## Where readings differed
-- No direct conflict; another perspective was added.
+## Agenda questions and perspectives
+- Agenda 1: One perspective.
+- Agenda 2: Another perspective.
 ## Scenes you might have missed
 - A scene.
 ## From the shelves
@@ -415,5 +416,43 @@ What would change your mind?`;
     expect(validateRecapQuality(recap, "en", ["You", "Maddie"])).toContain(
       "recap takeaway section must include participant: Maddie",
     );
+  });
+
+  it("uses 발제 rather than 의제 in a Korean book-club transition", () => {
+    expect(
+      validateUtteranceQuality(
+        {
+          utterance: "이 의제는 여기서 닫고 다음 이야기로 넘어가겠습니다.",
+          stance: null,
+          refers_to: null,
+          shelf_ref: null,
+        },
+        "moderator",
+        false,
+        { language: "ko", task: "TOPIC_CLOSE" },
+      ),
+    ).toContain(
+      "Korean book-club dialogue should call a prepared question 발제, not 의제",
+    );
+  });
+
+  it("requires exactly two agenda bullets and preserves both questions", () => {
+    expect(
+      validateRecapQuality(recap, "en", [], ["Agenda one?", "Agenda two?"]),
+    ).toEqual([
+      "recap agenda section must include agenda 1 in full",
+      "recap agenda section must include agenda 2 in full",
+    ]);
+    expect(
+      validateRecapQuality(
+        recap.replace(
+          "- Agenda 1: One perspective.\n- Agenda 2: Another perspective.",
+          "- Agenda one? One perspective.\n- Agenda two? Another perspective.",
+        ),
+        "en",
+        [],
+        ["Agenda one?", "Agenda two?"],
+      ),
+    ).toEqual([]);
   });
 });

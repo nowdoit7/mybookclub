@@ -831,8 +831,8 @@ describe("text prototype", () => {
     expect(screen.queryByText("## 오늘 나눈 이야기")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Markdown 다운로드" })).toBeVisible();
 
-    fireEvent.click(screen.getByRole("tab", { name: "전체 대화 31" }));
-    expect(screen.getAllByRole("article")).toHaveLength(31);
+    fireEvent.click(screen.getByRole("tab", { name: "전체 대화 37" }));
+    expect(screen.getAllByRole("article")).toHaveLength(37);
     expect(
       screen
         .getAllByRole("article")

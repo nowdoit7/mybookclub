@@ -142,6 +142,24 @@ export function validateMeetingPlanQuality(
       issues.push(`${name} must contain exactly one question mark`);
     }
   });
+  const promptTokens = (value: string) =>
+    new Set(
+      value
+        .toLocaleLowerCase()
+        .replace(/[^\p{L}\p{N}\s]/gu, " ")
+        .split(/\s+/u)
+        .filter((token) => token.length > 1),
+    );
+  const primaryTokens = promptTokens(output.primary_prompt);
+  const reserveTokens = promptTokens(output.reserve_prompt);
+  const promptUnion = new Set([...primaryTokens, ...reserveTokens]);
+  const promptOverlap = [...primaryTokens].filter((token) => reserveTokens.has(token)).length;
+  if (
+    output.primary_prompt.trim() === output.reserve_prompt.trim() ||
+    (promptUnion.size > 0 && promptOverlap / promptUnion.size >= 0.65)
+  ) {
+    issues.push("primary_prompt and reserve_prompt must be semantically distinct");
+  }
 
   if (requireWebSources && output.sources.length < 2) {
     issues.push("meeting-plan research must include at least two retrieved web sources");
@@ -283,6 +301,13 @@ export function validateUtteranceQuality(
   ) {
     issues.push("Korean TOPIC_OPEN must sound spoken rather than reciting an essay prompt");
   }
+  if (
+    context?.language === "ko" &&
+    context.task === "TOPIC_CLOSE" &&
+    /의제/u.test(output.utterance)
+  ) {
+    issues.push("Korean book-club dialogue should call a prepared question 발제, not 의제");
+  }
 
   return issues;
 }
@@ -291,7 +316,7 @@ const RECAP_HEADINGS: Record<AppLanguage, string[]> = {
   en: [
     "## What we explored",
     "## What each reader took away",
-    "## Where readings differed",
+    "## Agenda questions and perspectives",
     "## Scenes you might have missed",
     "## From the shelves",
     "## A question to sleep on",
@@ -299,7 +324,7 @@ const RECAP_HEADINGS: Record<AppLanguage, string[]> = {
   ko: [
     "## 오늘 나눈 이야기",
     "## 각자가 가져간 생각",
-    "## 서로 다르게 읽은 순간",
+    "## 발제와 주요 관점",
     "## 놓치기 쉬운 장면",
     "## 책장에서 꺼낸 연결",
     "## 잠들기 전 생각할 질문",
@@ -310,6 +335,7 @@ export function validateRecapQuality(
   markdown: string,
   language: AppLanguage = "en",
   participantNames: string[] = [],
+  agendaTopics: string[] = [],
 ): string[] {
   const issues = RECAP_HEADINGS[language].filter((heading) => !markdown.includes(heading)).map(
     (heading) => `recap is missing heading: ${heading}`,
@@ -334,6 +360,24 @@ export function validateRecapQuality(
   participantNames.forEach((name) => {
     if (!finalPositionSection.includes(name)) {
       issues.push(`recap takeaway section must include participant: ${name}`);
+    }
+  });
+
+  const agendaHeading = RECAP_HEADINGS[language][2];
+  const scenesHeading = RECAP_HEADINGS[language][3];
+  const agendaStart = markdown.indexOf(agendaHeading);
+  const scenesStart = markdown.indexOf(scenesHeading);
+  const agendaSection =
+    agendaStart >= 0 && scenesStart > agendaStart
+      ? markdown.slice(agendaStart, scenesStart)
+      : "";
+  const agendaBulletCount = agendaSection.match(/^- /gmu)?.length ?? 0;
+  if (agendaBulletCount !== 2) {
+    issues.push("recap agenda section must contain exactly two agenda bullets");
+  }
+  agendaTopics.forEach((topic, index) => {
+    if (!agendaSection.includes(topic)) {
+      issues.push(`recap agenda section must include agenda ${index + 1} in full`);
     }
   });
 

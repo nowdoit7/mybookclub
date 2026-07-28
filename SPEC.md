@@ -39,10 +39,9 @@ affected them. This app is different because:
 4. **A purpose-built UI** — a five-person cast-card establishing scene that cuts
    into a full-screen portrait-led conversation stage, directed speaker/target
    cues, manual paged dialogue, and hard user stops.
-5. **Participant or audience agency** — code schedules a genuine directed
-   reader-to-reader exchange, while bounded checkpoints let the user join,
-   keep listening, or wrap up instead of being forced into the center of every
-   exchange.
+5. **Equal participant agency** — each of two prepared agenda rounds gives the
+   user one clear turn, while all three readers contribute as lead, responder,
+   or reflector without forcing the user to defend a side.
 
 ### Target user story (for demo + README)
 The developer is a member of a real corporate book club in Korea. The demo
@@ -213,11 +212,9 @@ a hard project usage limit in the OpenAI Platform before publishing the demo.
   requests. Retry one transient connection, rate-limit, or upstream failure for
   only the affected reader; structured-output repair keeps its separate bounded
   retry policy.
-- Run one discussion topic. Its base reader-to-reader exchange is mandatory; up to
-  two additional two-reader exchanges are optional and code-capped. At each
-  post-join checkpoint the user chooses whether to continue or wrap, so a live
-  a useful thread is not closed immediately after its first exchange. Do
-  not add a second topic in MVP.
+- Run exactly two semantically distinct agenda questions prepared from different
+  research anchors. Each agenda has one code-selected lead, one responder, one
+  reflector, and one user turn. Do not add optional extension loops in MVP.
 - Expect roughly 30–40 model calls for a full live session; this is a latency
   risk even when token cost is modest. Track call count and elapsed time in the
   console harness.
@@ -334,8 +331,8 @@ interface MeetingPlan {           // generated once after book verification + ro
     detail: string;
     isCommonInterpretation: boolean;
   }[];                            // 8-12 diverse, source-grounded entrances
-  primaryPrompt: string;          // one natural spoken question used in Stage 4
-  reservePrompt?: string;         // prepared but not auto-switched in P0
+  primaryPrompt: string;          // first natural spoken agenda question in Stage 4
+  reservePrompt: string;          // second distinct agenda question, always used in P0
   assignments: {
     personaId: string;
     anchorId: string;             // unique across the three readers
@@ -697,54 +694,31 @@ interpretations; quote at most a short phrase; never reproduce passages.
   same independent-testimony rule as first impressions.
 - **User turn**: user shares theirs. One reader reacts once.
 
-### Stage 4 — SHARED PROMPT (the main event; internal id remains `DISCUSSION`)
-- Before the session begins, web-grounded meeting research prepares exactly one
-  `primaryPrompt` and at most one reserve prompt. Stage 4 always uses the
-  prepared primary prompt; it does not re-rank generic candidate topics after
+### Stage 4 — AGENDA ROUNDS (the main event; internal id remains `DISCUSSION`)
+- Before the session begins, web-grounded meeting research prepares exactly two
+  semantically distinct questions: `primaryPrompt` and `reservePrompt`. Both are
+  used in that order; Stage 4 does not re-rank generic candidate topics after
   hearing the user.
 - The plan assigns each reader a distinct scene, emotion, object of attention,
   and open question. It never assigns a pro/con side, final interpretation, or
   debate role.
-- Code selects the two personas with the most distinct prepared perspectives on
-  that topic as `leadA` and `leadB`. When the user explicitly invited an imagined
-  guest, that guest becomes one lead and code selects the most distinct eligible
-  reader as the other, guaranteeing that the session's special guest participates
-  in the main discussion. The model never selects speakers or decides whether
-  the session continues.
-- Base round (code-controlled):
-  1. Alex asks the prepared prompt as one natural spoken question.
-  2. `leadA` answers Alex's prompt with what they noticed, felt, or connected
-     from private notes; this first response is not directed at another reader.
-  3. `leadB` acknowledges that reading and adds a different scene, feeling, or
-     context. A question is optional here; disagreement is named only when the
-     transcript contains a real semantic difference.
-  4. The UI exposes a **discussion checkpoint**, not a generated utterance:
-     `join`, `listen`, or `wrap`.
-- The pre-checkpoint sequence above is a fixed engine invariant. `leadA`
-  answers the prompt and `leadB` may respond to that reading before the user
-  chooses; no opposition is required.
-- `listen` schedules one additional two-reader exchange. It is available once
-  before the user joins and at post-join checkpoints until the whole topic has
-  used its code-owned maximum of two extensions. Before the user joins, the
-  next checkpoint offers `join` or `wrap`.
-- `join` asks what the user felt or thought, then selects the least-heard eligible
-  reader while avoiding the immediately previous responder. That reader
-  acknowledges the user's exact response and asks exactly one natural question
-  about the scene, experience, or reason behind it. The next turn belongs to the
-  user, and that same reader responds once so the exchange never breaks causally.
-  Code then chooses the least-heard eligible third reader as `bridgeReader`;
-  they pick up the exact exchange and add a distinct scene, feeling, or context.
-  If the user passes, Alex simply accepts the pass and invites another reader.
-- After the bridge turn, code exposes another checkpoint. `join` lets the user add
-  another thought and schedules one direct response, `listen` schedules one
-  rotating two-reader exchange, and `wrap` closes the topic. Up to two bounded
-  post-join continuations are allowed. Selection favors readers with fewer main-
-  discussion turns so a seated reader does not remain permanently silent.
-- `wrap` or the extension cap carries the shared ground, widened perspectives,
-  and any real difference directly into WRAP_UP. Alex does not generate a duplicate
-  topic-closing summary immediately before the wrap invitation.
-- Expected discussion size is roughly 7–15 generated/user utterances depending
-  on the chosen route. One topic and two listening extensions are hard caps.
+- Code assigns a `lead`, `responder`, and `reflector` for each agenda. All three
+  readers participate in each round, and the same reader cannot lead both
+  agendas. An explicitly invited imagined guest therefore participates in both
+  agenda rounds without creating a fourth seat.
+- Each agenda follows this fixed code-controlled sequence:
+  1. Alex briefly frames the background and asks the prepared question.
+  2. The `lead` answers from their assigned anchor and private reading notes.
+  3. The `responder` adds an independent scene, feeling, context, or genuine
+     question. Agreement is allowed; disagreement appears only when real.
+  4. Alex invites the user to share what they noticed or experienced.
+  5. The user contributes once or passes.
+  6. The `reflector` responds to the user's exact contribution and widens it. If
+     the user passes, the reflector instead responds to the prior reader.
+  7. Alex preserves common ground, differences, and the newly opened question
+     without forcing consensus, then moves to the next agenda or closing round.
+- Expected discussion size is exactly 14 transcript turns when the user speaks
+  in both agendas, or 12 generated turns when the user passes both.
 
 ### Stage 5 — WRAP_UP
 - Moderator asks the user first for a closing thought ("Did this discussion move you?").
@@ -963,10 +937,8 @@ Layout (desktop, single screen):
   pointer or keyboard interaction. Playback and volume controls remain available.
 - User turns are visually distinguished at the table and in the input area and are a
   hard stop. They cannot be reached or submitted without an explicit reader action.
-- Discussion checkpoints use three explicit controls where applicable: "Join
-  the discussion" (or "Add another thought" after joining), "Keep listening",
-  and "Wrap up". They are engine actions, not generated dialogue and not
-  transcript messages.
+- The two agenda rounds each stop once for the user's response. The UI identifies
+  which agenda is active and does not expose legacy join/listen/wrap controls.
 - Perspective map: when shown, summarize what each participant noticed or
   carried forward. Never expose the legacy numeric stance fields.
 - Recap screen: tabs for rendered meeting recap and the complete conversation,
@@ -1321,8 +1293,8 @@ an opposing view when a user passes.
 
 **Code responsibilities (never the LLM's):** stage transitions, speaker
 scheduling, shelf-citation budget, response targeting, user-turn scheduling,
-topic selection order, perspective-reader selection, discussion checkpoint actions,
-listen-extension caps, and per-topic utterance caps.
+agenda order, agenda-role selection, user-turn scheduling, and per-agenda
+utterance caps.
 
 **LLM responsibilities:** the actual sentences — welcomes, hand-offs
 ("Marcus, what did you notice there?"), topic framings, perspective summaries,

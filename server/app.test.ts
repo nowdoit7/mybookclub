@@ -216,6 +216,20 @@ describe("server boundary", () => {
         book,
         personas,
         userDisplayName: "You",
+        agendaRounds: [
+          {
+            topic: "Which moment changed how you understood the book?",
+            lead: personas[0].id,
+            responder: personas[1].id,
+            reflector: personas[2].id,
+          },
+          {
+            topic: "Who gets to explain another person's life in this book?",
+            lead: personas[1].id,
+            responder: personas[2].id,
+            reflector: personas[0].id,
+          },
+        ],
         transcript: [
           {
             speaker: "moderator",

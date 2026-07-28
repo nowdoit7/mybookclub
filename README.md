@@ -17,12 +17,12 @@ different people can finish the same book noticing different scenes, feelings,
 and questions. They do not need to disagree for the conversation to matter.
 
 - **Code controls the meeting; GPT-5.6 supplies the language.** A deterministic
-  TypeScript engine owns stage order, speakers, response targets, turn caps, and
-  user checkpoints.
-- **Perspective expansion is guaranteed.** Two readers exchange distinct
-  readings before inviting the user. After the user speaks, one reader asks
-  naturally about the scene or reason behind the response and another adds a
-  new angle. Disagreement appears only when it is real.
+  TypeScript engine owns stage order, two-agenda order, speaker roles, response
+  targets, and user turns.
+- **Perspective expansion is guaranteed.** Two distinct research-grounded
+  agenda questions are asked in order. In each round, a lead opens, a responder
+  adds another reading, the user contributes, and a reflector widens that exact
+  contribution. Disagreement appears only when it is real.
 - **Readers remain distinct.** Emotional, analytical, and contextual readers
   prepare private notes about what attracts their attention, how the book
   affects them, and what they genuinely wonder about.
@@ -48,12 +48,14 @@ short path:
 5. Select a user profile and enter the meeting.
 6. Use **Next** to advance. When the table turns to you, write a response and
    select **Share**.
-7. Respond to Alex's shared book-club prompt, then open the recap and full transcript.
+7. Respond once to each of Alex's two agenda questions, then open the recap and
+   full transcript.
 
 Before the table opens, the live flow performs one additional web-grounded
-planning pass. It prepares a shared prompt and assigns each reader a different
-scene, feeling, context, or open question. These assignments guide attention
-without assigning pro/con sides or final interpretations.
+planning pass. It prepares two semantically distinct agenda questions and
+assigns each reader a different scene, feeling, context, or open question. These
+assignments guide attention without assigning pro/con sides or final
+interpretations.
 
 Live generation can take several seconds, especially after a Firebase cold
 start. The interface exposes verification, reading-note, dialogue, transition,
@@ -236,9 +238,9 @@ only as a code generator. The workflow repeatedly followed this cycle:
 That loop converted observations such as “everyone only listens to the user,”
 “the dialogue sounds like a debate even when readers are sharing feelings,” and
 “the responder disappears after the user answers” into testable behavior:
-independent first impressions, one code-owned reader exchange, a grounded user
-question, a same-reader response, a third-reader perspective bridge, and bounded
-continue/listen/wrap checkpoints.
+independent first impressions, two code-owned agenda rounds, a user contribution
+in each, a third-reader perspective bridge, and a recap that preserves the two
+questions separately.
 
 Codex also helped:
 

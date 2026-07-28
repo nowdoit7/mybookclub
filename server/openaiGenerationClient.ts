@@ -117,6 +117,7 @@ export function localizedSpokenConversationRule(
     "Do not use '서늘했다' as a generic serious reaction. Use it only when the scene produced a concrete sense of coldness, threat, or unease; otherwise name the actual feeling plainly.",
     "Do not infer a user's reading ability, sensitivity, or likely interpretation from their job, city, age, or hobby unless the user explicitly made that connection.",
     "Do not translate agreement as '같은 자리에 있다'. Say plainly that the speakers agree on that point or reached the same conclusion.",
+    "In this book-club product, call a prepared discussion question '발제', never the bureaucratic term '의제'.",
     "Character voice comes from judgment, focus, degree of formality, and rhythm after natural Korean is secured; obscurity is never evidence of character.",
   ].join(" ");
 }
@@ -232,7 +233,7 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "INVITE_USER":
       return "Invite the user to share who they are through work, everyday life, or their current relationship with reading. Keep this purely social: do not ask why they chose the current book, what they thought of it, or which scene stayed with them.";
     case "FIRST_IMPRESSIONS_OPEN":
-      return "Acknowledge one concrete detail from the user's introduction only if it can be done without inferring their reading ability, sensitivity, or likely interpretation from work, city, age, or hobby. Otherwise move directly into the book. Invite an overall first feeling or question and save concrete scenes for the next stage.";
+      return "Move directly into the book without mentioning the user's work, city, age, hobby, or other profile detail. Never infer reading ability, sensitivity, or a likely interpretation from the introduction. Invite an overall first feeling or question and save concrete scenes for the next stage.";
     case "FIRST_IMPRESSION":
       return "Give a personal overall reaction anchored in private notes and the assigned perspective entrance. Name what drew your attention and the concrete feeling or curiosity it created. This is independent testimony, not debate: do not agree with, quote, praise, rebut, correct, or cross-examine another participant. Do not recite the assignment or lead with a detailed memorable scene because the next stage is reserved for scenes.";
     case "OPEN_PERSONA_POSITION":
@@ -258,7 +259,7 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "DEVILS_ADVOCATE":
       return "The user did not add a reading in this turn. Briefly accept the pass and invite the table to hear one more concrete perspective. Do not create an opposing view, ask the user again, or imply that silence is a position.";
     case "REACT_TO_USER_SCENE":
-      return "Use the persona's lens to add one different detail, feeling, or connection prompted by the user's scene. Do not praise, paraphrase, correct, or turn the addition into a contradiction unless the two readings truly cannot coexist.";
+      return "Respond first within the exact story, scene, and experience the user named. Add one different detail, feeling, or implication without redirecting to the persona's prepared anchor. For a story collection, do not jump to a different story unless the comparison is both verified and genuinely clarifies the user's point; label it plainly as a comparison. Do not praise, paraphrase, correct, or turn the addition into a contradiction unless the two readings truly cannot coexist.";
     case "RESPOND_TO_USER_REPLY":
       return "Use 2-3 short spoken sentences. Treat the user's latest verbatim transcript turn as the source of truth and do not strengthen it through the supplied paraphrase. Respond directly and say what their answer helps you understand or notice. Add at most one related impression from your reading. Do not ask another question, announce agreement, manufacture tension, or reset the topic.";
     case "RESPOND_TO_USER_FOLLOWUP":
@@ -266,13 +267,13 @@ function utteranceTaskDirective(input: UtteranceRequest): string {
     case "BRIDGE_EXCHANGE":
       return "Use 2-3 short spoken sentences. Pick up the user's exact point, then add one genuinely different scene, feeling, or context from your private notes that can widen it. Address the supplied target, but do not support a side, praise the user, summarize the exchange, manufacture a disagreement, or open an unrelated topic.";
     case "TOPIC_CLOSE":
-      return "Briefly name what different readers noticed without forcing a disagreement or consensus. Close the topic and bridge naturally toward the closing round.";
+      return `Briefly name what different readers noticed without forcing disagreement or consensus. Close this agenda clearly. ${input.discussionFocus === "One more distinct agenda follows." ? "Bridge toward another agenda, not the end of the meeting." : "Bridge toward the closing round."}`;
     case "WRAP_OPEN":
-      return "In 2 warm spoken sentences, name one perspective the room gained and invite the user to leave a closing thought. Do not repeat the full topic summary or invent unresolved tension.";
+      return "In 2 warm spoken sentences, acknowledge that the table explored two distinct agenda questions and invite the user to leave one closing thought. Do not collapse the two agendas into one, repeat their full wording, or invent unresolved tension.";
     case "CLOSING_REFLECTION":
       return "Use exactly 2 short sentences total. Give this reader's independent takeaway from what genuinely happened, then naturally include either a farewell or their pleasure at sharing the table. Let voice come from the reader's judgment, warmth, formality, and rhythm, not an occupation catchphrase, city-based joke, résumé reminder, or forced metaphor. Do not introduce a new argument, evidence, question, or advice; do not address the user by default, copy the user's analogy, occupation, or phrasing, turn their personal plan into group advice, recite a before-and-after formula, or summarize the whole meeting.";
     case "DISCUSSION_SUMMARY":
-      return "Use exactly 4 short spoken sentences. Keep every Korean sentence under 95 characters and give each sentence only one main action. Name what the table explored, identify one precise contribution from the user, name one additional perspective that widened it, then warmly thank the table and say in the selected language that the meeting recap comes next. Mention a difference only if it genuinely occurred, without turning it into a winner or unresolved contest. Base it only on the supplied conversation; do not introduce a new opinion, repeat a previous transition summary, or end with English words in a Korean session.";
+      return "Use exactly 4 short spoken sentences. Keep every Korean sentence under 95 characters and give each sentence only one main action. Name the two distinct agendas the table explored, identify one precise contribution from the user, name one additional perspective that widened the discussion, then warmly thank the table and say in the selected language that the meeting recap comes next. Do not collapse the two agendas into one. Mention a difference only if it genuinely occurred, without turning it into a winner or unresolved contest. Base it only on the supplied conversation; do not introduce a new opinion, repeat a previous transition summary, or end with English words in a Korean session.";
     default:
       return "Perform the named task directly.";
   }
@@ -478,7 +479,7 @@ export class OpenAIGenerationClient implements GenerationClient {
 
 Return 8-12 diverse anchors across concrete scenes or events, character relationships, form or narration, historical/social context, emotional experience, and open questions. An anchor detail must be specific enough to guide a reader without reproducing prose. Mark is_common_interpretation true for widely repeated critical framings, canonical controversies, and prominent web-discussion themes.
 
-Prepare exactly one primary_prompt and at most one reserve_prompt. Each must be one natural spoken book-club question with exactly one question mark and one main axis of thought. Avoid compound academic prompts and avoid wording equivalent to "what does this reveal?" when a simpler spoken question works.
+Prepare exactly two semantically distinct agenda questions: primary_prompt and reserve_prompt. Both are used in the session, so reserve_prompt is required rather than optional. Each must be one natural spoken book-club question with exactly one question mark and one main axis of thought. Ground each in a different work-specific anchor or interpretive path, keep each under 240 characters, and avoid compound academic prompts or wording equivalent to "what does this reveal?" when a simpler spoken question works.
 
 Assign exactly one distinct anchor to each supplied persona id. Assign an entrance into attention, not a conclusion: emotional_door describes a feeling the persona can honestly explore, and question_to_explore remains genuinely open. Never assign agreement, disagreement, pro/con, correctness, a final interpretation, a debate role, or a line to recite. Use each persona's core to diversify what they notice. At most one persona may receive an anchor marked as a common interpretation. Keep first impressions independent and do not script a panel exchange.
 
@@ -654,6 +655,7 @@ connection_concepts may name related works or concepts only when useful, but mus
         input.language,
         input.userDisplayName,
       ),
+      agendaRounds: input.agendaRounds,
       transcript: input.transcript,
       personaStances: input.personaStances,
       userStances: input.userStances,
@@ -661,14 +663,14 @@ connection_concepts may name related works or concepts only when useful, but mus
     };
     const recapStructure =
       input.language === "ko"
-        ? `Start with "# {book title} — 리딩 테이블 모임 기록, {provided date}". Then use exactly these level-two headings: "오늘 나눈 이야기", "각자가 가져간 생각", "서로 다르게 읽은 순간", "놓치기 쉬운 장면", "책장에서 꺼낸 연결", and "잠들기 전 생각할 질문".`
-        : `Start with "# {book title} — Reading Table Recap, {provided date}". Then use exactly these level-two headings: "What we explored", "What each reader took away", "Where readings differed", "Scenes you might have missed", "From the shelves", and "A question to sleep on".`;
+        ? `Start with "# {book title} — 리딩 테이블 모임 기록, {provided date}". Then use exactly these level-two headings: "오늘 나눈 이야기", "각자가 가져간 생각", "발제와 주요 관점", "놓치기 쉬운 장면", "책장에서 꺼낸 연결", and "잠들기 전 생각할 질문".`
+        : `Start with "# {book title} — Reading Table Recap, {provided date}". Then use exactly these level-two headings: "What we explored", "What each reader took away", "Agenda questions and perspectives", "Scenes you might have missed", "From the shelves", and "A question to sleep on".`;
     return this.parse(
       recapSchema,
       "meeting_recap",
-      `${recapStructure} Keep the opening summary to 3-5 sentences, the different-readings section to at most 2 bullets, and the scenes section to at most 3 bullets. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown perspective table in the takeaways section with exactly one row or column for every supplied participant, including the user, and use the supplied participant names exactly in both the table and prose. Describe what each person noticed, felt, connected, or newly considered; do not rank positions or imply a winner. In the different-readings section, include only interpretations that genuinely differed and directly engaged one another. If no such difference occurred, say naturally that the readers mainly added compatible perspectives instead of inventing conflict. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, private notes, or stance scores. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
+      `${recapStructure} Keep the opening summary to 3-5 sentences and the scenes section to at most 3 bullets. In the agenda section, include exactly two bullets in supplied order: state each full agenda question, the main perspectives voiced, the user's contribution when present, and any question that remained open. Preserve compatible and differing readings without inventing conflict, consensus, or a winner. The final section must contain exactly one substantive question and exactly one question mark. Include a concise Markdown perspective table in the takeaways section with exactly one row or column for every supplied participant, including the user, and use the supplied participant names exactly in both the table and prose. Describe what each person noticed, felt, connected, or newly considered; do not rank positions. In the shelf section, include only books explicitly cited by a transcript entry's shelf reference; if none, say naturally that no other book was brought into the conversation. Never expose implementation terms or field names such as shelfRef, refersTo, transcript, schema, private notes, or stance scores. Do not imply that an exchange happened unless it appears in the supplied conversation. ${languageRule(input.language)} Quote only this session's generated conversation, never the source book. Do not invent or reveal private reading notes. ${COPYRIGHT_RULE}`,
       JSON.stringify(safeInput),
-      { reasoningEffort: "low", maxOutputTokens: 1_400 },
+      { reasoningEffort: "low", maxOutputTokens: 2_200 },
     );
   }
 }

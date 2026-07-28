@@ -33,12 +33,10 @@ function evaluate(result: CompletedSession): Check[] {
     const count = countSentences(text);
     return count < 2 || count > 4;
   }).length;
-  const topicOpening = discussion.find(({ speaker }) => speaker === "moderator");
   const discussionUserTurns = discussion.filter(({ speaker }) => speaker === "user");
-  const roles = state.discussionRoles;
-  const leadOpeningIndex = discussion.findIndex(({ speaker }) => speaker === roles?.leadA);
-  const positionIndex = discussion.findIndex(({ speaker }) => speaker === "user");
-  const reviewIndex = positionIndex + 1;
+  const agendaSlices = state.agendaRounds.map((_, index) =>
+    discussion.slice(index * 7, index * 7 + 7),
+  );
   const spokenDiscussionTurns = discussion.filter(
     ({ speaker }) => personaIds.has(speaker),
   );
@@ -62,12 +60,15 @@ function evaluate(result: CompletedSession): Check[] {
       detail: `${firstImpressions.length}/3 independent first impressions`,
     },
     {
-      name: "prepared shared prompt",
+      name: "two prepared agenda questions",
       passed:
-        Boolean(state.activeTopic) &&
-        state.activeTopic === state.meetingPlan.primaryPrompt &&
-        (topicOpening?.text.match(/[?？]/gu)?.length ?? 0) === 1,
-      detail: state.activeTopic ?? "no active topic",
+        state.agendaRounds.length === 2 &&
+        state.agendaRounds[0]?.topic === state.meetingPlan.primaryPrompt &&
+        state.agendaRounds[1]?.topic === state.meetingPlan.reservePrompt &&
+        agendaSlices.every(
+          (agenda) => (agenda[0]?.text.match(/[?？]/gu)?.length ?? 0) === 1,
+        ),
+      detail: `${state.agendaRounds.length}/2 agendas opened in prepared order`,
     },
     {
       name: "distinct perspective entrances",
@@ -87,48 +88,50 @@ function evaluate(result: CompletedSession): Check[] {
       detail: "at most one reader owns a common interpretation as the main entrance",
     },
     {
-      name: "user perspective explored",
+      name: "user perspective expanded in each agenda",
       passed:
-        positionIndex >= 0 &&
-        discussion[reviewIndex]?.speaker === roles?.challenger &&
-        discussion[reviewIndex]?.refersTo === "user" &&
-        (discussion[reviewIndex]?.text.match(/[?？]/gu)?.length ?? 0) === 1,
-      detail: "the code-selected responder asks one natural question after the user's contribution",
+        discussionUserTurns.length === 2 &&
+        agendaSlices.every(
+          (agenda, index) =>
+            agenda[4]?.speaker === "user" &&
+            agenda[5]?.speaker === state.agendaRounds[index]?.reflector &&
+            agenda[5]?.refersTo === "user",
+        ),
+      detail: `${discussionUserTurns.length}/2 user contributions received a widening response`,
     },
     {
-      name: "user gets the reviewed turn back",
+      name: "one user turn per agenda",
       passed:
-        discussionUserTurns.length === 2 && discussion[reviewIndex + 1]?.speaker === "user",
-      detail: `${discussionUserTurns.length}/2 user turns in the main discussion`,
+        discussionUserTurns.length === 2 &&
+        agendaSlices.every((agenda) => agenda.filter(({ speaker }) => speaker === "user").length === 1),
+      detail: `${discussionUserTurns.length}/2 scheduled user turns`,
     },
     {
-      name: "shared-prompt perspective exchange",
+      name: "agenda perspective exchange",
       passed:
-        Boolean(roles) &&
-        roles?.leadA !== roles?.leadB &&
-        discussion[leadOpeningIndex + 1]?.speaker === roles?.leadB &&
-        discussion[leadOpeningIndex + 1]?.refersTo === roles?.leadA &&
-        discussion[leadOpeningIndex + 2]?.speaker !== roles?.leadA,
-      detail: roles
-        ? `${roles.leadA} opens, ${roles.leadB} adds another perspective once, then code returns the floor`
-        : "roles missing",
+        agendaSlices.every(
+          (agenda, index) =>
+            agenda[1]?.speaker === state.agendaRounds[index]?.lead &&
+            agenda[2]?.speaker === state.agendaRounds[index]?.responder &&
+            agenda[2]?.refersTo === state.agendaRounds[index]?.lead,
+        ),
+      detail: "each lead is followed by a code-selected independent responder",
     },
     {
-      name: "causal user exchange",
+      name: "all readers participate in every agenda",
       passed:
-        reviewIndex >= 0 &&
-        discussion[reviewIndex + 1]?.speaker === "user" &&
-        discussion[reviewIndex + 2]?.speaker === roles?.challenger &&
-        discussion[reviewIndex + 3]?.speaker === roles?.bridgeReader,
-      detail: "user reply returns to the same responder before the third reader bridges",
+        agendaSlices.every(
+          (agenda) =>
+            new Set(agenda.filter(({ speaker }) => personaIds.has(speaker)).map(({ speaker }) => speaker))
+              .size === 3,
+        ),
+      detail: "lead, responder, and reflector cover all three readers in both agendas",
     },
     {
-      name: "focused prompt exchange",
+      name: "distinct agenda leads",
       passed:
-        new Set(
-          discussion.filter(({ speaker }) => personaIds.has(speaker)).map(({ speaker }) => speaker),
-        ).size <= 3,
-      detail: "two leads carry the exchange while a third reader may bridge it",
+        new Set(state.agendaRounds.map(({ lead }) => lead)).size === 2,
+      detail: `${new Set(state.agendaRounds.map(({ lead }) => lead)).size}/2 distinct leads`,
     },
     {
       name: "spoken discussion style",
@@ -179,7 +182,7 @@ async function runCase({
             firstImpression: "중심 질문은 흥미로웠지만 제시 방식에는 아직 판단을 유보하고 있습니다.",
             memorableScene: "앞에서 이해한 내용을 새롭게 보게 만든 대목이 가장 기억에 남았습니다.",
             discussion: "형식과 그 결과를 함께 설명하는 해석이 더 설득력 있다고 생각합니다.",
-            discussionReply: "그 질문을 생각해도 의도와 결과를 나누어 볼 필요가 있다고 생각합니다.",
+            discussionSecond: "두 번째 발제에서는 의도와 결과를 나누어 볼 필요가 있다고 생각합니다.",
             wrapUp: "다른 독자의 근거를 들으며 처음 판단을 더 세밀하게 다듬었습니다.",
           }
         : {
@@ -187,7 +190,7 @@ async function runCase({
             firstImpression: "The central question interested me, but I am still testing how the book presented it.",
             memorableScene: "The passage that changed my earlier understanding stayed with me.",
             discussion: "I prefer an interpretation that explains both the form and its consequences.",
-            discussionReply: "That objection matters, but my reading still holds if intention and consequence are separated.",
+            discussionSecond: "For the second agenda, I want to separate intention from consequence.",
             wrapUp: "The other readers helped me make my first judgment more precise.",
           },
   });

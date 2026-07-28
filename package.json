@@ -9,6 +9,7 @@
     "dev:server": "tsx watch server/index.ts",
     "start": "tsx server/index.ts",
     "session": "tsx scripts/session.ts",
+    "session:review:live": "tsx scripts/review.honmono.live.ts",
     "session:mock": "tsx scripts/session.mock.ts",
     "session:mock:ko": "tsx scripts/session.mock.ts --ko",
     "evaluate:mock": "tsx scripts/evaluate.mock.ts",
