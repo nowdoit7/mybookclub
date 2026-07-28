@@ -14,7 +14,9 @@ describe("SessionEngine", () => {
     });
 
     expect(result.state.stage).toBe("WRAP_UP");
-    expect(result.state.transcript).toHaveLength(30);
+    expect(result.state.transcript).toHaveLength(31);
+    expect(result.state.meetingPlan.assignments).toHaveLength(3);
+    expect(new Set(result.state.meetingPlan.assignments.map(({ anchorId }) => anchorId)).size).toBe(3);
     expect(Object.values(result.state.roomAtmosphere).every((value) => value >= 0 && value <= 1)).toBe(
       true,
     );
@@ -43,7 +45,7 @@ describe("SessionEngine", () => {
       ({ stage, speaker }) => stage === "DISCUSSION" && speaker === "moderator",
     );
     expect(topicOpening?.text).toContain(result.state.activeTopic);
-    expect(topicOpening?.text).toContain("earlier conversation");
+    expect(result.state.activeTopic).toBe(result.state.meetingPlan.primaryPrompt);
   });
 
   it("uses an explicitly selected three-reader roster", async () => {
@@ -61,6 +63,35 @@ describe("SessionEngine", () => {
         ({ speaker, stage }) => speaker === GUEST_PERSONAS[0].id && stage === "INTRO",
       )?.text,
     ).toContain("imagined guest");
+  });
+
+  it("prepares one meeting plan before persona notes and passes each reader only their entrance", async () => {
+    const client = new MockGenerationClient();
+    const originalPrepareMeetingPlan = client.prepareMeetingPlan.bind(client);
+    const originalGenerateNotes = client.generateReadingNotes.bind(client);
+    const events: string[] = [];
+    const assignedReaders: string[] = [];
+
+    client.prepareMeetingPlan = async (input) => {
+      events.push("plan");
+      return originalPrepareMeetingPlan(input);
+    };
+    client.generateReadingNotes = async (input) => {
+      events.push(`notes:${input.persona.id}`);
+      expect(input.meetingPlan?.assignments).toHaveLength(3);
+      expect(input.perspectiveAssignment?.personaId).toBe(input.persona.id);
+      assignedReaders.push(input.perspectiveAssignment!.personaId);
+      return originalGenerateNotes(input);
+    };
+
+    const { state } = await new SessionEngine(client).run({
+      title: "A Reader-Selected Book",
+      seed: "demo",
+    });
+
+    expect(events[0]).toBe("plan");
+    expect(events.filter((event) => event.startsWith("plan"))).toHaveLength(1);
+    expect(new Set(assignedReaders)).toEqual(new Set(state.personas.map(({ id }) => id)));
   });
 
   it("rejects an injected roster that breaks the three-category invariant", async () => {
@@ -99,7 +130,7 @@ describe("SessionEngine", () => {
     }
   });
 
-  it("keeps first impressions non-adversarial and challenges the discussion position", async () => {
+  it("keeps first impressions non-adversarial and expands the user's discussion response", async () => {
     const { state } = await new SessionEngine(new MockGenerationClient()).run({
       title: "A Reader-Selected Book",
       seed: "demo",
@@ -118,10 +149,21 @@ describe("SessionEngine", () => {
     );
 
     expect(firstImpressionChallenges).toHaveLength(0);
-    expect(discussionRepliesToUser).toHaveLength(3);
+    expect(discussionRepliesToUser.length).toBeGreaterThanOrEqual(3);
+    expect(
+      state.transcript
+        .filter(
+          ({ stage, speaker }) =>
+            stage === "DISCUSSION" && !["moderator", "user"].includes(speaker),
+        )
+        .map(({ text }) => text)
+        .join(" "),
+    ).not.toMatch(
+      /\b(?:counterexample|evidence|scope|defend|rebut)\b|반론|반박|반례|입증|증명|범위|근거/iu,
+    );
   });
 
-  it("answers a user-backed topic before opening the directed reader clash", async () => {
+  it("opens the planned prompt before inviting the user into the exchange", async () => {
     const { state } = await new SessionEngine(new MockGenerationClient()).run({
       title: "A Reader-Selected Book",
       seed: "demo",
@@ -136,8 +178,8 @@ describe("SessionEngine", () => {
     expect(state.discussionRoles).toBeDefined();
     expect(turns[1]).toMatchObject({
       speaker: state.discussionRoles?.leadA,
-      refersTo: "user",
     });
+    expect(turns[1].refersTo).toBeUndefined();
     expect(turns[2]).toMatchObject({
       speaker: state.discussionRoles?.leadB,
       refersTo: state.discussionRoles?.leadA,
@@ -147,15 +189,15 @@ describe("SessionEngine", () => {
       turns.slice(0, 3).filter(({ speaker }) => speaker !== "moderator"),
     ).toHaveLength(2);
 
-    const challengeIndex = turns.findIndex(
+    const responderIndex = turns.findIndex(
       ({ speaker, refersTo }) =>
         speaker === state.discussionRoles?.challenger && refersTo === "user",
     );
-    expect(challengeIndex).toBeGreaterThan(-1);
-    expect(turns[challengeIndex].text.match(/[?？]/gu)).toHaveLength(1);
-    expect(turns[challengeIndex + 1]?.speaker).toBe("user");
-    expect(turns[challengeIndex + 2]?.speaker).toBe(state.discussionRoles?.challenger);
-    expect(turns[challengeIndex + 3]?.speaker).toBe(state.discussionRoles?.bridgeReader);
+    expect(responderIndex).toBeGreaterThan(-1);
+    expect(turns[responderIndex].text.match(/[?？]/gu)).toHaveLength(1);
+    expect(turns[responderIndex + 1]?.speaker).toBe("user");
+    expect(turns[responderIndex + 2]?.speaker).toBe(state.discussionRoles?.challenger);
+    expect(turns[responderIndex + 3]?.speaker).toBe(state.discussionRoles?.bridgeReader);
     expect(
       new Set(
         turns
@@ -165,7 +207,7 @@ describe("SessionEngine", () => {
     ).toEqual(new Set(state.personas.map(({ id }) => id)));
   });
 
-  it("keeps a table-backed topic as a reader-to-reader opening", async () => {
+  it("keeps the first response directed to Alex's prompt instead of another reader", async () => {
     const client = new MockGenerationClient();
     const originalExtractFocus = client.extractDiscussionFocus.bind(client);
     client.extractDiscussionFocus = async (input) => {
@@ -189,8 +231,8 @@ describe("SessionEngine", () => {
 
     expect(turns[1]).toMatchObject({
       speaker: state.discussionRoles?.leadA,
-      refersTo: state.discussionRoles?.leadB,
     });
+    expect(turns[1].refersTo).toBeUndefined();
     expect(turns[2]).toMatchObject({
       speaker: state.discussionRoles?.leadB,
       refersTo: state.discussionRoles?.leadA,
@@ -216,8 +258,8 @@ describe("SessionEngine", () => {
     expect(directedTurns).not.toHaveLength(0);
     expect(directedTurns.every(({ refersTo }) => refersTo !== "wrong-reader")).toBe(true);
     expect(directedTurns[0]).toMatchObject({
-      speaker: state.discussionRoles?.leadA,
-      refersTo: "user",
+      speaker: state.discussionRoles?.leadB,
+      refersTo: state.discussionRoles?.leadA,
     });
   });
 
@@ -300,26 +342,15 @@ describe("SessionEngine", () => {
     ]);
   });
 
-  it("weights a user-backed thread above a generally relevant but user-distant topic", async () => {
+  it("uses the privately prepared primary prompt instead of re-ranking topics mid-session", async () => {
     const client = new MockGenerationClient();
-    const originalExtractFocus = client.extractDiscussionFocus.bind(client);
-    let expectedTopic = "";
-    client.extractDiscussionFocus = async (input) => {
-      const base = await originalExtractFocus(input);
-      expectedTopic = input.book.candidateTopics[1];
+    const originalPrepareMeetingPlan = client.prepareMeetingPlan.bind(client);
+    const expectedTopic = "Which choice changed meaning after you saw its consequence?";
+    client.prepareMeetingPlan = async (input) => {
+      const base = await originalPrepareMeetingPlan(input);
       return {
         ...base,
-        topic_scores: input.book.candidateTopics.map((topic, index) => ({
-          topic,
-          relevance: index === 0 ? 2 : index === 1 ? 1 : 0,
-          evidence: `Table evidence ${index}`,
-          user_relevance: index === 1 ? 2 : 0,
-          user_evidence: index === 1 ? "The user's memorable scene supports this thread." : null,
-        })),
-        emergent_question: null,
-        emergent_relevance: 0,
-        emergent_evidence: null,
-        emergent_user_relevance: 0,
+        primary_prompt: expectedTopic,
       };
     };
 
@@ -331,7 +362,7 @@ describe("SessionEngine", () => {
     expect(state.activeTopic).toBe(expectedTopic);
   });
 
-  it("lets the same challenger answer before a third reader bridges the exchange", async () => {
+  it("lets the same responder answer before a third reader bridges the exchange", async () => {
     const actions = ["join", "join", "wrap"] as const;
     let actionIndex = 0;
     const followUp = "I want to add one more distinction about responsibility.";
@@ -345,20 +376,20 @@ describe("SessionEngine", () => {
     });
 
     const discussion = state.transcript.filter(({ stage }) => stage === "DISCUSSION");
-    const challengeIndex = discussion.findIndex(
+    const responderIndex = discussion.findIndex(
       ({ speaker, refersTo }) =>
         speaker === state.discussionRoles?.challenger && refersTo === "user",
     );
     const followUpIndex = discussion.findIndex(({ text }) => text === followUp);
-    expect(challengeIndex).toBeGreaterThan(-1);
-    expect(discussion[challengeIndex + 1]?.speaker).toBe("user");
-    expect(discussion[challengeIndex + 2]?.speaker).toBe(state.discussionRoles?.challenger);
-    expect(discussion[challengeIndex + 3]?.speaker).toBe(state.discussionRoles?.bridgeReader);
-    expect(followUpIndex).toBeGreaterThan(challengeIndex);
+    expect(responderIndex).toBeGreaterThan(-1);
+    expect(discussion[responderIndex + 1]?.speaker).toBe("user");
+    expect(discussion[responderIndex + 2]?.speaker).toBe(state.discussionRoles?.challenger);
+    expect(discussion[responderIndex + 3]?.speaker).toBe(state.discussionRoles?.bridgeReader);
+    expect(followUpIndex).toBeGreaterThan(responderIndex);
     expect(discussion[followUpIndex + 1]).toMatchObject({ refersTo: "user" });
   });
 
-  it("uses a reader rather than the moderator when every stance is close to the user", async () => {
+  it("uses a reader when every compatibility stance value is identical", async () => {
     const client = new MockGenerationClient();
     const originalGenerateNotes = client.generateReadingNotes.bind(client);
     client.generateReadingNotes = async (input) => {
@@ -400,7 +431,7 @@ describe("SessionEngine", () => {
     expect([state.discussionRoles?.leadA, state.discussionRoles?.leadB]).toContain(guest.id);
   });
 
-  it("lets the user observe one bounded extension and then wrap without a forced position", async () => {
+  it("lets the user observe one bounded extension and then wrap without a forced response", async () => {
     const decisions = ["listen", "wrap"] as const;
     let decisionIndex = 0;
     const { state } = await new SessionEngine(new MockGenerationClient()).run({
@@ -422,7 +453,7 @@ describe("SessionEngine", () => {
     expect(state.userStances[state.activeTopic!]).toBeUndefined();
   });
 
-  it("lets the user extend the clash twice after joining and choose when to wrap", async () => {
+  it("lets the user extend the exchange twice after joining and choose when to wrap", async () => {
     const checkpoints: Array<{ phase: string; canListen: boolean }> = [];
     const { state } = await new SessionEngine(new MockGenerationClient()).run({
       title: "A Reader-Selected Book",
@@ -575,7 +606,7 @@ describe("SessionEngine", () => {
     expect(authorTurn?.text).toMatch(/^내가 이 책을 쓸 때/u);
   });
 
-  it("prepares both memorable scenes as independent testimony", async () => {
+  it("prepares all three memorable scenes as independent, assigned testimony", async () => {
     const client = new MockGenerationClient();
     const originalGenerateNotes = client.generateReadingNotes.bind(client);
     const originalGenerateUtterance = client.generateUtterance.bind(client);
@@ -601,12 +632,11 @@ describe("SessionEngine", () => {
 
     await new SessionEngine(client).run({ title: "A Reader-Selected Book", seed: "demo" });
 
-    expect(sceneContexts).toHaveLength(2);
+    expect(sceneContexts).toHaveLength(3);
     expect(sceneContexts.every((speakers) => speakers.length === 1)).toBe(true);
     expect(sceneContexts.every(([speaker]) => speaker === "moderator")).toBe(true);
-    expect(sceneAnchors).toHaveLength(2);
-    expect(sceneAnchors[0]).toContain("Yun Tianming");
-    expect(sceneAnchors[1]).not.toContain("Yun Tianming");
+    expect(sceneAnchors).toHaveLength(3);
+    expect(new Set(sceneAnchors).size).toBe(3);
   });
 
   it("derives and updates room atmosphere without another model operation", async () => {
@@ -659,7 +689,7 @@ describe("SessionEngine", () => {
       },
     });
 
-    expect(advanceCount).toBe(24);
+    expect(advanceCount).toBe(25);
     expect(inputCount).toBe(6);
     expect(completionWaitCount).toBe(1);
     expect(state.transcript.filter(({ speaker }) => speaker === "user").map(({ text }) => text)).toEqual(
@@ -790,9 +820,9 @@ describe("SessionEngine", () => {
     });
 
     expect(result.state.book.title).toBe("최근에 읽은 책");
-    expect(result.state.transcript).toHaveLength(30);
+    expect(result.state.transcript).toHaveLength(31);
     expect(result.state.transcript[0].text).toMatch(/[가-힣]/u);
-    expect(result.recapMarkdown).toContain("## 토론 요약");
+    expect(result.recapMarkdown).toContain("## 오늘 나눈 이야기");
     expect(result.recapMarkdown).toContain("## 잠들기 전 생각할 질문");
   });
 
@@ -883,6 +913,12 @@ describe("SessionEngine", () => {
     expect(fallbackDialogue).not.toContain("PRIVATE_SENTINEL");
     expect(fallbackDialogue).not.toContain("사용자");
     expect(fallbackDialogue).not.toContain("관점에서");
+    expect(
+      state.transcript
+        .filter(({ stage, speaker }) => stage !== "INTRO" && !["moderator", "user"].includes(speaker))
+        .map(({ text }) => text)
+        .join(" "),
+    ).not.toMatch(/(?:인 저는|인 제게|As a )/u);
     const closings = state.transcript.filter(
       ({ stage, speaker }) => stage === "WRAP_UP" && !["moderator", "user"].includes(speaker),
     );

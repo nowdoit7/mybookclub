@@ -6,14 +6,14 @@ export const STAGE_LABELS: Record<AppLanguage, Record<StageId, string>> = {
     INTRO: "Intro",
     FIRST_IMPRESSIONS: "First impressions",
     MEMORABLE_SCENES: "Scenes",
-    DISCUSSION: "Discussion",
+    DISCUSSION: "Shared prompt",
     WRAP_UP: "Wrap-up",
   },
   ko: {
     INTRO: "소개",
     FIRST_IMPRESSIONS: "첫인상",
     MEMORABLE_SCENES: "기억에 남은 장면",
-    DISCUSSION: "본 토론",
+    DISCUSSION: "발제 대화",
     WRAP_UP: "마무리",
   },
 };

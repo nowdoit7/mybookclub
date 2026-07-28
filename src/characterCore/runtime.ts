@@ -134,6 +134,8 @@ export function buildCharacterCoreReadingNotesPromptSlice(
     personaId: core.personaId,
     prompt: [
       "Apply this local Character Core when forming the private reading notes.",
+      "The Character Core chooses what this reader notices, feels, connects, and wonders about. It does not assign a side or require disagreement.",
+      "Treat all labels below as private planning language. Do not copy their abstract nouns or stock phrases into the spoken dialogue unless the book or user has naturally supplied them.",
       `Core belief: ${core.coreBelief}`,
       `Ranked commitments:\n${formatRankedValues(core)}`,
       `Reading method: ${core.epistemicMoves.join(" ")}`,
@@ -167,6 +169,10 @@ export function buildCharacterCoreUtterancePromptSlice(
     state,
     prompt: [
       "Apply this local Character Core while following the existing turn directive.",
+      "The Character Core controls attention, felt response, and question style; it does not force an opposing conclusion.",
+      "Default book-club move: acknowledge the previous person's scene or feeling, add one genuinely different detail or perspective, then ask a natural question only when this turn requires one.",
+      "A task name containing CHALLENGE is legacy routing language. Challenge only when the transcript contains a real semantic conflict; never manufacture opposition, counterevidence, or a debate to satisfy the task name.",
+      "The labels below are private planning vocabulary. Do not echo phrases such as responsibility assignment, speaking position, operating mechanism, evidence test, cost, standard, or scope unless the book or user actually used that idea.",
       `Core belief: ${core.coreBelief}`,
       `Distinctive focus: ${core.contrastivePolicy.primaryFocus}`,
       `Reasoning move: ${behavior.dialogueMoves.join(" ")}`,

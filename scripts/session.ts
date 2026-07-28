@@ -4,6 +4,7 @@ import { OpenAIGenerationClient } from "../server/openaiGenerationClient";
 import type { BookIdentificationRequest } from "../src/api/contracts";
 import type {
   GenerationClient,
+  MeetingPlanRequest,
   ReadingNotesRequest,
   RecapRequest,
   UserStanceRequest,
@@ -49,6 +50,10 @@ class InstrumentedGenerationClient implements GenerationClient {
 
   generateReadingNotes(input: ReadingNotesRequest) {
     return this.track("reading-notes", () => this.inner.generateReadingNotes(input));
+  }
+
+  prepareMeetingPlan(input: MeetingPlanRequest) {
+    return this.track("meeting-plan", () => this.inner.prepareMeetingPlan(input));
   }
 
   extractDiscussionFocus(input: Parameters<GenerationClient["extractDiscussionFocus"]>[0]) {

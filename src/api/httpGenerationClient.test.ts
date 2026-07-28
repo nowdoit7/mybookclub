@@ -6,7 +6,11 @@ import {
   resolveGenerationApiBaseUrl,
 } from "./httpGenerationClient";
 import { clearGenerationDiagnostics, getGenerationDiagnostics } from "./diagnostics";
-import type { ReadingNotesRequest, UtteranceRequest } from "./generationClient";
+import type {
+  MeetingPlanRequest,
+  ReadingNotesRequest,
+  UtteranceRequest,
+} from "./generationClient";
 
 const identifiedBookResponse = {
   canonical_title: "A Reader-Selected Book",
@@ -106,6 +110,51 @@ describe("HttpGenerationClient", () => {
       },
     }));
     expect(request?.headers).not.toHaveProperty("x-character-core-experiment");
+  });
+
+  it("uses the dedicated meeting-plan boundary for deep research", async () => {
+    const planResponse = {
+      research_brief:
+        "The plan uses bounded research rather than claiming full-text access. It separates scenes, form, context, and emotion. Common interpretations are labeled. Each reader receives an open entrance rather than a conclusion.",
+      anchors: Array.from({ length: 8 }, (_, index) => ({
+        id: `anchor-${index + 1}`,
+        kind: index % 2 === 0 ? "scene" : "form",
+        label: `Anchor ${index + 1}`,
+        detail: `A concrete and bounded research detail for anchor ${index + 1}.`,
+        is_common_interpretation: index === 0,
+      })),
+      primary_prompt: "Which moment changed how you understood the book?",
+      reserve_prompt: "What would you notice differently on a second reading?",
+      assignments: ["reader-a", "reader-b", "reader-c"].map((personaId, index) => ({
+        persona_id: personaId,
+        anchor_id: `anchor-${index + 1}`,
+        emotional_door: "Name the concrete feeling created by this entrance.",
+        question_to_explore: "What might another reader notice here?",
+      })),
+      uncertainties: [],
+      connection_concepts: [],
+      sources: [
+        { url: "https://publisher.example/book" },
+        { url: "https://library.example/record" },
+      ],
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(planResponse), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const client = new HttpGenerationClient("/api/generate", "session-123");
+
+    const output = await client.prepareMeetingPlan({
+      language: "en",
+    } as MeetingPlanRequest);
+
+    expect(output.primary_prompt).toBe(planResponse.primary_prompt);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/generate/meeting-plan",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("marks every experimental post and only adds the Korean prompt marker to notes and utterances", async () => {

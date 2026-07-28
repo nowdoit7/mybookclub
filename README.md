@@ -1,28 +1,31 @@
 # Open Reading Club
 
-An AI book club where three readers with committed viewpoints debate the book
-you read, challenge your interpretation, and create a downloadable recap.
+An AI book club where three distinct readers share what they noticed, help widen
+your view of the book, and create a downloadable recap.
 
 **[Try the live app](https://reading-table-buildweek.web.app)** ·
 **[Watch the 2:46 demo](https://www.youtube.com/watch?v=H6an4WAsfyA)**
 
 The judging build is deployed and uses GPT-5.6 Terra for live book verification,
-dialogue, private reading notes, stance extraction, and the final meeting recap.
+dialogue, private reading notes, response interpretation, and the final meeting recap.
 No account or credentials are required.
 
 ## Why this is not another agreeable chatbot
 
 Open Reading Club recreates the part of a real book club that matters most:
-different people can finish the same book with incompatible interpretations.
+different people can finish the same book noticing different scenes, feelings,
+and questions. They do not need to disagree for the conversation to matter.
 
 - **Code controls the meeting; GPT-5.6 supplies the language.** A deterministic
-  TypeScript engine owns stage order, speakers, rebuttal targets, turn caps, and
+  TypeScript engine owns stage order, speakers, response targets, turn caps, and
   user checkpoints.
-- **Disagreement is enforced, not merely prompted.** Two readers clash before
-  inviting the user, and a user who states a position receives a directed
-  challenge.
+- **Perspective expansion is guaranteed.** Two readers exchange distinct
+  readings before inviting the user. After the user speaks, one reader asks
+  naturally about the scene or reason behind the response and another adds a
+  new angle. Disagreement appears only when it is real.
 - **Readers remain distinct.** Emotional, analytical, and contextual readers
-  prepare private notes and defend revisable but committed positions.
+  prepare private notes about what attracts their attention, how the book
+  affects them, and what they genuinely wonder about.
 - **Almost any book can come to the table.** Live sessions verify a single book
   or a full series with GPT-5.6 web search and show the retrieved sources before
   the meeting starts.
@@ -30,7 +33,7 @@ different people can finish the same book with incompatible interpretations.
   legendary, or literary guests can replace a regular reader without turning
   the conversation into biography recitation or fake quotation.
 - **The conversation leaves an artifact.** Every completed meeting produces a
-  styled recap, final-position table, moments of real disagreement, and a full
+  styled recap, reader-takeaway table, any genuine differences in reading, and a full
   transcript that can be copied, downloaded, shared, or sent by email.
 
 ## Try the judging build
@@ -45,7 +48,12 @@ short path:
 5. Select a user profile and enter the meeting.
 6. Use **Next** to advance. When the table turns to you, write a response and
    select **Share**.
-7. Complete the discussion to open the recap and full transcript.
+7. Respond to Alex's shared book-club prompt, then open the recap and full transcript.
+
+Before the table opens, the live flow performs one additional web-grounded
+planning pass. It prepares a shared prompt and assigns each reader a different
+scene, feeling, context, or open question. These assignments guide attention
+without assigning pro/con sides or final interpretations.
 
 Live generation can take several seconds, especially after a Firebase cold
 start. The interface exposes verification, reading-note, dialogue, transition,
@@ -68,12 +76,13 @@ judging path.
    bending around the user's opinion.
 3. **Scenes** — the table grounds interpretations in concrete moments from the
    verified work.
-4. **Discussion** — code selects opposed lead readers, directs one clash, then
+4. **Discussion** — code selects readers with distinct prepared perspectives,
+   directs one exchange, then
    lets the user join, keep listening, add another thought, or wrap up. The
-   original challenger responds after the user answers, so the exchange remains
+   original responder replies after the user answers, so the exchange remains
    conversational rather than becoming a queue of unrelated monologues.
 5. **Wrap-up** — every reader gives a distinct closing reflection, Alex connects
-   the major arguments, and GPT-5.6 produces the written recap.
+   what the table noticed, and GPT-5.6 produces the written recap.
 
 ## Architecture
 
@@ -81,7 +90,7 @@ judging path.
 React / Vite UI
   |
   +-- deterministic TypeScript session engine
-  |     stage order | speaker selection | directed rebuttals | turn limits
+  |     stage order | perspective selection | directed responses | turn limits
   |
   +-- GenerationClient
         |-- local: same-origin Express /api/generate
@@ -99,7 +108,7 @@ origins, rate limits, body-size limits, and per-session call limits.
 
 Every model call uses a strict structured-output schema. Responses are validated
 with Zod plus task-specific quality rules for sentence count, complete endings,
-topic grounding, directed targets, stance bounds, and recap evidence. Invalid
+topic grounding, directed targets, compatibility bounds, and recap grounding. Invalid
 responses receive one bounded repair attempt rather than entering the session.
 
 The engine and prompts remain book-agnostic. Book facts arrive through the
@@ -156,9 +165,9 @@ npm run typecheck
 npm run lint
 ```
 
-At submission, the fast suite passes **201 tests across 16 files**. It covers
-the five-stage state machine, persona-category draw, directed disagreement,
-user rebuttal, discussion caps, quality validation, strict server contracts,
+The current local suite passes **273 tests across 22 files**. It covers
+the five-stage state machine, persona-category draw, perspective exchanges,
+user response flow, discussion caps, quality validation, strict server contracts,
 guest participation, sharing, and a complete mock session. Five neutral mock
 sessions also pass all 15 dialogue-flow checks.
 
@@ -170,7 +179,7 @@ npm run evaluate:guests:live -- --language=ko
 ```
 
 `test:live` validates properties such as schema conformance, sentence bounds,
-stance variance, and copyright limits; it never asserts exact generated prose.
+perspective distinction, and copyright limits; it never asserts exact generated prose.
 
 ## Commands
 
@@ -225,10 +234,11 @@ only as a code generator. The workflow repeatedly followed this cycle:
 5. Reserve paid GPT-5.6 runs for language-quality validation.
 
 That loop converted observations such as “everyone only listens to the user,”
-“the debate stops when it becomes interesting,” and “the challenger disappears
-after the user answers” into testable behavior: independent first impressions,
-one code-owned reader clash, a guaranteed user challenge, a same-challenger
-response, a third-reader bridge, and bounded continue/listen/wrap checkpoints.
+“the dialogue sounds like a debate even when readers are sharing feelings,” and
+“the responder disappears after the user answers” into testable behavior:
+independent first impressions, one code-owned reader exchange, a grounded user
+question, a same-reader response, a third-reader perspective bridge, and bounded
+continue/listen/wrap checkpoints.
 
 Codex also helped:
 
@@ -239,11 +249,11 @@ Codex also helped:
 - remove early overfitting to a single development book;
 - simulate cross-genre sessions without spending credits;
 - evaluate all 21 imagined guests with neutral fixtures;
-- translate conversation-quality feedback into the current 201-test suite; and
+- translate conversation-quality feedback into the current 273-test suite; and
 - document the server-only key boundary, Firebase deployment, and privacy model.
 
-GPT-5.6 supplies book verification, private notes, natural dialogue, stance
-extraction, and the recap. TypeScript owns the meeting. This boundary was the
+GPT-5.6 supplies book verification, private notes, natural dialogue, response
+interpretation, and the recap. TypeScript owns the meeting. This boundary was the
 key product and engineering decision: language remains flexible while the
 social contract remains deterministic and testable.
 

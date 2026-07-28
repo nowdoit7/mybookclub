@@ -82,6 +82,23 @@ describe("MockGenerationClient", () => {
     expect(novel.summary).not.toContain("Notes on Attention");
   });
 
+  it("prepares distinct perspective entrances without assigning conclusions", async () => {
+    const personas = [persona("maddie"), persona("marcus"), persona("jamal")];
+    const plan = await new MockGenerationClient().prepareMeetingPlan({
+      language: "ko",
+      book,
+      personas,
+    });
+
+    expect(plan.anchors).toHaveLength(8);
+    expect(plan.assignments.map(({ persona_id }) => persona_id)).toEqual(
+      personas.map(({ id }) => id),
+    );
+    expect(new Set(plan.assignments.map(({ anchor_id }) => anchor_id)).size).toBe(3);
+    expect(plan.primary_prompt.match(/[?？]/gu)).toHaveLength(1);
+    expect(JSON.stringify(plan.assignments)).not.toMatch(/찬성|반대|승리|정답|pro|con/iu);
+  });
+
   it.each(["en", "ko"] as const)(
     "gives short, distinct closing takeaways with natural farewells in %s",
     async (language) => {
@@ -112,7 +129,9 @@ describe("MockGenerationClient", () => {
       expect(new Set(outputs.map(({ utterance }) => utterance)).size).toBe(3);
       expect(
         outputs.every(({ utterance }) =>
-          language === "ko" ? /즐거/u.test(utterance) : /enjoy|loved/iu.test(utterance),
+          language === "ko"
+            ? /즐거|좋았|만나/u.test(utterance)
+            : /enjoy|loved|see you|until/iu.test(utterance),
         ),
       ).toBe(true);
       expect(outputs.map(({ utterance }) => utterance).join(" ")).not.toMatch(/\b(?:should|must)\b|해야/u);
@@ -134,9 +153,36 @@ describe("MockGenerationClient", () => {
     });
 
     expect(countSentences(output.utterance)).toBe(4);
-    expect(output.utterance).toMatch(language === "ko" ? /고맙/u : /Thank you all/iu);
+    expect(output.utterance).toMatch(language === "ko" ? /고맙/u : /Thank you/iu);
     expect(output.utterance).toMatch(language === "ko" ? /모임 기록/u : /written recap/iu);
   });
+
+  it.each(["en", "ko"] as const)(
+    "asks the user about their scene without forcing debate in %s",
+    async (language) => {
+      const output = await new MockGenerationClient().generateUtterance({
+        language,
+        roomAtmosphere,
+        book,
+        speaker: persona("marcus"),
+        stage: "DISCUSSION",
+        task: "CHALLENGE_USER",
+        recentTranscript: transcript(language),
+        participants,
+        activeTopic: book.candidateTopics[0],
+        targetSpeaker: "user",
+        userArgument: { stance: 0, paraphrase: language === "ko" ? "저는 슬펐어요." : "I felt sad." },
+        allowShelfReference: false,
+      });
+
+      expect(output.utterance.match(/[?？]/gu)).toHaveLength(1);
+      expect(output.utterance).not.toMatch(
+        language === "ko"
+          ? /반론|반박|반례|입증|증명|범위|근거/u
+          : /rebut|counterexample|prove|evidence|scope|defend/iu,
+      );
+    },
+  );
 
   it("uses the supplied discussion focus as the memorable-scene anchor", async () => {
     const sceneAnchor = "the silent exchange at the station";

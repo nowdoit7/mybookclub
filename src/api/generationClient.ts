@@ -2,6 +2,7 @@ import type {
   BookIdentificationOutput,
   BookIdentificationRequest,
   DiscussionFocusOutput,
+  MeetingPlanOutput,
   ReadingNotesOutput,
   RecapOutput,
   UserStanceOutput,
@@ -11,7 +12,9 @@ import type {
 import type {
   AppLanguage,
   ConfirmedBook,
+  MeetingPlan,
   PersonaCard,
+  PerspectiveAssignment,
   ReadingNotes,
   RoomAtmosphere,
   StageId,
@@ -26,8 +29,17 @@ export interface ReadingNotesRequest {
   language: AppLanguage;
   book: ConfirmedBook;
   persona: PersonaCard;
+  meetingPlan?: MeetingPlan;
+  perspectiveAssignment?: PerspectiveAssignment;
   validationError?: string;
   characterCoreExperiment?: CharacterCoreExperimentMarker;
+}
+
+export interface MeetingPlanRequest {
+  language: AppLanguage;
+  book: ConfirmedBook;
+  personas: PersonaCard[];
+  validationError?: string;
 }
 
 export interface ParticipantLabel {
@@ -40,6 +52,8 @@ export interface UtteranceRequest {
   language: AppLanguage;
   roomAtmosphere: RoomAtmosphere;
   book: ConfirmedBook;
+  meetingPlan?: MeetingPlan;
+  perspectiveAssignment?: PerspectiveAssignment;
   speaker: PersonaCard | "moderator";
   notes?: ReadingNotes;
   stage: StageId;
@@ -83,6 +97,7 @@ export interface RecapRequest {
 
 export interface GenerationClient {
   identifyBook(input: BookIdentificationRequest): Promise<BookIdentificationOutput>;
+  prepareMeetingPlan(input: MeetingPlanRequest): Promise<MeetingPlanOutput>;
   generateReadingNotes(input: ReadingNotesRequest): Promise<ReadingNotesOutput>;
   extractDiscussionFocus(input: DiscussionFocusRequest): Promise<DiscussionFocusOutput>;
   generateUtterance(input: UtteranceRequest): Promise<UtteranceOutput>;

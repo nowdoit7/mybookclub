@@ -1,11 +1,62 @@
 import { describe, expect, it } from "vitest";
 
-import { bookIdentificationSchema } from "../api/contracts";
+import { bookIdentificationSchema, meetingPlanSchema } from "../api/contracts";
 import {
   validateBookIdentificationQuality,
+  validateMeetingPlanQuality,
   validateRecapQuality,
   validateUtteranceQuality,
 } from "./qualityValidation";
+
+describe("meeting-plan quality validation", () => {
+  it("rejects duplicated anchors and repeated common-interpretation assignments", () => {
+    const output = meetingPlanSchema.parse({
+      research_brief:
+        "The research brief distinguishes verified context from interpretation. It gathers several concrete entrances into the work without claiming access to the full text. Common critical framings are labeled instead of silently becoming every reader's main idea. The assignments remain open questions rather than conclusions.",
+      anchors: Array.from({ length: 8 }, (_, index) => ({
+        id: `anchor-${index + 1}`,
+        kind: index % 2 === 0 ? "scene" : "form",
+        label: `Anchor ${index + 1}`,
+        detail: `A sufficiently concrete and bounded research detail for anchor ${index + 1}.`,
+        is_common_interpretation: index < 2,
+      })),
+      primary_prompt: "Which moment changed how you understood the book?",
+      reserve_prompt: "What would you notice differently on a second reading?",
+      assignments: [
+        {
+          persona_id: "reader-a",
+          anchor_id: "anchor-1",
+          emotional_door: "Explore the feeling created by the first moment.",
+          question_to_explore: "Why did this moment change the reading?",
+        },
+        {
+          persona_id: "reader-b",
+          anchor_id: "anchor-2",
+          emotional_door: "Explore the feeling created by the second moment.",
+          question_to_explore: "What does another reader notice here?",
+        },
+        {
+          persona_id: "reader-c",
+          anchor_id: "anchor-3",
+          emotional_door: "Explore the feeling created by the third moment.",
+          question_to_explore: "How does the form shape this response?",
+        },
+      ],
+      uncertainties: ["One edition-dependent detail remains uncertain."],
+      connection_concepts: ["A paraphrased connection to changing judgments."],
+      sources: [
+        { url: "https://publisher.example/book" },
+        { url: "https://library.example/record" },
+      ],
+    });
+
+    expect(
+      validateMeetingPlanQuality(output, ["reader-a", "reader-b", "reader-c"]),
+    ).toContain(
+      "at most one persona may receive a common interpretation as a primary anchor",
+    );
+  });
+});
 
 describe("book identification quality validation", () => {
   it("requires two retrieved sources before a live book can be verified", () => {
@@ -340,12 +391,12 @@ describe("utterance quality validation", () => {
 describe("recap quality validation", () => {
   const recap = `# A Book — Reading Table Recap, 2026-07-18
 
-## Discussion summary
+## What we explored
 Summary.
-## Where everyone landed
-| Reader | Position |\n| --- | --- |\n| You | A view |
-## Sparks — moments of real disagreement
-- A disagreement.
+## What each reader took away
+| Reader | Takeaway |\n| --- | --- |\n| You | A view |
+## Where readings differed
+- No direct conflict; another perspective was added.
 ## Scenes you might have missed
 - A scene.
 ## From the shelves
@@ -360,9 +411,9 @@ What would change your mind?`;
     );
   });
 
-  it("requires every named participant in the final-position section", () => {
+  it("requires every named participant in the takeaway section", () => {
     expect(validateRecapQuality(recap, "en", ["You", "Maddie"])).toContain(
-      "recap final-position section must include participant: Maddie",
+      "recap takeaway section must include participant: Maddie",
     );
   });
 });

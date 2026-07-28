@@ -67,7 +67,7 @@ const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
     intro: "Tell us a little about your work, everyday life, or what reading has looked like lately.",
     first_impression: "What was your first impression?",
     memorable_scene: "Which scene stayed with you?",
-    discussion_position: "Where do you land on this question?",
+    discussion_position: "What did you feel or think about this part of the book?",
     discussion_reply: "How do you answer that question?",
     discussion_followup: "What else would you like to add to this exchange?",
     wrap_up: "What are you leaving the table with?",
@@ -76,7 +76,7 @@ const INPUT_PROMPTS: Record<AppLanguage, Record<UserTurnKind, string>> = {
     intro: "하시는 일이나 요즘의 일상, 최근의 독서 생활처럼 편한 이야기로 자신을 소개해 주세요.",
     first_impression: "이 책의 첫인상은 어땠나요?",
     memorable_scene: "어떤 장면이 가장 기억에 남았나요?",
-    discussion_position: "이 질문에 대해 어디에 서 있나요?",
+    discussion_position: "이 대목에서 어떤 느낌이나 생각이 들었나요?",
     discussion_reply: "방금 받은 질문에는 어떻게 답하시겠어요?",
     discussion_followup: "이 대화에 어떤 생각을 더 보태고 싶나요?",
     wrap_up: "오늘 테이블에서 무엇을 가지고 떠나시나요?",
@@ -92,7 +92,7 @@ const COPY = {
     description:
       "Revisit what you have read with AI readers and widen your thinking through different perspectives.",
     bookSetup: "Bring a book to the table",
-    scopeLabel: "Discussion scope",
+    scopeLabel: "Book scope",
     scopeLabels: { single_book: "One book", series: "Full series" },
     singleBookHint: "Discuss one volume or one standalone work.",
     seriesHint: "Verify and discuss every published volume in the series.",
@@ -124,7 +124,7 @@ const COPY = {
       mock: "mock only",
     },
     verificationSources: "Verification sources",
-    verificationBlocked: "This result is not verified yet, so it cannot start a discussion.",
+    verificationBlocked: "This result is not verified yet, so it cannot start a book-club session.",
     retryAsSingleBook: "Verify this title as one book",
     retryAsSeries: "Verify this title as a full series",
     scopeCorrectionHint:
@@ -137,7 +137,7 @@ const COPY = {
     currentBook: "Tonight's book",
     privacyTitle: "Data & privacy",
     privacy:
-      "Your book title is sent to OpenAI for web verification, and your messages are sent to generate the discussion. This session is stored only in this browser and is not saved by Open Reading Club's server.",
+      "Your book title is sent to OpenAI for web verification and meeting research, and your messages are sent to generate the conversation. This session is stored only in this browser and is not saved by Open Reading Club's server.",
     mockPrivacy:
       "This prototype uses deterministic mock responses, so nothing is sent to OpenAI during this walkthrough.",
     start: "Start mock session",
@@ -193,19 +193,20 @@ const COPY = {
     dialoguePreparing: "Preparing dialogue",
     stageReady: (stageName: string) => `${stageName} is ready to begin.`,
     preparingRoom: "Preparing the next part of the conversation…",
+    preparingResearch: "Researching the book and preparing Alex's shared prompt…",
     preparingNotes: (progress: string) => `The readers are gathering their thoughts · ${progress}`,
     preparingRecap: "Turning today's conversation into the meeting recap…",
     nextTurnReady: (name: string) => `${name}'s next line is ready.`,
     preparingTurn: (name: string) => `Preparing ${name}'s next line…`,
     earlierDialogue: (stageName: string) => `Earlier dialogue · ${stageName}`,
     currentDialogue: "Current dialogue",
-    challengedLine: "The line you are answering",
-    discussionChoice: "How would you like to continue?",
-    joinDiscussion: "Join the discussion",
+    challengedLine: "The question you are answering",
+    discussionChoice: "How would you like to continue this book conversation?",
+    joinDiscussion: "Add my thoughts",
     addThought: "Add another thought",
     finalThought: "Leave one final thought",
     keepListening: "Keep listening",
-    continueDiscussion: "Continue the discussion",
+    continueDiscussion: "Continue the book conversation",
     wrapDiscussion: "Move to closing",
     viewTranscript: (count: number) => `View transcript ${count}`,
     transcriptTitle: "Conversation transcript",
@@ -214,7 +215,7 @@ const COPY = {
     mockMode: "Mock",
     liveMode: "Live GPT-5.6",
     mockModeHint: "Fast deterministic responses for UI testing.",
-    liveModeHint: "Web-verifies the book, then generates a real discussion using API credits.",
+    liveModeHint: "Web-verifies and researches the book, then generates a real conversation using API credits.",
     guestTestTitle: "Choose an imagined guest",
     guestTestHint:
       "Choose one imagined historical, legendary, or literary reader. The guest replaces one regular reader in the same category.",
@@ -222,7 +223,7 @@ const COPY = {
     guestBadge: "Imagined guest",
     guestDisclosure:
       "Generated dialogue is an imagined interpretation grounded in documented ideas or canonical traits, not a real quotation or the figure's actual view of this book.",
-    guestLiveHint: "This guest joins the same GPT-5.6 discussion as the regular readers.",
+    guestLiveHint: "This guest joins the same GPT-5.6 book conversation as the regular readers.",
     participationTitle: "Choose your conversation",
     regularConversation: "Join the regular club",
     regularConversationHint: "Meet three AI readers with different perspectives.",
@@ -247,9 +248,9 @@ const COPY = {
     nextSpeaker: "Next",
     yourTurn: "Your turn",
     waitingForYou: "The table stops here for you.",
-    movingToRecap: "Alex has wrapped up the discussion. The meeting recap is next.",
+    movingToRecap: "Alex has wrapped up the book conversation. The meeting recap is next.",
     identityTitle: "Take your seat",
-    identityHint: "Choose how you appear at the table. This does not change the discussion.",
+    identityHint: "Choose how you appear at the table. This does not change the book conversation.",
     displayName: "Display name (optional)",
     displayNamePlaceholder: "You",
     avatarLabel: "Choose your portrait",
@@ -263,7 +264,7 @@ const COPY = {
     description:
       "읽은 책을 AI 독자들과 다시 생각하고, 서로 다른 관점으로 사고를 넓혀보세요.",
     bookSetup: "읽은 책을 테이블에 올려주세요",
-    scopeLabel: "토론 범위",
+    scopeLabel: "이야기 범위",
     scopeLabels: { single_book: "한 권", series: "시리즈 전체" },
     singleBookHint: "한 권 또는 단독 작품만 이야기합니다.",
     seriesHint: "시리즈에 포함된 모든 출간 도서를 검증하고 이야기합니다.",
@@ -308,7 +309,7 @@ const COPY = {
     currentBook: "오늘의 책",
     privacyTitle: "데이터 및 개인정보",
     privacy:
-      "도서 검증을 위해 책 제목이 OpenAI 웹 검색에 사용되고, 토론 생성을 위해 메시지가 전송됩니다. 이 세션은 현재 브라우저에만 저장되며 Open Reading Club 서버에는 저장되지 않습니다.",
+      "도서 검증과 모임 준비를 위해 책 제목이 OpenAI 웹 검색에 사용되고, 대화 생성을 위해 메시지가 전송됩니다. 이 세션은 현재 브라우저에만 저장되며 Open Reading Club 서버에는 저장되지 않습니다.",
     mockPrivacy:
       "이 프로토타입은 결정론적 모의 응답을 사용하므로 이번 체험에서는 OpenAI로 아무 내용도 전송되지 않습니다.",
     start: "모의 세션 시작",
@@ -364,19 +365,20 @@ const COPY = {
     dialoguePreparing: "대화 준비 중",
     stageReady: (stageName: string) => `${stageName} 단계가 준비되었습니다.`,
     preparingRoom: "다음 대화를 준비하고 있습니다…",
+    preparingResearch: "책을 더 깊이 살펴보고 알렉스의 발제를 준비하고 있습니다…",
     preparingNotes: (progress: string) => `독자들이 책에 대한 생각을 정리하고 있습니다 · ${progress}`,
     preparingRecap: "오늘의 대화를 모임 기록으로 정리하고 있습니다…",
     nextTurnReady: (name: string) => `${name}의 다음 발언이 준비되었습니다.`,
     preparingTurn: (name: string) => `${name}의 발언을 준비하고 있습니다…`,
     earlierDialogue: (stageName: string) => `이전 대화 · ${stageName}`,
     currentDialogue: "현재 대화",
-    challengedLine: "지금 답변할 발언",
-    discussionChoice: "이 토론을 어떻게 이어갈까요?",
+    challengedLine: "지금 답변할 질문",
+    discussionChoice: "이 책 이야기를 어떻게 이어갈까요?",
     joinDiscussion: "내 의견 보태기",
     addThought: "의견 덧붙이기",
     finalThought: "마지막 생각 남기기",
     keepListening: "한 번 더 듣기",
-    continueDiscussion: "토론 조금 더 이어보기",
+    continueDiscussion: "책 이야기 조금 더 이어보기",
     wrapDiscussion: "마무리 순서로 이동",
     viewTranscript: (count: number) => `대화 기록 보기 ${count}`,
     transcriptTitle: "대화 기록",
@@ -385,7 +387,7 @@ const COPY = {
     mockMode: "모의 응답",
     liveMode: "실제 GPT-5.6",
     mockModeHint: "UI 확인용으로 빠르고 동일한 응답을 사용합니다.",
-    liveModeHint: "도서를 웹에서 검증한 뒤 실제 토론을 생성하며 API 크레딧을 사용합니다.",
+    liveModeHint: "도서를 웹에서 검증하고 더 깊이 살펴본 뒤 실제 책 이야기를 생성하며 API 크레딧을 사용합니다.",
     guestTestTitle: "상상 속 게스트 선택",
     guestTestHint:
       "이번 세션에 참여할 역사·전승·문학 독자 한 명을 직접 선택합니다. 게스트는 같은 성향의 일반 독자 한 명을 대신합니다.",
@@ -393,7 +395,7 @@ const COPY = {
     guestBadge: "상상 속 게스트",
     guestDisclosure:
       "생성된 대사는 기록된 사상이나 원작의 특징을 바탕으로 재구성한 해석이며, 실제 인용문이나 이 책에 대한 당사자의 실제 견해가 아닙니다.",
-    guestLiveHint: "선택한 게스트도 일반 독자와 동일한 GPT-5.6 토론에 참여합니다.",
+    guestLiveHint: "선택한 게스트도 일반 독자와 동일한 GPT-5.6 책 이야기에 참여합니다.",
     participationTitle: "대화 방식 선택",
     regularConversation: "일반 대화하기",
     regularConversationHint: "서로 다른 관점의 AI 독자 세 명과 모임을 시작합니다.",
@@ -417,9 +419,9 @@ const COPY = {
     nextSpeaker: "다음",
     yourTurn: "내 차례",
     waitingForYou: "내 차례에서 테이블이 멈췄습니다.",
-    movingToRecap: "알렉스가 토론을 정리했습니다. 이어서 모임 기록으로 이동합니다.",
+    movingToRecap: "알렉스가 책 이야기를 정리했습니다. 이어서 모임 기록으로 이동합니다.",
     identityTitle: "내 자리 준비",
-    identityHint: "테이블에서 보일 모습을 선택하세요. 토론 내용에는 영향을 주지 않습니다.",
+    identityHint: "테이블에서 보일 모습을 선택하세요. 책 이야기 내용에는 영향을 주지 않습니다.",
     displayName: "표시 이름 (선택)",
     displayNamePlaceholder: "나",
     avatarLabel: "내 초상화 선택",
@@ -461,6 +463,7 @@ export function relevantInputContext(
 }
 
 type SessionPreparationStatus =
+  | { kind: "research" }
   | { kind: "reading_notes"; progress: string }
   | { kind: "recap" };
 type CopyStatus = "idle" | "copied" | "failed";
@@ -1009,7 +1012,9 @@ function ConversationStage({
   const transitionText = busy
     ? transitionSpeakerName
       ? copy.preparingTurn(transitionSpeakerName)
-      : preparationStatus?.kind === "reading_notes"
+      : preparationStatus?.kind === "research"
+        ? copy.preparingResearch
+        : preparationStatus?.kind === "reading_notes"
         ? copy.preparingNotes(preparationStatus.progress)
         : preparationStatus?.kind === "recap"
           ? copy.preparingRecap
@@ -1970,6 +1975,8 @@ export function App() {
           }
           setStage(nextStage);
           if (nextStage !== "INTRO") setPreparationStatus(undefined);
+        } else if (message === "Researching the book and preparing the meeting prompt") {
+          setPreparationStatus({ kind: "research" });
         } else if (message === "Generating private reading notes in parallel") {
           setPreparationStatus({ kind: "reading_notes", progress: `0/${personas.length}` });
         } else if (message.startsWith("Reading notes ready: ")) {

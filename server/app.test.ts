@@ -134,6 +134,16 @@ describe("server boundary", () => {
     ];
     const sessionHeaders = { "x-session-id": "browser-session" };
 
+    const meetingPlanResponse = await request(app)
+      .post("/api/generate/meeting-plan")
+      .set(sessionHeaders)
+      .send({ language: "en", book, personas });
+    expect(meetingPlanResponse.status).toBe(200);
+    expect(meetingPlanResponse.body.assignments).toHaveLength(3);
+    expect(new Set(meetingPlanResponse.body.assignments.map(
+      (assignment: { anchor_id: string }) => assignment.anchor_id,
+    )).size).toBe(3);
+
     const notesResponse = await request(app)
       .post("/api/generate/reading-notes")
       .set(sessionHeaders)
@@ -217,7 +227,7 @@ describe("server boundary", () => {
         userStances: {},
       });
     expect(recapResponse.status).toBe(200);
-    expect(recapResponse.body.markdown).toContain("## Discussion summary");
+    expect(recapResponse.body.markdown).toContain("## What we explored");
   });
 
   it("enforces a per-session call ceiling", async () => {

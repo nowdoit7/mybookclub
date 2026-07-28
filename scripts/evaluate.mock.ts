@@ -62,21 +62,38 @@ function evaluate(result: CompletedSession): Check[] {
       detail: `${firstImpressions.length}/3 independent first impressions`,
     },
     {
-      name: "conversation-grounded topic",
+      name: "prepared shared prompt",
       passed:
         Boolean(state.activeTopic) &&
-        state.book.candidateTopics.includes(state.activeTopic ?? "") &&
+        state.activeTopic === state.meetingPlan.primaryPrompt &&
         (topicOpening?.text.match(/[?？]/gu)?.length ?? 0) === 1,
       detail: state.activeTopic ?? "no active topic",
     },
     {
-      name: "user position examined",
+      name: "distinct perspective entrances",
+      passed:
+        state.meetingPlan.assignments.length === 3 &&
+        new Set(state.meetingPlan.assignments.map(({ anchorId }) => anchorId)).size === 3,
+      detail: `${new Set(
+        state.meetingPlan.assignments.map(({ anchorId }) => anchorId),
+      ).size}/3 unique primary anchors`,
+    },
+    {
+      name: "common interpretation ownership",
+      passed:
+        state.meetingPlan.assignments.filter(({ anchorId }) =>
+          state.meetingPlan.anchors.find(({ id }) => id === anchorId)?.isCommonInterpretation
+        ).length <= 1,
+      detail: "at most one reader owns a common interpretation as the main entrance",
+    },
+    {
+      name: "user perspective explored",
       passed:
         positionIndex >= 0 &&
         discussion[reviewIndex]?.speaker === roles?.challenger &&
         discussion[reviewIndex]?.refersTo === "user" &&
         (discussion[reviewIndex]?.text.match(/[?？]/gu)?.length ?? 0) === 1,
-      detail: "the code-selected reviewer asks one direct question after the user's position",
+      detail: "the code-selected responder asks one natural question after the user's contribution",
     },
     {
       name: "user gets the reviewed turn back",
@@ -85,7 +102,7 @@ function evaluate(result: CompletedSession): Check[] {
       detail: `${discussionUserTurns.length}/2 user turns in the main discussion`,
     },
     {
-      name: "directed persona-to-persona examination",
+      name: "shared-prompt perspective exchange",
       passed:
         Boolean(roles) &&
         roles?.leadA !== roles?.leadB &&
@@ -93,7 +110,7 @@ function evaluate(result: CompletedSession): Check[] {
         discussion[leadOpeningIndex + 1]?.refersTo === roles?.leadA &&
         discussion[leadOpeningIndex + 2]?.speaker !== roles?.leadA,
       detail: roles
-        ? `${roles.leadA} opens, ${roles.leadB} examines that claim once, then code returns the floor`
+        ? `${roles.leadA} opens, ${roles.leadB} adds another perspective once, then code returns the floor`
         : "roles missing",
     },
     {
@@ -103,15 +120,15 @@ function evaluate(result: CompletedSession): Check[] {
         discussion[reviewIndex + 1]?.speaker === "user" &&
         discussion[reviewIndex + 2]?.speaker === roles?.challenger &&
         discussion[reviewIndex + 3]?.speaker === roles?.bridgeReader,
-      detail: "user reply returns to the reviewer before the third reader bridges",
+      detail: "user reply returns to the same responder before the third reader bridges",
     },
     {
-      name: "concentrated discussion floor",
+      name: "focused prompt exchange",
       passed:
         new Set(
           discussion.filter(({ speaker }) => personaIds.has(speaker)).map(({ speaker }) => speaker),
         ).size <= 3,
-      detail: "two leads carry the clash while a third reader may bridge it",
+      detail: "two leads carry the exchange while a third reader may bridge it",
     },
     {
       name: "spoken discussion style",

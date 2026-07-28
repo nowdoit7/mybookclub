@@ -29,7 +29,7 @@ describe("Character Core offline evaluator", () => {
       /작동 원리.*조건.*일반화/u,
     );
     expect(byId.get("marcus")?.contrastivePolicy.primaryFocus).toMatch(
-      /책임.*반대 증거.*절차/u,
+      /행동.*선택.*빠진 사람/u,
     );
     expect(byId.get("justice-tolerance-reader")?.contrastivePolicy.primaryFocus).toMatch(
       /비용.*기준.*복구/u,

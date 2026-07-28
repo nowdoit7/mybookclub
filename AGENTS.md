@@ -57,11 +57,12 @@ These are project-defining. Do not "improve" past them without asking.
    as typed objects. Adding a persona must require zero engine changes.
 4. **Every model call uses strict JSON schema output.** No free-text parsing,
    no regex extraction. Schema in SPEC §6.
-5. **Meaningful position review is not optional.** After the user joins a
-   discussion and states a position, at least one persona tests its disagreement,
-   scope, evidence, causality, or consequence (SPEC §9). Compatible positions
-   must not be turned into fake conflict. A user who chooses to keep listening
-   may instead observe the mandatory directed persona-to-persona examination.
+5. **Perspective expansion is not optional.** After the user joins the shared
+   prompt conversation, at least one persona responds to the user's actual
+   feeling or interpretation and adds a distinct scene, emotion, context, or
+   genuine question (SPEC §9). Agreement is allowed. Disagreement appears only
+   when the readings genuinely differ; evidence tests, rebuttals, and
+   counterexamples are never mandatory conversation devices.
 6. **Persona utterances: 2–4 sentences.** Enforced in prompt AND by schema
    maxLength. Personas that monologue are a bug.
 7. **Copyright:** discuss themes and scenes; quote at most a short phrase;

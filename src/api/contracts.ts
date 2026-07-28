@@ -133,6 +133,47 @@ const confirmedBookSchema = z
   })
   .strict();
 
+const researchAnchorKindSchema = z.enum([
+  "scene",
+  "character_relationship",
+  "form",
+  "context",
+  "emotion",
+  "question",
+]);
+
+const internalResearchAnchorSchema = z
+  .object({
+    id: boundedString(1, 80),
+    kind: researchAnchorKindSchema,
+    label: boundedString(1, 160),
+    detail: boundedString(20, 600),
+    isCommonInterpretation: z.boolean(),
+  })
+  .strict();
+
+const internalPerspectiveAssignmentSchema = z
+  .object({
+    personaId: boundedString(1, 80),
+    anchorId: boundedString(1, 80),
+    emotionalDoor: boundedString(5, 240),
+    questionToExplore: boundedString(5, 300),
+  })
+  .strict();
+
+export const internalMeetingPlanSchema = z
+  .object({
+    researchBrief: boundedString(80, 1600),
+    anchors: z.array(internalResearchAnchorSchema).min(8).max(12),
+    primaryPrompt: boundedString(10, 240),
+    reservePrompt: boundedString(10, 240).optional(),
+    assignments: z.array(internalPerspectiveAssignmentSchema).length(3),
+    uncertainties: z.array(boundedString(5, 300)).max(5),
+    connectionConcepts: z.array(boundedString(5, 240)).max(4),
+    sources: z.array(bookSourceSchema).max(8),
+  })
+  .strict();
+
 const internalReadingNotesSchema = z
   .object({
     overallTake: boundedString(40, 600),
@@ -203,8 +244,61 @@ export const readingNotesRequestSchema = z
     language: z.enum(["en", "ko"]),
     book: confirmedBookSchema,
     persona: personaCardSchema,
+    meetingPlan: internalMeetingPlanSchema.optional(),
+    perspectiveAssignment: internalPerspectiveAssignmentSchema.optional(),
     validationError: boundedString(1, 1200).optional(),
     characterCoreExperiment: characterCoreExperimentMarkerSchema.optional(),
+  })
+  .strict();
+
+export const meetingPlanRequestSchema = z
+  .object({
+    language: z.enum(["en", "ko"]),
+    book: confirmedBookSchema,
+    personas: z.array(personaCardSchema).length(3),
+    validationError: boundedString(1, 1200).optional(),
+  })
+  .strict();
+
+export const meetingPlanModelSchema = z
+  .object({
+    research_brief: boundedString(80, 1600),
+    anchors: z
+      .array(
+        z
+          .object({
+            id: boundedString(1, 80),
+            kind: researchAnchorKindSchema,
+            label: boundedString(1, 160),
+            detail: boundedString(20, 600),
+            is_common_interpretation: z.boolean(),
+          })
+          .strict(),
+      )
+      .min(8)
+      .max(12),
+    primary_prompt: boundedString(10, 240),
+    reserve_prompt: boundedString(10, 240).nullable(),
+    assignments: z
+      .array(
+        z
+          .object({
+            persona_id: boundedString(1, 80),
+            anchor_id: boundedString(1, 80),
+            emotional_door: boundedString(5, 240),
+            question_to_explore: boundedString(5, 300),
+          })
+          .strict(),
+      )
+      .length(3),
+    uncertainties: z.array(boundedString(5, 300)).max(5),
+    connection_concepts: z.array(boundedString(5, 240)).max(4),
+  })
+  .strict();
+
+export const meetingPlanSchema = meetingPlanModelSchema
+  .extend({
+    sources: z.array(bookSourceSchema).max(8),
   })
   .strict();
 
@@ -213,6 +307,8 @@ export const utteranceRequestSchema = z
     language: z.enum(["en", "ko"]),
     roomAtmosphere: roomAtmosphereSchema,
     book: confirmedBookSchema,
+    meetingPlan: internalMeetingPlanSchema.optional(),
+    perspectiveAssignment: internalPerspectiveAssignmentSchema.optional(),
     speaker: z.union([personaCardSchema, z.literal("moderator")]),
     notes: internalReadingNotesSchema.optional(),
     stage: stageIdSchema,
@@ -358,6 +454,8 @@ export type BookIdentificationRequest = z.infer<typeof bookIdentificationRequest
 export type UtteranceTask = z.infer<typeof utteranceTaskSchema>;
 export type BookIdentificationOutput = z.infer<typeof bookIdentificationSchema>;
 export type BookIdentificationModelOutput = z.infer<typeof bookIdentificationModelSchema>;
+export type MeetingPlanOutput = z.infer<typeof meetingPlanSchema>;
+export type MeetingPlanModelOutput = z.infer<typeof meetingPlanModelSchema>;
 export type ReadingNotesOutput = z.infer<typeof readingNotesSchema>;
 export type DiscussionFocusOutput = z.infer<typeof discussionFocusSchema>;
 export type UtteranceOutput = z.infer<typeof utteranceSchema>;

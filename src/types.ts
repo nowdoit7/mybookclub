@@ -93,6 +93,40 @@ export interface ConfirmedBook {
   sources: BookSource[];
 }
 
+export type ResearchAnchorKind =
+  | "scene"
+  | "character_relationship"
+  | "form"
+  | "context"
+  | "emotion"
+  | "question";
+
+export interface ResearchAnchor {
+  id: string;
+  kind: ResearchAnchorKind;
+  label: string;
+  detail: string;
+  isCommonInterpretation: boolean;
+}
+
+export interface PerspectiveAssignment {
+  personaId: string;
+  anchorId: string;
+  emotionalDoor: string;
+  questionToExplore: string;
+}
+
+export interface MeetingPlan {
+  researchBrief: string;
+  anchors: ResearchAnchor[];
+  primaryPrompt: string;
+  reservePrompt?: string;
+  assignments: PerspectiveAssignment[];
+  uncertainties: string[];
+  connectionConcepts: string[];
+  sources: BookSource[];
+}
+
 export type StageId =
   | "INTRO"
   | "FIRST_IMPRESSIONS"
@@ -131,6 +165,7 @@ export interface SessionState {
   language: AppLanguage;
   roomAtmosphere: RoomAtmosphere;
   book: ConfirmedBook;
+  meetingPlan: MeetingPlan;
   personas: PersonaCard[];
   notes: Record<string, ReadingNotes>;
   transcript: Utterance[];

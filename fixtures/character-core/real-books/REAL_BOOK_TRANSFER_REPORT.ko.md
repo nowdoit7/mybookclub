@@ -11,7 +11,7 @@
 - 블라인드 판단: 261개
 - 홀드아웃 프로토콜: v2 output-unseen locked holdout
 - 한계: Book titles and evidence-pack construction were known before generation. Character Core v2, dialogue policy, question prompts, and evidence packs were frozen before any v2 dialogue output was generated.
-- 고정 입력 해시: 11/11 일치
+- 고정 입력 해시: 10/11 일치
 - 잠금 후 정정: 없음
 - 질문·근거 연결: 통과
 - 출처 URL 폐쇄성: 통과
@@ -112,4 +112,4 @@
 
 ## 검증
 
-- 모든 필수 검증 통과
+- 실패: lock hash changed: scripts/character-core/prototypeCores.ts

@@ -295,7 +295,7 @@ describe("imagined guest signature moment", () => {
     expect(firstImpressionRule).toContain("only author-perspective moment");
     expect(firstImpressionRule).toContain("내가 이 책을 쓸 때");
     expect(firstImpressionRule).toContain("first sentence must begin with the exact words");
-    expect(firstImpressionRule).toContain("contestable interpretive claim");
+    expect(firstImpressionRule).toContain("one feeling or question");
     expect(firstImpressionRule).toContain("authorship does not make their interpretation final");
     expect(firstImpressionRule).toContain("undocumented hidden intention");
 
@@ -325,7 +325,7 @@ describe("imagined guest signature moment", () => {
     expect(utteranceRule).toContain("assembled or published after");
     expect(utteranceRule).toContain("Never claim the guest completed");
     expect(guestReadingNotesRule(pascal, request.book, "ko")).toContain(
-      "present-day readers may reasonably resist",
+      "present-day readers may experience the work differently",
     );
   });
 

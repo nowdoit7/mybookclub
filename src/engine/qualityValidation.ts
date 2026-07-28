@@ -1,5 +1,6 @@
 import type {
   BookIdentificationOutput,
+  MeetingPlanOutput,
   ReadingNotesOutput,
   UtteranceOutput,
 } from "../api/contracts";
@@ -87,6 +88,67 @@ export function validateBookIdentificationQuality(output: BookIdentificationOutp
       issues.push(`candidate topic ${index + 1} contains an unmatched quotation mark`);
     }
   });
+
+  return issues;
+}
+
+export function validateMeetingPlanQuality(
+  output: MeetingPlanOutput,
+  expectedPersonaIds: string[],
+  requireWebSources = true,
+): string[] {
+  const issues: string[] = [];
+  const anchorIds = output.anchors.map(({ id }) => id);
+  const assignmentPersonaIds = output.assignments.map(({ persona_id }) => persona_id);
+  const assignedAnchorIds = output.assignments.map(({ anchor_id }) => anchor_id);
+
+  if (new Set(anchorIds).size !== anchorIds.length) {
+    issues.push("meeting-plan anchor ids must be unique");
+  }
+  if (
+    assignmentPersonaIds.length !== expectedPersonaIds.length ||
+    [...assignmentPersonaIds].sort().some(
+      (personaId, index) => personaId !== [...expectedPersonaIds].sort()[index],
+    )
+  ) {
+    issues.push("meeting-plan assignments must cover every selected persona exactly once");
+  }
+  if (new Set(assignedAnchorIds).size !== assignedAnchorIds.length) {
+    issues.push("meeting-plan assignments must use distinct primary anchors");
+  }
+  if (assignedAnchorIds.some((anchorId) => !anchorIds.includes(anchorId))) {
+    issues.push("every assigned anchor must exist in the research pack");
+  }
+
+  const commonAnchorIds = new Set(
+    output.anchors
+      .filter(({ is_common_interpretation }) => is_common_interpretation)
+      .map(({ id }) => id),
+  );
+  const commonAssignmentCount = assignedAnchorIds.filter((anchorId) =>
+    commonAnchorIds.has(anchorId)
+  ).length;
+  if (commonAssignmentCount > 1) {
+    issues.push("at most one persona may receive a common interpretation as a primary anchor");
+  }
+
+  const prompts = [
+    ["primary_prompt", output.primary_prompt],
+    ...(output.reserve_prompt ? [["reserve_prompt", output.reserve_prompt]] : []),
+  ] as const;
+  prompts.forEach(([name, prompt]) => {
+    const questionMarkCount = prompt.match(/[?？]/gu)?.length ?? 0;
+    if (questionMarkCount !== 1) {
+      issues.push(`${name} must contain exactly one question mark`);
+    }
+  });
+
+  if (requireWebSources && output.sources.length < 2) {
+    issues.push("meeting-plan research must include at least two retrieved web sources");
+  }
+  if (output.sources.some(({ url }) => !url.startsWith("https://"))) {
+    issues.push("meeting-plan sources must use HTTPS URLs");
+  }
 
   return issues;
 }
@@ -227,17 +289,17 @@ export function validateUtteranceQuality(
 
 const RECAP_HEADINGS: Record<AppLanguage, string[]> = {
   en: [
-    "## Discussion summary",
-    "## Where everyone landed",
-    "## Sparks — moments of real disagreement",
+    "## What we explored",
+    "## What each reader took away",
+    "## Where readings differed",
     "## Scenes you might have missed",
     "## From the shelves",
     "## A question to sleep on",
   ],
   ko: [
-    "## 토론 요약",
-    "## 모두의 최종 입장",
-    "## 불꽃 — 실제로 부딪힌 순간",
+    "## 오늘 나눈 이야기",
+    "## 각자가 가져간 생각",
+    "## 서로 다르게 읽은 순간",
     "## 놓치기 쉬운 장면",
     "## 책장에서 꺼낸 연결",
     "## 잠들기 전 생각할 질문",
@@ -271,7 +333,7 @@ export function validateRecapQuality(
       : "";
   participantNames.forEach((name) => {
     if (!finalPositionSection.includes(name)) {
-      issues.push(`recap final-position section must include participant: ${name}`);
+      issues.push(`recap takeaway section must include participant: ${name}`);
     }
   });
 

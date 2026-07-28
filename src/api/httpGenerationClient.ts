@@ -3,6 +3,7 @@ import type { z } from "zod";
 import {
   bookIdentificationSchema,
   discussionFocusSchema,
+  meetingPlanSchema,
   readingNotesSchema,
   recapSchema,
   userStanceSchema,
@@ -13,6 +14,7 @@ import type {
   CharacterCoreExperimentMarker,
   GenerationClient,
   DiscussionFocusRequest,
+  MeetingPlanRequest,
   ReadingNotesRequest,
   RecapRequest,
   UserStanceRequest,
@@ -170,6 +172,10 @@ export class HttpGenerationClient implements GenerationClient {
 
   identifyBook(input: BookIdentificationRequest) {
     return this.post("book-identification", input, bookIdentificationSchema);
+  }
+
+  prepareMeetingPlan(input: MeetingPlanRequest) {
+    return this.post("meeting-plan", input, meetingPlanSchema);
   }
 
   generateReadingNotes(input: ReadingNotesRequest) {

@@ -10,6 +10,7 @@ import { ZodError } from "zod";
 import {
   bookIdentificationRequestSchema,
   discussionFocusRequestSchema,
+  meetingPlanRequestSchema,
   readingNotesRequestSchema,
   recapRequestSchema,
   userStanceRequestSchema,
@@ -474,6 +475,20 @@ export function createApp({
         const input = bookIdentificationRequestSchema.parse(request.body);
         const result = await generationClient.identifyBook(input);
         response.json(result);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  app.post(
+    "/api/generate/meeting-plan",
+    generationRateLimit,
+    sessionCallLimiter,
+    async (request, response, next) => {
+      try {
+        const input = meetingPlanRequestSchema.parse(request.body);
+        response.json(await generationClient.prepareMeetingPlan(input));
       } catch (error) {
         next(error);
       }
